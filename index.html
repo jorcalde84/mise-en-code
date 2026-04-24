@@ -511,9 +511,71 @@ function Tip({ tx, ch }) {
 }
 
 /* ═══ APP ═══ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   PERSISTENCE LAYER — localStorage + Google Sheets cloud sync
+   ─────────────────────────────────────────────────────────────────────────
+   Priority on startup:
+     1. Google Sheets (via Apps Script) — if URL is configured
+     2. localStorage — fast offline cache
+     3. BOOT constant — factory defaults
+
+   On every Save/Publish/Delete:
+     1. Write to localStorage immediately (instant)
+     2. POST to Google Sheets in background (async, non-blocking)
+═══════════════════════════════════════════════════════════════════════════ */
+const LS_KEY = "mise_en_code_data";
+const LS_SYNC_URL = "mise_en_code_sync_url";
+
+const buildExportData = (recs, cI, cT, cP, favs) => ({
+  version: 1, exportedAt: new Date().toISOString(),
+  recipes: recs, customIngredients: cI, customTools: cT, customProcesses: cP,
+  favourites: Array.isArray(favs) ? favs : [...(favs || [])],
+});
+
+const saveToLocal = (data) => {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) { console.warn("localStorage save failed:", e); }
+};
+
+const loadFromLocal = () => {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) { console.warn("localStorage load failed:", e); }
+  return null;
+};
+
+const saveToCloud = async (data, url) => {
+  if (!url) return { ok: false, error: "no_url" };
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(data),
+    });
+    if (resp.ok) return { ok: true };
+    return { ok: false, error: "http_" + resp.status };
+  } catch(e) { return { ok: false, error: e.message }; }
+};
+
+const loadFromCloud = async (url) => {
+  if (!url) return null;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data && data.recipes) return data;
+  } catch(e) { console.warn("Cloud load failed:", e); }
+  return null;
+};
+
 function App() {
   const [lang, sL] = useState("en"); const t = T[lang];
   const [vw, sV] = useState("browse");
+  const [loading, setLoading] = useState(true);
+  const [syncUrl, setSyncUrl] = useState(() => { try { return localStorage.getItem(LS_SYNC_URL) || ""; } catch { return ""; }});
+  const [syncStatus, setSyncStatus] = useState("idle"); /* idle | saving | saved | error | loading */
+  const [showSettings, setShowSettings] = useState(false);
+  /* Initial data — will be overwritten by loadBootData */
   const [recs, sR] = useState(SAMP);
   const [aId, sAId] = useState(null);
   const [eR, sER] = useState(null);
@@ -523,6 +585,77 @@ function App() {
   const [cP, sCP] = useState(DEFAULT_CP || {});
   const [favs, sFavs] = useState(new Set(Array.isArray(BOOT.favourites) ? BOOT.favourites : [])); /* favourite ingredient IDs */
   const toggleFav = id => sFavs(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  /* ── Boot: load data from cloud → localStorage → BOOT ── */
+  useEffect(() => {
+    let cancelled = false;
+    const boot = async () => {
+      try {
+        /* Try cloud first */
+        const url = syncUrl;
+        if (url) {
+          setSyncStatus("loading");
+          const cloud = await loadFromCloud(url);
+          if (cloud && !cancelled) {
+            sR(cloud.recipes || SAMP);
+            if (cloud.customIngredients) sCI(cloud.customIngredients);
+            if (cloud.customTools) sCT(cloud.customTools);
+            if (cloud.customProcesses) sCP(cloud.customProcesses);
+            if (cloud.favourites) sFavs(new Set(cloud.favourites));
+            saveToLocal(cloud); /* cache locally */
+            setSyncStatus("idle");
+            setLoading(false);
+            return;
+          }
+        }
+        /* Fallback to localStorage */
+        const local = loadFromLocal();
+        if (local && !cancelled) {
+          sR(local.recipes || SAMP);
+          if (local.customIngredients) sCI(local.customIngredients);
+          if (local.customTools) sCT(local.customTools);
+          if (local.customProcesses) sCP(local.customProcesses);
+          if (local.favourites) sFavs(new Set(local.favourites));
+        }
+      } catch(e) {
+        console.warn("Boot load error:", e);
+      }
+      /* Always resolve loading, even on error */
+      setSyncStatus("idle");
+      if (!cancelled) setLoading(false);
+    };
+    boot();
+    return () => { cancelled = true; };
+  }, []);  /* run once on mount */
+
+  /* ── Persist helper: saves to localStorage + cloud on every state change ── */
+  const persistRef = useRef(null);
+  const persist = (newRecs, newCI, newCT, newCP, newFavs) => {
+    const data = buildExportData(
+      newRecs || recs, newCI || cI, newCT || cT, newCP || cP, newFavs || favs
+    );
+    saveToLocal(data);
+    /* Debounced cloud save */
+    if (persistRef.current) clearTimeout(persistRef.current);
+    if (syncUrl) {
+      setSyncStatus("saving");
+      persistRef.current = setTimeout(async () => {
+        const result = await saveToCloud(data, syncUrl);
+        setSyncStatus(result.ok ? "saved" : "error");
+        if (result.ok) setTimeout(() => setSyncStatus("idle"), 2000);
+      }, 1500); /* debounce 1.5s to avoid hammering on rapid edits */
+    }
+  };
+
+  /* Wrap sR to auto-persist whenever recipes change */
+  const setRecsAndPersist = (updater) => {
+    sR(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      /* Schedule persist after state settles */
+      setTimeout(() => persist(next), 0);
+      return next;
+    });
+  };
 
   const lib = useMemo(()=>{ const l=JSON.parse(JSON.stringify(DL)); Object.entries(cI).forEach(([c,its])=>{if(!l[c])l[c]=[];its.forEach(x=>{if(!l[c].find(y=>y.id===x.id))l[c].push(x);});}); return l;},[cI]);
   const tl = useMemo(()=>{ const l=JSON.parse(JSON.stringify(TL)); Object.entries(cT).forEach(([c,its])=>{if(!l[c])l[c]=[];its.forEach(x=>{if(!l[c].find(y=>y.id===x.id))l[c].push(x);});}); return l;},[cT]);
@@ -538,12 +671,12 @@ function App() {
   const oE = r => { sER(JSON.parse(JSON.stringify(r))); sV("edit"); };
   const cN = () => oE({ id:uid(),name:"",description:"",servings:4,status:"draft",tags:[],category:"Mains",flavour:{sweetness:50,richness:50,spiciness:0,acidity:20,umami:20}, preparations:[{id:uid(),name:"Main",comment:"",isModule:false, laneNames:["Main Process"], grid:[[null]]}]});
   const svR = (r, asPublished=true) => {
-    sR(p=>{const i=p.findIndex(x=>x.id===r.id);if(i>=0){const n=[...p];n[i]=r;return n;}return[...p,r];});
+    setRecsAndPersist(p=>{const i=p.findIndex(x=>x.id===r.id);if(i>=0){const n=[...p];n[i]=r;return n;}return[...p,r];});
     sAId(r.id);
     /* If saving as draft, stay in editor; if publishing, switch to published view */
     if (asPublished) sV("view");
   };
-  const delR = id => { sR(p => p.filter(x => x.id !== id)); if (aId === id) sAId(null); };
+  const delR = id => { setRecsAndPersist(p => p.filter(x => x.id !== id)); if (aId === id) sAId(null); };
 
   /* ── Export / Import JSON ── */
   const fileRef = useRef(null);
@@ -565,6 +698,8 @@ function App() {
         if (data.customTools) sCT(data.customTools);
         if (data.customProcesses) sCP(data.customProcesses);
         if (data.favourites) sFavs(new Set(data.favourites));
+        /* Persist imported data */
+        persist(data.recipes, data.customIngredients, data.customTools, data.customProcesses, data.favourites);
         sV("browse");
       } catch(err) { alert("Invalid file: " + err.message); }
     };
@@ -596,11 +731,72 @@ function App() {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           Import
         </button>
+        {/* Sync status indicator */}
+        <div style={{ width:1,height:16,background:"#E0D9CF" }}/>
+        <button style={{...S.nb(false),fontSize:11,position:"relative"}} onClick={()=>setShowSettings(true)} title="Cloud sync settings">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          {syncUrl ? (syncStatus === "saving" ? "\u2B6E" : syncStatus === "saved" ? "\u2714" : syncStatus === "error" ? "\u26A0" : "\u2601") : "Sync"}
+          {syncUrl && <span style={{ position:"absolute",top:2,right:2,width:6,height:6,borderRadius:"50%",background:syncStatus==="error"?"#D45B5B":syncStatus==="saving"?"#E8B84B":"#6BAF6E" }}/>}
+        </button>
       </div>
     </div>
-    {vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={oE} oC={cN} oD={delR} t={t}/>}
-    {vw==="view" && act && <VwV r={act} oB={()=>sV("browse")} oE={()=>oE(act)} t={t} lib={lib} tl={tl} lang={lang}/>}
-    {vw==="edit" && eR && <EdV r={eR} sR={sER} oS={svR} oC={()=>sV(aId?"view":"browse")} mL={mL} t={t} lib={lib} tl={tl} pl={pl} aCI={addCI} aCT={addCT} aCP={addCP} favs={favs} toggleFav={toggleFav} lang={lang}/>}
+    {/* Cloud Sync Settings Modal */}
+    {showSettings && <div style={{ position:"fixed",inset:0,background:"rgba(42,36,32,0.5)",zIndex:1100,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)" }} onClick={()=>setShowSettings(false)}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:"#FDFAF5",borderRadius:16,padding:"24px 28px",maxWidth:520,width:"92%",boxShadow:"0 16px 50px rgba(42,36,32,0.25)",fontFamily:"'DM Sans',sans-serif" }}>
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+          <h3 style={{ fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,margin:0 }}>Cloud Sync Settings</h3>
+          <button onClick={()=>setShowSettings(false)} style={{ background:"transparent",border:"none",cursor:"pointer",fontSize:18,color:"#8A7E72" }}>&times;</button>
+        </div>
+        <div style={{ marginBottom:16 }}>
+          <label style={{ fontSize:11,fontWeight:700,color:"#6A6058",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Google Apps Script URL</label>
+          <input value={syncUrl} onChange={e=>{const v=e.target.value;setSyncUrl(v);try{localStorage.setItem(LS_SYNC_URL,v);}catch{}}} placeholder="https://script.google.com/macros/s/.../exec" style={{ width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid #D5CEBC",fontSize:12,fontFamily:"'JetBrains Mono',monospace",boxSizing:"border-box" }}/>
+          <p style={{ fontSize:10,color:"#B0A898",marginTop:6,lineHeight:1.5 }}>Paste the URL from your deployed Google Apps Script web app. Data syncs automatically on every save.</p>
+        </div>
+        <div style={{ display:"flex",gap:8,marginBottom:16 }}>
+          <button onClick={async()=>{
+            if(!syncUrl){alert("Enter a URL first.");return;}
+            setSyncStatus("loading");
+            const data=await loadFromCloud(syncUrl);
+            if(data){sR(data.recipes||SAMP);if(data.customIngredients)sCI(data.customIngredients);if(data.customTools)sCT(data.customTools);if(data.customProcesses)sCP(data.customProcesses);if(data.favourites)sFavs(new Set(data.favourites));saveToLocal(data);setSyncStatus("saved");setTimeout(()=>setSyncStatus("idle"),2000);alert("Loaded "+((data.recipes||[]).length)+" recipes from cloud.");}
+            else{setSyncStatus("error");alert("Could not load from cloud. Check your URL and that the script is deployed.");}
+          }} style={{ ...S.btn("outline"),fontSize:11,padding:"6px 14px" }}>Test &amp; Load from Cloud</button>
+          <button onClick={async()=>{
+            if(!syncUrl){alert("Enter a URL first.");return;}
+            setSyncStatus("saving");
+            const data=buildExportData(recs,cI,cT,cP,favs);
+            const result=await saveToCloud(data,syncUrl);
+            if(result.ok){setSyncStatus("saved");setTimeout(()=>setSyncStatus("idle"),2000);alert("Pushed "+recs.length+" recipes to cloud.");}
+            else{setSyncStatus("error");alert("Push failed: "+result.error);}
+          }} style={{ ...S.btn("primary"),fontSize:11,padding:"6px 14px" }}>Push Current Data to Cloud</button>
+        </div>
+        <div style={{ borderTop:"1px solid #EDE8E0",paddingTop:12 }}>
+          <p style={{ fontSize:10,fontWeight:700,color:"#6A6058",margin:"0 0 6px" }}>Setup Instructions</p>
+          <ol style={{ fontSize:10,color:"#8A7E72",lineHeight:1.7,margin:0,paddingLeft:18 }}>
+            <li>Go to <b>script.google.com</b> and create a new project</li>
+            <li>Replace the code in <b>Code.gs</b> with the Apps Script code (see documentation)</li>
+            <li>Click <b>Deploy → New deployment → Web app</b></li>
+            <li>Set "Execute as" to <b>Me</b>, "Who has access" to <b>Anyone</b></li>
+            <li>Copy the deployment URL and paste it above</li>
+            <li>Click <b>"Test &amp; Load"</b> to verify the connection</li>
+          </ol>
+        </div>
+        <div style={{ borderTop:"1px solid #EDE8E0",paddingTop:12,marginTop:12 }}>
+          <p style={{ fontSize:10,fontWeight:700,color:"#6A6058",margin:"0 0 4px" }}>Status</p>
+          <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+            <span style={{ width:8,height:8,borderRadius:"50%",background:!syncUrl?"#B0A898":syncStatus==="error"?"#D45B5B":syncStatus==="saving"||syncStatus==="loading"?"#E8B84B":"#6BAF6E" }}/>
+            <span style={{ fontSize:11,color:"#6A6058" }}>{!syncUrl ? "Not configured — using localStorage only" : syncStatus==="saving"?"Saving to cloud...":syncStatus==="loading"?"Loading from cloud...":syncStatus==="saved"?"Synced \u2714":syncStatus==="error"?"Sync error — check URL":"Connected \u2014 auto-sync active"}</span>
+          </div>
+          <p style={{ fontSize:9,color:"#B0A898",marginTop:6 }}>Data is always saved to localStorage as a fast offline backup, regardless of cloud sync status.</p>
+        </div>
+      </div>
+    </div>}
+    {loading && <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:"60vh",flexDirection:"column",gap:12 }}>
+      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,color:"#2A2420" }}><span style={{ color:"#C49A6C" }}>&#9670;</span> Mise en Code</div>
+      <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#B0A898" }}>{syncUrl ? "Loading from cloud..." : "Loading..."}</div>
+    </div>}
+    {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={oE} oC={cN} oD={delR} t={t}/>}
+    {!loading && vw==="view" && act && <VwV r={act} oB={()=>sV("browse")} oE={()=>oE(act)} t={t} lib={lib} tl={tl} lang={lang}/>}
+    {!loading && vw==="edit" && eR && <EdV r={eR} sR={sER} oS={svR} oC={()=>sV(aId?"view":"browse")} mL={mL} t={t} lib={lib} tl={tl} pl={pl} aCI={addCI} aCT={addCT} aCP={addCP} favs={favs} toggleFav={toggleFav} lang={lang}/>}
   </div>);
 }
 
