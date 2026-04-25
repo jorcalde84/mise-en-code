@@ -749,52 +749,90 @@ function App() {
     e.target.value = "";
   };
 
-  /* ═══ Import Pro ═══ */
+  /* ═══ Import Pro v2 — Backend-powered ═══ */
+  const IP_URL = "http://localhost:3001"; /* Change to your deployed backend URL */
   const [showIP, setShowIP] = useState(false);
-  const [ipS, setIpS] = useState(1);
-  const [ipN, setIpN] = useState("");
-  const [ipSv, setIpSv] = useState(4);
-  const [ipCat, setIpCat] = useState("Mains");
-  const [ipD, setIpD] = useState("");
-  const [ipIng, setIpIng] = useState("");
-  const [ipMth, setIpMth] = useState("");
-  const [ipSt, setIpSt] = useState("idle");
-  const [ipR, setIpR] = useState(null);
+  const [ipS, setIpS] = useState(1); /* 1=input, 2=preview */
+  const [ipTitle, setIpTitle] = useState("");
+  const [ipServ, setIpServ] = useState(4);
+  const [ipText, setIpText] = useState("");
+  const [ipLang, setIpLang] = useState("auto");
+  const [ipMode, setIpMode] = useState("smart");
+  const [ipSt, setIpSt] = useState("idle"); /* idle|parsing|preview|error */
+  const [ipR, setIpR] = useState(null); /* full backend response */
   const [ipErr, setIpErr] = useState("");
-  const ipReset = ()=>{setIpS(1);setIpN("");setIpSv(4);setIpCat("Mains");setIpD("");setIpIng("");setIpMth("");setIpSt("idle");setIpR(null);setIpErr("");};
+  const ipReset = ()=>{setIpS(1);setIpTitle("");setIpServ(4);setIpText("");setIpLang("auto");setIpMode("smart");setIpSt("idle");setIpR(null);setIpErr("");};
 
-  const IP_SYS = `You are a culinary data architect. Convert structured recipe input into JSON for a recipe builder. Return ONLY valid JSON, no prose.
-
-SCHEMA: {"id":"8charId","name":"FROM INPUT","description":"FROM INPUT","servings":N,"status":"published","tags":["auto"],"category":"FROM INPUT","preparations":[{"id":"8charId","name":"Main","comment":"","isModule":false,"laneNames":["Lane1","Lane2"],"grid":[[stepOrNull,stepOrNull]]}]}
-
-STEP: {"id":"8charId","title":"Short title","instruction":"Detail","ingredients":[{"uid":"8charId","ingredientId":"slug","name":"Display","qty":100,"unit":"g"}],"processes":["process"],"tool":{"uid":"8charId","toolId":"slug","name":"Display","opts":{}},"connectsTo":[{"targetId":"stepId","side":"left|right"}]}
-
-TOOL OPTS: oven:{"_temp":180,"_time":30,"_timeUnit":"min"}, cast-iron-pan/wok/reg-pot:{"heat":"Medium-High"}, knife:{"cut":"Dice"}, thermomix:{"_temp":80,"_speed":"3","_time":10,"_timeUnit":"min"}
-
-UNITS: g,kg,ml,l,tsp,tbsp,cup,ea,pinch,bunch,clove,to taste
-
-APPROVED INGREDIENTS: aji-amarillo,balsamic,basil,bay-leaf,beef-chuck,beef-mince,beef-rib-eye,beef-sirloin,beef-stock,beef-tenderloin,butter,capsicum,carrot,caster-sugar,celery,chicken,chilli,cinnamon,coconut-milk,condensed-milk,coriander-fresh,cornflour,cream,cream-of-tartar,cucumber,cumin,egg,egg-white,egg-yolk,evaporated-milk,fish-sauce,garlic,ginger,green-beans,guanciale,honey,icing-sugar,lamb,leek,lemon,lime,milk,mushroom,olive-oil,onion,oregano,oyster-sauce,pancetta,paprika,parmesan,parsley,pasta-water,pecorino-romano,pepper,pisco,plain-flour,pork,potato,pumpkin,raspberry,red-onion,rice,roma-tomato,rosemary,salt,sesame-oil,shallot,soy-sauce,spaghetti-fresh,spring-onion,strawberry,sugar,thyme,tomato-paste,vanilla,vanilla-bean,vegetable-oil,vinegar,water,wine-red,wine-white,zucchini. For unknown ingredients create a slug.
-
-APPROVED TOOLS: baking-tray,blow-torch,bowl,cast-iron-pan,cast-iron-pot,deep-fryer,food-processor,fridge,grater,jug,kitchenaid,knife,mortar,oven,reg-pot,rice-cooker,saucepan,scale,sieve,stock-pot,thermomix,tongs,whisk,wok
-
-APPROVED PROCESSES: bake,batonnet,beat,blanch,boil,braise,chill,chop,concentrate,cool,deep-fry,deglaze,dice,dissolve,emulsify,evaporate,ferment,filter,fold,grate,grill,hydrate,infuse,julienne,knead,marinate,measure,mince,mix,pan-fry,pan-roast,peel,plate,poach,portion,pour,proof,reduce,rest,roast,sauté,season,sear,shallow-fry,simmer,slice,soak,steam,stew,stir,strain,toast,torching,toss,trim,wash,whip,whisk. If a technique has no match, use the closest or omit and describe in instruction.
-
-LANE RULES: Each ingredient group heading (bare noun or "For the X") = a lane. grid[row][lane], rows=time, null=empty cell. Place ingredients only at first use. connectsTo when output moves between lanes. 1-5 lanes typical. Vegetables cooked WITH protein = same lane.`;
-
-  const runIP = async ()=>{
-    if(!ipN.trim()||!ipIng.trim()||!ipMth.trim())return;
-    setIpSt("parsing");setIpErr("");
-    try{
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,system:IP_SYS,messages:[{role:"user",content:`NAME: ${ipN}\nSERVINGS: ${ipSv}\nCATEGORY: ${ipCat}\nDESCRIPTION: ${ipD||"No description."}\n\nINGREDIENTS:\n${ipIng}\n\nMETHOD:\n${ipMth}`}]})});
-      const data=await resp.json();const raw=data.content?.find(b=>b.type==="text")?.text||"";
-      const clean=raw.replace(/^```json\s*/i,"").replace(/^```\s*/i,"").replace(/\s*```$/,"").trim();
-      const parsed=JSON.parse(clean);
-      if(!parsed.name||!parsed.preparations)throw new Error("Missing name or preparations");
-      parsed.id=Math.random().toString(36).slice(2,10);parsed.status="published";
-      setIpR(parsed);setIpSt("preview");setIpS(4);
-    }catch(e){setIpErr(e.message);setIpSt("error");}
+  /* Build compact library summaries for appContext */
+  const ipBuildContext = () => {
+    const ingLib = Object.entries(lib||{}).flatMap(([cat,items])=>items.map(i=>({id:i.id,n:i.n||i.id,cat})));
+    const toolLib = Object.values(tl||{}).flat().map(t2=>({id:t2.id,n:t2.n||t2.id}));
+    const procLib = Object.values(pl||{}).flat();
+    return { ingredientLibrary:ingLib, toolLibrary:toolLib, processLibrary:procLib, customIngredients:cI, customTools:cT, customProcesses:cP, schemaVersion:1 };
   };
-  const confirmIP = ()=>{if(!ipR)return;setRecsAndPersist(prev=>[...prev,ipR]);sAId(ipR.id);setShowIP(false);ipReset();sV("view");};
+
+  /* uid generator */
+  const uid = () => Math.random().toString(36).slice(2,10);
+
+  /* Normalize IDs in the draft to avoid collisions */
+  const normalizeIds = (draft) => {
+    if (!draft || !draft.preparations) return draft;
+    const idMap = {};
+    const newId = (old) => { if (!old) return uid(); if (!idMap[old]) idMap[old]=uid(); return idMap[old]; };
+    draft.id = uid();
+    draft.status = "draft";
+    draft.preparations.forEach(prep => {
+      prep.id = uid();
+      if (!prep.grid) return;
+      /* First pass: map all step IDs */
+      prep.grid.forEach(row => row.forEach(step => { if (step) { const oldId=step.id; step.id=newId(oldId); }}));
+      /* Second pass: fix connectsTo references */
+      prep.grid.forEach(row => row.forEach(step => {
+        if (step && step.connectsTo) {
+          step.connectsTo = step.connectsTo.map(c => ({...c, targetId: idMap[c.targetId] || c.targetId }));
+        }
+        if (step) {
+          (step.ingredients||[]).forEach(i => { i.uid = uid(); });
+          if (step.tool) step.tool.uid = uid();
+        }
+      }));
+      /* Ensure all rows have same lane count */
+      const maxLanes = Math.max(0,...prep.grid.map(r=>(r||[]).length));
+      prep.grid.forEach(row => { while(row.length<maxLanes) row.push(null); });
+    });
+    return draft;
+  };
+
+  const runIP = async () => {
+    if (!ipText.trim()) return;
+    setIpSt("parsing"); setIpErr("");
+    try {
+      const resp = await fetch(`${IP_URL}/api/import-pro/parse`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceText: ipText.trim(),
+          hints: { title: ipTitle.trim()||undefined, servings: ipServ, language: ipLang, importMode: ipMode },
+          appContext: ipBuildContext(),
+        }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.message || "Parse failed");
+      setIpR(data);
+      setIpSt("preview");
+      setIpS(2);
+    } catch(e) { setIpErr(e.message); setIpSt("error"); }
+  };
+
+  const confirmIP = () => {
+    if (!ipR?.recipeDraft) return;
+    const normalized = normalizeIds(JSON.parse(JSON.stringify(ipR.recipeDraft)));
+    setRecsAndPersist(prev => [...prev, normalized]);
+    sAId(normalized.id);
+    setShowIP(false);
+    ipReset();
+    sV("view");
+  };
 
   const act = recs.find(r => r.id === aId);
   const filt = recs.filter(r => r.name.toLowerCase().includes(sr.toLowerCase()) || r.tags?.some(x => x.toLowerCase().includes(sr.toLowerCase())));
@@ -859,76 +897,127 @@ LANE RULES: Each ingredient group heading (bare noun or "For the X") = a lane. g
         </div>
       </div>
     </div>}
-    {/* ═══ IMPORT PRO MODAL ═══ */}
+    {/* ═══ IMPORT PRO MODAL v2 ═══ */}
     {showIP && <div style={{ position:"fixed",inset:0,background:"rgba(42,36,32,0.55)",zIndex:1300,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)",padding:16 }} onClick={()=>{if(ipSt!=="parsing"){setShowIP(false);ipReset();}}}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:TH().bgC,borderRadius:20,maxWidth:600,width:"100%",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:TH().shO,overflow:"hidden",color:TH().tx }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:TH().bgC,borderRadius:20,maxWidth:680,width:"100%",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:TH().shO,overflow:"hidden",color:TH().tx }}>
+        {/* Header */}
         <div style={{ padding:"16px 24px 12px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
           <div style={{ display:"flex",alignItems:"center",gap:10 }}>
             <div style={{ width:32,height:32,borderRadius:9,background:`linear-gradient(135deg,${TH().acc},${TH().sec})`,display:"flex",alignItems:"center",justifyContent:"center" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="M15 2h7v7"/></svg>
             </div>
-            <div><div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700 }}>Import Pro</div><div style={{ fontSize:9,color:TH().txM }}>Step {ipS} of 4 · AI-powered</div></div>
+            <div><div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700 }}>Import Pro</div><div style={{ fontSize:9,color:TH().txM }}>AI-powered recipe agent · Secure backend</div></div>
           </div>
           <button onClick={()=>{setShowIP(false);ipReset();}} style={{ background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:TH().txM }}>&times;</button>
         </div>
-        <div style={{ display:"flex",padding:"0 24px",gap:4,paddingTop:12 }}>{[1,2,3,4].map(s=><div key={s} style={{ flex:1,height:3,borderRadius:2,background:s<=ipS?TH().acc:TH().bdS }}/>)}</div>
+
+        {/* Body */}
         <div style={{ flex:1,overflowY:"auto",padding:"16px 24px 20px" }}>
+
+          {/* ── INPUT STEP ── */}
           {ipS===1 && <>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,marginBottom:12 }}>Recipe basics</div>
-            <div style={{ marginBottom:12 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Name <span style={{color:TH().err}}>*</span></label><input value={ipN} onChange={e=>setIpN(e.target.value)} placeholder="e.g. Lomo Saltado" style={{ ...S.inp(),fontSize:13,fontWeight:600 }}/></div>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,marginBottom:12 }}>Paste your recipe</div>
+            {/* Title + Servings row */}
             <div style={{ display:"flex",gap:12,marginBottom:12 }}>
-              <div style={{ flex:1 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Servings <span style={{color:TH().err}}>*</span></label><input type="number" min="1" value={ipSv} onChange={e=>setIpSv(Math.max(1,+e.target.value))} style={{ ...S.inp(),textAlign:"center",fontSize:14,fontWeight:700 }}/></div>
-              <div style={{ flex:2 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Category</label><select value={ipCat} onChange={e=>setIpCat(e.target.value)} style={{ ...S.sel(),width:"100%",fontSize:12,padding:"7px 10px" }}><option value="Entrees">Entrees</option><option value="Mains">Mains</option><option value="Desserts">Desserts</option><option value="Drinks & Cocktails">Drinks & Cocktails</option></select></div>
+              <div style={{ flex:3 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Title <span style={{ fontWeight:400 }}>(optional)</span></label><input value={ipTitle} onChange={e=>setIpTitle(e.target.value)} placeholder="Auto-detected if empty" style={{ ...S.inp(),fontSize:12 }}/></div>
+              <div style={{ flex:1 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Servings</label><input type="number" min="1" value={ipServ} onChange={e=>setIpServ(Math.max(1,+e.target.value))} style={{ ...S.inp(),textAlign:"center",fontSize:13,fontWeight:700 }}/></div>
             </div>
-            <div><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Description</label><textarea value={ipD} onChange={e=>setIpD(e.target.value)} placeholder="Short description..." rows={2} style={{ ...S.inp(),resize:"vertical",lineHeight:1.5 }}/></div>
-          </>}
-          {ipS===2 && <>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,marginBottom:4 }}>Ingredients</div>
-            <p style={{ fontSize:11,color:TH().txM,margin:"0 0 12px" }}>Group by component using headings. One per line.</p>
-            <textarea value={ipIng} onChange={e=>setIpIng(e.target.value)} placeholder={"Beef\n1 kg beef tenderloin, cut into thick strips\n10 g salt\n2 g black pepper\n\nVegetables\n2 large red onions, cut into wedges\n4 tomatoes, deseeded\n4 garlic cloves, minced\n\nSauce\n80 ml soy sauce\n40 ml red wine vinegar\n1 tsp sugar\n\nChips\n1.2 kg potatoes, cut into chips\nOil for frying\n\nRice\n400 g white rice\n560 ml water"} style={{ ...S.inp(),minHeight:280,resize:"vertical",lineHeight:1.7,fontFamily:"'JetBrains Mono',monospace",fontSize:12 }}/>
-          </>}
-          {ipS===3 && <>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,marginBottom:4 }}>Method</div>
-            <p style={{ fontSize:11,color:TH().txM,margin:"0 0 12px" }}>Describe cooking steps. Match your ingredient groups.</p>
-            <textarea value={ipMth} onChange={e=>setIpMth(e.target.value)} placeholder={"Rice: Wash, cook with water and salt, rest 10 min.\n\nChips: Soak 30 min, blanch fry at 150°C for 6 min, crisp fry at 180°C until golden.\n\nSauce: Mix soy, vinegar, stock, sugar in a bowl.\n\nLomo Saltado:\n1. Season beef with salt, pepper, oil.\n2. Heat wok very high. Sear beef in batches, 1-2 min each.\n3. Stir-fry onion and chilli 45 sec.\n4. Add garlic and spring onion 15 sec.\n5. Add tomato 30 sec.\n6. Return beef, pour sauce, toss 30 sec.\n7. Add coriander. Serve with rice and chips."} style={{ ...S.inp(),minHeight:300,resize:"vertical",lineHeight:1.7,fontSize:12 }}/>
-          </>}
-          {ipS===4 && ipSt==="preview" && ipR && <>
-            <div style={{ padding:"8px 12px",borderRadius:8,background:TH().ok+"12",border:`1px solid ${TH().ok}30`,marginBottom:14,display:"flex",alignItems:"center",gap:8 }}>
-              <span style={{ color:TH().ok,fontWeight:600,fontSize:11 }}>✓ Parsed successfully</span>
+            {/* Language + Mode row */}
+            <div style={{ display:"flex",gap:12,marginBottom:14 }}>
+              <div style={{ flex:1 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Language</label><select value={ipLang} onChange={e=>setIpLang(e.target.value)} style={{ ...S.sel(),width:"100%",fontSize:11,padding:"6px 8px" }}><option value="auto">Auto-detect</option><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option></select></div>
+              <div style={{ flex:2 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Import mode</label><select value={ipMode} onChange={e=>setIpMode(e.target.value)} style={{ ...S.sel(),width:"100%",fontSize:11,padding:"6px 8px" }}><option value="smart">Smart recipe</option><option value="preserve">Preserve cookbook structure</option><option value="professional">Professional mise en place</option></select></div>
             </div>
-            <div style={{ background:TH().bgS,borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
-              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,marginBottom:2 }}>{ipR.name}</div>
-              <div style={{ fontSize:11,color:TH().txM,marginBottom:4 }}>{ipR.servings} servings · {ipR.category} · {ipR.tags?.join(", ")}</div>
-              {ipR.description && <div style={{ fontSize:11,color:TH().tx2,lineHeight:1.5 }}>{ipR.description}</div>}
-            </div>
-            {ipR.preparations?.map((prep,pi)=>{const ts2=prep.grid?.flat().filter(Boolean).length||0;const procs=[...new Set(prep.grid?.flat().filter(Boolean).flatMap(s=>s.processes||[]))];
-              return <div key={pi} style={{ background:TH().bgC,borderRadius:10,border:`1px solid ${TH().bdS}`,padding:"12px 14px",marginBottom:8 }}>
-                <div style={{ fontSize:12,fontWeight:700,marginBottom:4 }}>{prep.name}</div>
-                <div style={{ display:"flex",flexWrap:"wrap",gap:4,marginBottom:6 }}>{prep.laneNames?.map((ln,li)=><span key={li} style={{ fontSize:10,padding:"2px 8px",borderRadius:6,background:TH().bgS,border:`1px solid ${TH().bdS}`,color:TH().tx2 }}>{ln}</span>)}</div>
-                <div style={{ fontSize:10,color:TH().txM }}>{ts2} steps · {procs.length} processes</div>
-                <div style={{ marginTop:6 }}>{prep.grid?.flat().filter(Boolean).map((step,si)=><div key={si} style={{ display:"flex",gap:6,alignItems:"center",padding:"3px 0",borderTop:si?`1px solid ${TH().div}`:undefined }}>
-                  <div style={{ fontSize:10,flex:1,fontWeight:500 }}>{step.title}</div>
-                  <div style={{ display:"flex",gap:2 }}>{step.processes?.slice(0,3).map(p=><span key={p} style={{ fontSize:8,padding:"1px 4px",borderRadius:4,background:TH().proc+"10",color:TH().proc }}>{p}</span>)}</div>
-                </div>)}</div>
-              </div>;})}
+            {/* Main textarea */}
+            <textarea value={ipText} onChange={e=>setIpText(e.target.value)} disabled={ipSt==="parsing"} placeholder={"Paste the full recipe here — ingredients + method together.\n\nThe AI agent will automatically:\n• Identify ingredient groups and create lanes\n• Map ingredients to the library\n• Infer tools from context\n• Assign processes\n• Detect parallel cooking tracks\n• Create cross-lane connections\n\nYou can paste any format:\n• Cookbook format with ingredient list + numbered steps\n• Chef notes with timeline\n• Casual prose descriptions\n• Multi-language recipes"} style={{ ...S.inp(),minHeight:300,resize:"vertical",lineHeight:1.7,fontSize:12,opacity:ipSt==="parsing"?0.5:1 }}/>
+            {ipText && <div style={{ textAlign:"right",fontSize:9,color:TH().txD,marginTop:2 }}>{ipText.length.toLocaleString()} chars</div>}
+            {ipSt==="error" && <div style={{ marginTop:10,padding:"10px 14px",borderRadius:8,background:TH().err+"10",border:`1px solid ${TH().err}25` }}>
+              <div style={{ fontSize:12,fontWeight:600,color:TH().err,marginBottom:4 }}>Parse failed</div>
+              <div style={{ fontSize:11,color:TH().err,opacity:0.8 }}>{ipErr}</div>
+              <div style={{ fontSize:10,color:TH().txM,marginTop:6 }}>Check that your backend is running at {IP_URL}</div>
+            </div>}
           </>}
+
+          {/* ── PARSING STATE ── */}
           {ipSt==="parsing" && <div style={{ textAlign:"center",padding:"48px 0" }}>
             <div style={{ width:28,height:28,border:`3px solid ${TH().bdS}`,borderTopColor:TH().acc,borderRadius:"50%",margin:"0 auto 14px",animation:"spin 0.8s linear infinite" }}/>
-            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600 }}>Claude is reading your recipe</div>
-            <div style={{ fontSize:11,color:TH().txM,marginTop:4 }}>Creating lanes, mapping ingredients...</div>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600 }}>Analysing recipe</div>
+            <div style={{ fontSize:11,color:TH().txM,marginTop:4 }}>Mapping ingredients, inferring tools, creating lanes...</div>
           </div>}
-          {ipSt==="error" && <div style={{ padding:"12px 14px",borderRadius:8,background:TH().err+"10",border:`1px solid ${TH().err}25`,marginTop:8 }}>
-            <div style={{ fontSize:12,fontWeight:600,color:TH().err,marginBottom:4 }}>Parse failed</div>
-            <div style={{ fontSize:11,color:TH().err,opacity:0.8 }}>{ipErr}</div>
-          </div>}
+
+          {/* ── PREVIEW STEP ── */}
+          {ipS===2 && ipSt==="preview" && ipR && <>
+            {/* Confidence bar */}
+            <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"10px 14px",borderRadius:8,background:ipR.confidence>0.7?TH().ok+"12":ipR.confidence>0.4?TH().warn+"12":TH().err+"12",border:`1px solid ${ipR.confidence>0.7?TH().ok:ipR.confidence>0.4?TH().warn:TH().err}30` }}>
+              <div style={{ fontSize:22,fontWeight:700,fontFamily:"'Playfair Display',serif",color:ipR.confidence>0.7?TH().ok:ipR.confidence>0.4?TH().warn:TH().err }}>{Math.round(ipR.confidence*100)}%</div>
+              <div><div style={{ fontSize:11,fontWeight:600,color:ipR.confidence>0.7?TH().ok:ipR.confidence>0.4?TH().warn:TH().err }}>Confidence</div><div style={{ fontSize:9,color:TH().txM }}>Review the preview below before importing</div></div>
+            </div>
+
+            {/* Recipe summary */}
+            {ipR.recipeDraft && <div style={{ background:TH().bgS,borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
+              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,marginBottom:2 }}>{ipR.recipeDraft.name}</div>
+              <div style={{ fontSize:11,color:TH().txM,marginBottom:4 }}>{ipR.recipeDraft.servings} servings · {ipR.recipeDraft.category} · {ipR.recipeDraft.tags?.join(", ")}</div>
+              {ipR.recipeDraft.description && <div style={{ fontSize:11,color:TH().tx2,lineHeight:1.5 }}>{ipR.recipeDraft.description}</div>}
+            </div>}
+
+            {/* Preparations */}
+            {ipR.recipeDraft?.preparations?.map((prep,pi)=>{
+              const steps=prep.grid?.flat().filter(Boolean)||[];
+              const procs=[...new Set(steps.flatMap(s=>s.processes||[]))];
+              const tools=[...new Set(steps.map(s=>s.tool?.name).filter(Boolean))];
+              return <div key={pi} style={{ background:TH().bgC,borderRadius:10,border:`1px solid ${TH().bdS}`,padding:"12px 14px",marginBottom:8 }}>
+                <div style={{ fontSize:12,fontWeight:700,marginBottom:4 }}>{prep.name} {prep.isModule&&<span style={{ fontSize:8,padding:"1px 5px",borderRadius:4,background:TH().acc+"10",color:TH().acc }}>module</span>}</div>
+                <div style={{ display:"flex",flexWrap:"wrap",gap:4,marginBottom:6 }}>{prep.laneNames?.map((ln,li)=><span key={li} style={{ fontSize:10,padding:"2px 8px",borderRadius:6,background:TH().bgS,border:`1px solid ${TH().bdS}`,color:TH().tx2 }}>{ln}</span>)}</div>
+                <div style={{ display:"flex",gap:12,fontSize:10,color:TH().txM,marginBottom:6 }}><span><b>{steps.length}</b> steps</span><span><b>{procs.length}</b> processes</span><span><b>{tools.length}</b> tools</span></div>
+                {steps.map((step,si)=><div key={si} style={{ display:"flex",gap:6,alignItems:"center",padding:"3px 0",borderTop:si?`1px solid ${TH().div}`:undefined }}>
+                  <div style={{ fontSize:10,flex:1,fontWeight:500 }}>{step.title}</div>
+                  <div style={{ display:"flex",gap:2 }}>{step.processes?.slice(0,3).map(p=><span key={p} style={{ fontSize:8,padding:"1px 4px",borderRadius:4,background:TH().proc+"10",color:TH().proc }}>{p}</span>)}</div>
+                  {step.tool&&<span style={{ fontSize:8,color:TH().txM }}>{step.tool.name}</span>}
+                </div>)}
+              </div>;
+            })}
+
+            {/* Custom candidates */}
+            {ipR.customIngredientCandidates?.length>0 && <div style={{ marginBottom:8,padding:"10px 14px",borderRadius:8,background:TH().warn+"10",border:`1px solid ${TH().warn}25` }}>
+              <div style={{ fontSize:10,fontWeight:700,color:TH().warn,textTransform:"uppercase",marginBottom:6 }}>New ingredients to add</div>
+              {ipR.customIngredientCandidates.map((c,ci2)=><div key={ci2} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 0",borderTop:ci2?`1px solid ${TH().div}`:undefined }}>
+                <div><span style={{ fontSize:11,fontWeight:600 }}>{c.name}</span> <span style={{ fontSize:9,color:TH().txM }}>{c.category} · {c.unit} · {Math.round(c.confidence*100)}%</span></div>
+                <div style={{ fontSize:9,color:TH().txM }}>{c.reason}</div>
+              </div>)}
+            </div>}
+
+            {ipR.customToolCandidates?.length>0 && <div style={{ marginBottom:8,padding:"10px 14px",borderRadius:8,background:TH().warn+"10",border:`1px solid ${TH().warn}25` }}>
+              <div style={{ fontSize:10,fontWeight:700,color:TH().warn,textTransform:"uppercase",marginBottom:6 }}>New tools to add</div>
+              {ipR.customToolCandidates.map((c,ci2)=><div key={ci2} style={{ fontSize:11,padding:"3px 0" }}><b>{c.name}</b> <span style={{ fontSize:9,color:TH().txM }}>{c.reason}</span></div>)}
+            </div>}
+
+            {/* Warnings */}
+            {ipR.warnings?.length>0 && <div style={{ marginBottom:8,padding:"10px 14px",borderRadius:8,background:TH().err+"08",border:`1px solid ${TH().err}20` }}>
+              <div style={{ fontSize:10,fontWeight:700,color:TH().err,textTransform:"uppercase",marginBottom:4 }}>Warnings</div>
+              {ipR.warnings.map((w,wi)=><div key={wi} style={{ fontSize:10,color:TH().tx2,lineHeight:1.5 }}>• {w}</div>)}
+            </div>}
+
+            {/* Assumptions */}
+            {ipR.assumptions?.length>0 && <div style={{ marginBottom:8,padding:"10px 14px",borderRadius:8,background:TH().info+"08",border:`1px solid ${TH().info}20` }}>
+              <div style={{ fontSize:10,fontWeight:700,color:TH().info,textTransform:"uppercase",marginBottom:4 }}>Assumptions</div>
+              {ipR.assumptions.map((a,ai)=><div key={ai} style={{ fontSize:10,color:TH().tx2,lineHeight:1.5 }}>• {a}</div>)}
+            </div>}
+
+            <div style={{ padding:"8px 12px",borderRadius:8,background:TH().bgS,fontSize:10,color:TH().txM,lineHeight:1.5 }}>
+              Recipe will be imported as <b>draft</b>. Open the Editor to fine-tune.
+            </div>
+          </>}
         </div>
+
+        {/* Footer */}
         <div style={{ padding:"12px 24px",borderTop:`1px solid ${TH().div}`,display:"flex",justifyContent:"space-between",background:TH().bgC }}>
-          <div>{ipS>1&&ipSt!=="parsing"&&<button onClick={()=>{if(ipS===4){setIpS(3);setIpSt("idle");setIpR(null);}else setIpS(ipS-1);}} style={{ ...S.btn("outline"),fontSize:11,padding:"5px 14px" }}>← Back</button>}</div>
+          <div>
+            {ipS===2 && <button onClick={()=>{setIpS(1);setIpSt("idle");setIpR(null);}} style={{ ...S.btn("outline"),fontSize:11,padding:"5px 14px" }}>← Edit text</button>}
+          </div>
           <div style={{ display:"flex",gap:8 }}>
-            {ipS===1 && <button onClick={()=>{if(!ipN.trim()){alert("Name required.");return;}setIpS(2);}} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px" }}>Next →</button>}
-            {ipS===2 && <button onClick={()=>{if(!ipIng.trim()){alert("Add ingredients.");return;}setIpS(3);}} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px" }}>Next →</button>}
-            {ipS===3 && ipSt!=="parsing" && <button onClick={()=>{if(!ipMth.trim()){alert("Add method.");return;}runIP();setIpS(4);}} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px",background:`linear-gradient(135deg,${TH().acc},${TH().sec})` }}>Parse with AI</button>}
-            {ipS===4 && ipSt==="preview" && <button onClick={confirmIP} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px" }}>✓ Import recipe</button>}
+            {ipS===1 && ipSt!=="parsing" && <button onClick={runIP} disabled={!ipText.trim()} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px",opacity:!ipText.trim()?0.5:1,background:`linear-gradient(135deg,${TH().acc},${TH().sec})` }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="M15 2h7v7"/></svg> Analyse Recipe
+            </button>}
+            {ipS===2 && ipSt==="preview" && <button onClick={confirmIP} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px" }}>✓ Import as Draft Recipe</button>}
           </div>
         </div>
       </div>
