@@ -396,78 +396,46 @@ const getSuggestedTools = (cat, tLib) => {
 };
 const fmtQ = (qty, unit) => `${qty} ${unit}`;
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   THEME SYSTEM — Light + Dark mode with full colour palette
-   ─────────────────────────────────────────────────────────────────────────
-   All colours flow through the TH object. Components reference TH() to
-   get the current theme's colour values. The theme state lives in React
-   context and persists to localStorage.
-═══════════════════════════════════════════════════════════════════════════ */
+/* ═══ Theme System ═══ */
 const THEMES = {
   light: {
-    bgMain:"#FDFAF5", bgSecondary:"#F5F2ED", bgSurface:"#FFFFFF", bgSurfaceElevated:"#FFFFFF",
-    bgSurfaceHover:"#FAF7F2", bgInput:"#FDFAF5", bgTableHeader:"#F5F0E8",
-    borderDefault:"#E0D9CF", borderSubtle:"#EDE8E0", borderStrong:"#D5CEBC", divider:"#EDE8E0",
-    textPrimary:"#2A2420", textSecondary:"#6A6058", textMuted:"#8A7E72", textDisabled:"#B0A898",
-    textOnPrimary:"#FDFAF5", textOnAccent:"#FFFFFF",
-    primary:"#2A2420", primaryHover:"#3D352E", primaryActive:"#1A1614",
-    accent:"#8B5CF6", accentHover:"#7C4FE0", accentActive:"#6D42CC",
-    secondary:"#C49A6C", secondaryHover:"#B5926C",
-    focusRing:"#8B5CF640",
-    success:"#6BAF6E", successBg:"#6BAF6E12", successBorder:"#6BAF6E30",
-    warning:"#E8B84B", warningBg:"#E8B84B15", warningBorder:"#E8B84B30",
-    error:"#D45B5B", errorBg:"#D45B5B10", errorBorder:"#D45B5B25",
-    info:"#4A9EAF", infoBg:"#4A9EAF12", infoBorder:"#4A9EAF30",
-    module:"#9B7EB8", moduleBg:"#9B7EB815", moduleBorder:"#9B7EB830",
-    proc:"#8B5CF6", procBg:"#8B5CF610", procBorder:"#8B5CF625",
+    bg:"#FDFAF5",bgS:"#F5F2ED",bgC:"#FFF",bgH:"#FAF7F2",bgI:"#FDFAF5",
+    bd:"#E0D9CF",bdS:"#EDE8E0",bdSt:"#D5CEBC",div:"#E8E2D8",
+    tx:"#2A2420",tx2:"#6A6058",txM:"#8A7E72",txD:"#B0A898",txOn:"#FDFAF5",
+    pri:"#2A2420",priH:"#3D352E",acc:"#8B5CF6",sec:"#C49A6C",
+    ok:"#6BAF6E",warn:"#E8B84B",err:"#D45B5B",info:"#4A9EAF",
+    mod:"#9B7EB8",proc:"#8B5CF6",
     hdrBg:"rgba(253,250,245,0.95)",
-    shadowSm:"0 2px 8px rgba(42,36,32,0.04)", shadowMd:"0 4px 16px rgba(42,36,32,0.08)",
-    shadowLg:"0 8px 32px rgba(42,36,32,0.12)", shadowOverlay:"0 20px 60px rgba(42,36,32,0.25)",
-    overlayBg:"rgba(42,36,32,0.55)",
-    cardGradient:`linear-gradient(90deg,#C49A6C,#8B5CF6,#6BAF6E,#D45B5B,#4A9EAF)`,
+    sh:"0 2px 10px rgba(42,36,32,0.04)",shM:"0 6px 24px rgba(42,36,32,0.10)",
+    shO:"0 20px 60px rgba(42,36,32,0.25)",ov:"rgba(42,36,32,0.55)",
   },
   dark: {
-    bgMain:"#1A1714", bgSecondary:"#221F1B", bgSurface:"#2A2622", bgSurfaceElevated:"#332E29",
-    bgSurfaceHover:"#332E29", bgInput:"#221F1B", bgTableHeader:"#2A2622",
-    borderDefault:"#3D3830", borderSubtle:"#332E29", borderStrong:"#4A443C", divider:"#332E29",
-    textPrimary:"#F0EBE3", textSecondary:"#C2B8A8", textMuted:"#8A7E72", textDisabled:"#5A5048",
-    textOnPrimary:"#1A1714", textOnAccent:"#FFFFFF",
-    primary:"#F0EBE3", primaryHover:"#E0D8CC", primaryActive:"#D0C8BC",
-    accent:"#A78BFA", accentHover:"#B99CFF", accentActive:"#C4ABFF",
-    secondary:"#D4A87A", secondaryHover:"#E0B88A",
-    focusRing:"#A78BFA40",
-    success:"#7BC47E", successBg:"#7BC47E15", successBorder:"#7BC47E30",
-    warning:"#F0C65A", warningBg:"#F0C65A15", warningBorder:"#F0C65A30",
-    error:"#E06B6B", errorBg:"#E06B6B12", errorBorder:"#E06B6B25",
-    info:"#5AB8CA", infoBg:"#5AB8CA15", infoBorder:"#5AB8CA30",
-    module:"#B99ADE", moduleBg:"#B99ADE15", moduleBorder:"#B99ADE30",
-    proc:"#A78BFA", procBg:"#A78BFA15", procBorder:"#A78BFA30",
+    bg:"#1A1714",bgS:"#221F1B",bgC:"#2A2622",bgH:"#332E29",bgI:"#221F1B",
+    bd:"#3D3830",bdS:"#332E29",bdSt:"#4A443C",div:"#332E29",
+    tx:"#F0EBE3",tx2:"#C2B8A8",txM:"#8A7E72",txD:"#5A5048",txOn:"#1A1714",
+    pri:"#F0EBE3",priH:"#E0D8CC",acc:"#A78BFA",sec:"#D4A87A",
+    ok:"#7BC47E",warn:"#F0C65A",err:"#E06B6B",info:"#5AB8CA",
+    mod:"#B99ADE",proc:"#A78BFA",
     hdrBg:"rgba(26,23,20,0.92)",
-    shadowSm:"0 2px 8px rgba(0,0,0,0.20)", shadowMd:"0 4px 16px rgba(0,0,0,0.30)",
-    shadowLg:"0 8px 32px rgba(0,0,0,0.40)", shadowOverlay:"0 20px 60px rgba(0,0,0,0.50)",
-    overlayBg:"rgba(0,0,0,0.55)",
-    cardGradient:`linear-gradient(90deg,#D4A87A,#A78BFA,#7BC47E,#E06B6B,#5AB8CA)`,
+    sh:"0 2px 10px rgba(0,0,0,0.20)",shM:"0 6px 24px rgba(0,0,0,0.30)",
+    shO:"0 20px 60px rgba(0,0,0,0.50)",ov:"rgba(0,0,0,0.55)",
   }
 };
-
-const LS_THEME = "mise_en_code_theme";
-const getInitialTheme = () => { try { return localStorage.getItem(LS_THEME) || "light"; } catch { return "light"; } };
-
-/* Global mutable ref — components call TH() to get current palette */
-let _currentTheme = getInitialTheme();
-const TH = () => THEMES[_currentTheme] || THEMES.light;
+const LS_THEME="mise_en_code_theme";
+let _ct;try{_ct=localStorage.getItem(LS_THEME)||"light";}catch{_ct="light";}
+const TH=()=>THEMES[_ct]||THEMES.light;
 
 /* ═══ Styles (theme-aware) ═══ */
 const S = {
-  app:()=>({fontFamily:"'Cormorant Garamond','Georgia',serif",minHeight:"100vh",background:TH().bgMain,color:TH().textPrimary,transition:"background 0.3s, color 0.3s"}),
-  hdr:()=>({display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 20px",borderBottom:`1px solid ${TH().divider}`,background:TH().hdrBg,backdropFilter:"blur(10px)",position:"sticky",top:0,zIndex:100,transition:"background 0.3s, border-color 0.3s"}),
-  nb:a=>({padding:"5px 12px",borderRadius:20,border:"none",background:a?TH().primary:"transparent",color:a?TH().textOnPrimary:TH().textMuted,fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"background 0.2s, color 0.2s"}),
-  card:()=>({background:TH().bgSurface,borderRadius:14,border:`1px solid ${TH().borderSubtle}`,overflow:"hidden",cursor:"pointer",transition:"all 0.25s",boxShadow:TH().shadowSm}),
+  app:()=>({fontFamily:"'Cormorant Garamond','Georgia',serif",minHeight:"100vh",background:TH().bg,color:TH().tx,transition:"background 0.3s,color 0.3s"}),
+  hdr:()=>({display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 20px",borderBottom:`1px solid ${TH().div}`,background:TH().hdrBg,backdropFilter:"blur(10px)",position:"sticky",top:0,zIndex:100,transition:"background 0.3s"}),
+  nb:a=>({padding:"5px 12px",borderRadius:20,border:"none",background:a?TH().pri:"transparent",color:a?TH().txOn:TH().txM,fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:4}),
+  card:()=>({background:TH().bgC,borderRadius:14,border:`1px solid ${TH().bdS}`,overflow:"hidden",cursor:"pointer",transition:"all 0.25s",boxShadow:TH().sh}),
   tag:c=>({display:"inline-flex",alignItems:"center",gap:3,padding:"2px 8px",borderRadius:10,background:c+"16",color:c,fontSize:11,fontFamily:"'DM Sans',sans-serif",fontWeight:600,whiteSpace:"nowrap",border:`1px solid ${c}28`}),
-  btn:(v="primary")=>{const th=TH();return{padding:v==="sm"?"4px 10px":"7px 14px",borderRadius:v==="sm"?6:10,border:v==="outline"?`1.5px solid ${th.primary}`:"none",background:v==="primary"?th.primary:v==="danger"?th.error:"transparent",color:v==="primary"||v==="danger"?th.textOnPrimary:th.textPrimary,fontFamily:"'DM Sans',sans-serif",fontSize:v==="sm"?11:12,fontWeight:600,cursor:"pointer",transition:"background 0.2s, color 0.2s, border-color 0.2s"};},
-  inp:()=>({padding:"6px 10px",borderRadius:8,border:`1.5px solid ${TH().borderDefault}`,background:TH().bgInput,fontFamily:"'DM Sans',sans-serif",fontSize:12,color:TH().textPrimary,outline:"none",width:"100%",boxSizing:"border-box",transition:"background 0.3s, border-color 0.3s, color 0.3s"}),
-  sel:()=>({padding:"4px 8px",borderRadius:6,border:`1.5px solid ${TH().borderDefault}`,background:TH().bgInput,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().textPrimary,outline:"none",cursor:"pointer",transition:"background 0.3s, border-color 0.3s, color 0.3s"}),
-  olbl:()=>({fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().textMuted,fontWeight:600,letterSpacing:0.3}),
+  btn:(v="primary")=>{const t=TH();return{padding:v==="sm"?"4px 10px":"7px 14px",borderRadius:v==="sm"?6:10,border:v==="outline"?`1.5px solid ${t.pri}`:"none",background:v==="primary"?t.pri:v==="danger"?t.err:"transparent",color:v==="primary"||v==="danger"?t.txOn:t.tx,fontFamily:"'DM Sans',sans-serif",fontSize:v==="sm"?11:12,fontWeight:600,cursor:"pointer"};},
+  inp:()=>({padding:"6px 10px",borderRadius:8,border:`1.5px solid ${TH().bd}`,background:TH().bgI,fontFamily:"'DM Sans',sans-serif",fontSize:12,color:TH().tx,outline:"none",width:"100%",boxSizing:"border-box"}),
+  sel:()=>({padding:"4px 8px",borderRadius:6,border:`1.5px solid ${TH().bd}`,background:TH().bgI,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().tx,outline:"none",cursor:"pointer"}),
+  olbl:()=>({fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().txM,fontWeight:600,letterSpacing:0.3}),
 };
 
 const Ic = {
@@ -646,14 +614,9 @@ function App() {
   const [loginError, setLoginError] = useState(false);
   const isAdmin = role === "admin";
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const [theme, setTheme] = useState(getInitialTheme);
-  _currentTheme = theme; /* sync global ref */
-  const toggleTheme = () => {
-    const next = theme === "light" ? "dark" : "light";
-    setTheme(next);
-    _currentTheme = next;
-    try { localStorage.setItem(LS_THEME, next); } catch {}
-  };
+  const [theme, setTheme] = useState(()=>{try{return localStorage.getItem(LS_THEME)||"light";}catch{return"light";}});
+  _ct = theme;
+  const toggleTheme = () => { const n=theme==="light"?"dark":"light";setTheme(n);_ct=n;try{localStorage.setItem(LS_THEME,n);}catch{} };
   /* Initial data — will be overwritten by loadBootData */
   const [recs, sR] = useState(SAMP);
   const [aId, sAId] = useState(null);
@@ -786,6 +749,53 @@ function App() {
     e.target.value = "";
   };
 
+  /* ═══ Import Pro ═══ */
+  const [showIP, setShowIP] = useState(false);
+  const [ipS, setIpS] = useState(1);
+  const [ipN, setIpN] = useState("");
+  const [ipSv, setIpSv] = useState(4);
+  const [ipCat, setIpCat] = useState("Mains");
+  const [ipD, setIpD] = useState("");
+  const [ipIng, setIpIng] = useState("");
+  const [ipMth, setIpMth] = useState("");
+  const [ipSt, setIpSt] = useState("idle");
+  const [ipR, setIpR] = useState(null);
+  const [ipErr, setIpErr] = useState("");
+  const ipReset = ()=>{setIpS(1);setIpN("");setIpSv(4);setIpCat("Mains");setIpD("");setIpIng("");setIpMth("");setIpSt("idle");setIpR(null);setIpErr("");};
+
+  const IP_SYS = `You are a culinary data architect. Convert structured recipe input into JSON for a recipe builder. Return ONLY valid JSON, no prose.
+
+SCHEMA: {"id":"8charId","name":"FROM INPUT","description":"FROM INPUT","servings":N,"status":"published","tags":["auto"],"category":"FROM INPUT","preparations":[{"id":"8charId","name":"Main","comment":"","isModule":false,"laneNames":["Lane1","Lane2"],"grid":[[stepOrNull,stepOrNull]]}]}
+
+STEP: {"id":"8charId","title":"Short title","instruction":"Detail","ingredients":[{"uid":"8charId","ingredientId":"slug","name":"Display","qty":100,"unit":"g"}],"processes":["process"],"tool":{"uid":"8charId","toolId":"slug","name":"Display","opts":{}},"connectsTo":[{"targetId":"stepId","side":"left|right"}]}
+
+TOOL OPTS: oven:{"_temp":180,"_time":30,"_timeUnit":"min"}, cast-iron-pan/wok/reg-pot:{"heat":"Medium-High"}, knife:{"cut":"Dice"}, thermomix:{"_temp":80,"_speed":"3","_time":10,"_timeUnit":"min"}
+
+UNITS: g,kg,ml,l,tsp,tbsp,cup,ea,pinch,bunch,clove,to taste
+
+APPROVED INGREDIENTS: aji-amarillo,balsamic,basil,bay-leaf,beef-chuck,beef-mince,beef-rib-eye,beef-sirloin,beef-stock,beef-tenderloin,butter,capsicum,carrot,caster-sugar,celery,chicken,chilli,cinnamon,coconut-milk,condensed-milk,coriander-fresh,cornflour,cream,cream-of-tartar,cucumber,cumin,egg,egg-white,egg-yolk,evaporated-milk,fish-sauce,garlic,ginger,green-beans,guanciale,honey,icing-sugar,lamb,leek,lemon,lime,milk,mushroom,olive-oil,onion,oregano,oyster-sauce,pancetta,paprika,parmesan,parsley,pasta-water,pecorino-romano,pepper,pisco,plain-flour,pork,potato,pumpkin,raspberry,red-onion,rice,roma-tomato,rosemary,salt,sesame-oil,shallot,soy-sauce,spaghetti-fresh,spring-onion,strawberry,sugar,thyme,tomato-paste,vanilla,vanilla-bean,vegetable-oil,vinegar,water,wine-red,wine-white,zucchini. For unknown ingredients create a slug.
+
+APPROVED TOOLS: baking-tray,blow-torch,bowl,cast-iron-pan,cast-iron-pot,deep-fryer,food-processor,fridge,grater,jug,kitchenaid,knife,mortar,oven,reg-pot,rice-cooker,saucepan,scale,sieve,stock-pot,thermomix,tongs,whisk,wok
+
+APPROVED PROCESSES: bake,batonnet,beat,blanch,boil,braise,chill,chop,concentrate,cool,deep-fry,deglaze,dice,dissolve,emulsify,evaporate,ferment,filter,fold,grate,grill,hydrate,infuse,julienne,knead,marinate,measure,mince,mix,pan-fry,pan-roast,peel,plate,poach,portion,pour,proof,reduce,rest,roast,sauté,season,sear,shallow-fry,simmer,slice,soak,steam,stew,stir,strain,toast,torching,toss,trim,wash,whip,whisk. If a technique has no match, use the closest or omit and describe in instruction.
+
+LANE RULES: Each ingredient group heading (bare noun or "For the X") = a lane. grid[row][lane], rows=time, null=empty cell. Place ingredients only at first use. connectsTo when output moves between lanes. 1-5 lanes typical. Vegetables cooked WITH protein = same lane.`;
+
+  const runIP = async ()=>{
+    if(!ipN.trim()||!ipIng.trim()||!ipMth.trim())return;
+    setIpSt("parsing");setIpErr("");
+    try{
+      const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,system:IP_SYS,messages:[{role:"user",content:`NAME: ${ipN}\nSERVINGS: ${ipSv}\nCATEGORY: ${ipCat}\nDESCRIPTION: ${ipD||"No description."}\n\nINGREDIENTS:\n${ipIng}\n\nMETHOD:\n${ipMth}`}]})});
+      const data=await resp.json();const raw=data.content?.find(b=>b.type==="text")?.text||"";
+      const clean=raw.replace(/^```json\s*/i,"").replace(/^```\s*/i,"").replace(/\s*```$/,"").trim();
+      const parsed=JSON.parse(clean);
+      if(!parsed.name||!parsed.preparations)throw new Error("Missing name or preparations");
+      parsed.id=Math.random().toString(36).slice(2,10);parsed.status="published";
+      setIpR(parsed);setIpSt("preview");setIpS(4);
+    }catch(e){setIpErr(e.message);setIpSt("error");}
+  };
+  const confirmIP = ()=>{if(!ipR)return;setRecsAndPersist(prev=>[...prev,ipR]);sAId(ipR.id);setShowIP(false);ipReset();sV("view");};
+
   const act = recs.find(r => r.id === aId);
   const filt = recs.filter(r => r.name.toLowerCase().includes(sr.toLowerCase()) || r.tags?.some(x => x.toLowerCase().includes(sr.toLowerCase())));
   const mL = recs.flatMap(r => r.preparations.filter(p => p.isModule).map(p => ({ ...p, fromRecipe:r.name, recipeId:r.id })));
@@ -801,6 +811,9 @@ function App() {
         </div>}
         <button style={S.nb(vw==="browse")} onClick={()=>sV("browse")}><Ic.Bk/>{!isMobile && t.recipes}</button>
         {!isMobile && <button style={S.nb(false)} onClick={()=>{cN();}}><Ic.P/>{t.newRecipe}</button>}
+        {!isMobile && <button onClick={()=>setShowIP(true)} style={{...S.nb(false),fontSize:11,background:`linear-gradient(135deg,${TH().acc}15,${TH().sec}15)`,border:`1px solid ${TH().acc}30`,color:TH().acc,fontWeight:600}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="M15 2h7v7"/></svg> Import Pro
+        </button>}
         {!isMobile && <><div style={{ width:1,height:16,background:"#E0D9CF" }}/>
         <button style={{...S.nb(false),fontSize:11}} onClick={exportAll} title="Export all recipes as JSON">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -817,14 +830,11 @@ function App() {
           {syncUrl && <span style={{ position:"absolute",top:2,right:2,width:6,height:6,borderRadius:"50%",background:syncStatus==="error"?"#D45B5B":syncStatus==="saving"?"#E8B84B":"#6BAF6E" }}/>}
         </button></>}
         {/* Theme toggle */}
-        <div style={{ width:1,height:16,background:TH().divider }}/>
-        <button onClick={toggleTheme} style={{...S.nb(false),fontSize:11,padding:"4px 8px"}} title={theme==="light"?"Switch to dark mode":"Switch to light mode"}>
-          {theme==="light"
-            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>}
+        <button onClick={toggleTheme} style={{...S.nb(false),fontSize:11,padding:"4px 8px"}} title={theme==="light"?"Dark mode":"Light mode"}>
+          {theme==="light" ? "\uD83C\uDF19" : "\u2600\uFE0F"}
         </button>
         {/* Role badge + login/logout */}
-        <div style={{ width:1,height:16,background:TH().divider }}/>
+        <div style={{ width:1,height:16,background:"#E0D9CF" }}/>
         <button onClick={()=>{if(isAdmin){setRole("guest");try{localStorage.setItem(LS_ROLE,"guest");}catch{}}else{setShowLogin(true);setLoginPw("");setLoginError(false);}}} style={{...S.nb(false),fontSize:10,padding:"4px 10px",position:"relative",gap:4}}>
           <span style={{ width:7,height:7,borderRadius:"50%",background:isAdmin?"#6BAF6E":"#E8B84B",display:"inline-block",flexShrink:0 }}/>
           <span>{isAdmin ? "Admin" : "Guest"}</span>
@@ -849,6 +859,81 @@ function App() {
         </div>
       </div>
     </div>}
+    {/* ═══ IMPORT PRO MODAL ═══ */}
+    {showIP && <div style={{ position:"fixed",inset:0,background:"rgba(42,36,32,0.55)",zIndex:1300,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)",padding:16 }} onClick={()=>{if(ipSt!=="parsing"){setShowIP(false);ipReset();}}}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:TH().bgC,borderRadius:20,maxWidth:600,width:"100%",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:TH().shO,overflow:"hidden",color:TH().tx }}>
+        <div style={{ padding:"16px 24px 12px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+          <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+            <div style={{ width:32,height:32,borderRadius:9,background:`linear-gradient(135deg,${TH().acc},${TH().sec})`,display:"flex",alignItems:"center",justifyContent:"center" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="M15 2h7v7"/></svg>
+            </div>
+            <div><div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700 }}>Import Pro</div><div style={{ fontSize:9,color:TH().txM }}>Step {ipS} of 4 · AI-powered</div></div>
+          </div>
+          <button onClick={()=>{setShowIP(false);ipReset();}} style={{ background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:TH().txM }}>&times;</button>
+        </div>
+        <div style={{ display:"flex",padding:"0 24px",gap:4,paddingTop:12 }}>{[1,2,3,4].map(s=><div key={s} style={{ flex:1,height:3,borderRadius:2,background:s<=ipS?TH().acc:TH().bdS }}/>)}</div>
+        <div style={{ flex:1,overflowY:"auto",padding:"16px 24px 20px" }}>
+          {ipS===1 && <>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,marginBottom:12 }}>Recipe basics</div>
+            <div style={{ marginBottom:12 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Name <span style={{color:TH().err}}>*</span></label><input value={ipN} onChange={e=>setIpN(e.target.value)} placeholder="e.g. Lomo Saltado" style={{ ...S.inp(),fontSize:13,fontWeight:600 }}/></div>
+            <div style={{ display:"flex",gap:12,marginBottom:12 }}>
+              <div style={{ flex:1 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Servings <span style={{color:TH().err}}>*</span></label><input type="number" min="1" value={ipSv} onChange={e=>setIpSv(Math.max(1,+e.target.value))} style={{ ...S.inp(),textAlign:"center",fontSize:14,fontWeight:700 }}/></div>
+              <div style={{ flex:2 }}><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Category</label><select value={ipCat} onChange={e=>setIpCat(e.target.value)} style={{ ...S.sel(),width:"100%",fontSize:12,padding:"7px 10px" }}><option value="Entrees">Entrees</option><option value="Mains">Mains</option><option value="Desserts">Desserts</option><option value="Drinks & Cocktails">Drinks & Cocktails</option></select></div>
+            </div>
+            <div><label style={{ fontSize:10,fontWeight:700,color:TH().txM,textTransform:"uppercase",display:"block",marginBottom:4 }}>Description</label><textarea value={ipD} onChange={e=>setIpD(e.target.value)} placeholder="Short description..." rows={2} style={{ ...S.inp(),resize:"vertical",lineHeight:1.5 }}/></div>
+          </>}
+          {ipS===2 && <>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,marginBottom:4 }}>Ingredients</div>
+            <p style={{ fontSize:11,color:TH().txM,margin:"0 0 12px" }}>Group by component using headings. One per line.</p>
+            <textarea value={ipIng} onChange={e=>setIpIng(e.target.value)} placeholder={"Beef\n1 kg beef tenderloin, cut into thick strips\n10 g salt\n2 g black pepper\n\nVegetables\n2 large red onions, cut into wedges\n4 tomatoes, deseeded\n4 garlic cloves, minced\n\nSauce\n80 ml soy sauce\n40 ml red wine vinegar\n1 tsp sugar\n\nChips\n1.2 kg potatoes, cut into chips\nOil for frying\n\nRice\n400 g white rice\n560 ml water"} style={{ ...S.inp(),minHeight:280,resize:"vertical",lineHeight:1.7,fontFamily:"'JetBrains Mono',monospace",fontSize:12 }}/>
+          </>}
+          {ipS===3 && <>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,marginBottom:4 }}>Method</div>
+            <p style={{ fontSize:11,color:TH().txM,margin:"0 0 12px" }}>Describe cooking steps. Match your ingredient groups.</p>
+            <textarea value={ipMth} onChange={e=>setIpMth(e.target.value)} placeholder={"Rice: Wash, cook with water and salt, rest 10 min.\n\nChips: Soak 30 min, blanch fry at 150°C for 6 min, crisp fry at 180°C until golden.\n\nSauce: Mix soy, vinegar, stock, sugar in a bowl.\n\nLomo Saltado:\n1. Season beef with salt, pepper, oil.\n2. Heat wok very high. Sear beef in batches, 1-2 min each.\n3. Stir-fry onion and chilli 45 sec.\n4. Add garlic and spring onion 15 sec.\n5. Add tomato 30 sec.\n6. Return beef, pour sauce, toss 30 sec.\n7. Add coriander. Serve with rice and chips."} style={{ ...S.inp(),minHeight:300,resize:"vertical",lineHeight:1.7,fontSize:12 }}/>
+          </>}
+          {ipS===4 && ipSt==="preview" && ipR && <>
+            <div style={{ padding:"8px 12px",borderRadius:8,background:TH().ok+"12",border:`1px solid ${TH().ok}30`,marginBottom:14,display:"flex",alignItems:"center",gap:8 }}>
+              <span style={{ color:TH().ok,fontWeight:600,fontSize:11 }}>✓ Parsed successfully</span>
+            </div>
+            <div style={{ background:TH().bgS,borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
+              <div style={{ fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,marginBottom:2 }}>{ipR.name}</div>
+              <div style={{ fontSize:11,color:TH().txM,marginBottom:4 }}>{ipR.servings} servings · {ipR.category} · {ipR.tags?.join(", ")}</div>
+              {ipR.description && <div style={{ fontSize:11,color:TH().tx2,lineHeight:1.5 }}>{ipR.description}</div>}
+            </div>
+            {ipR.preparations?.map((prep,pi)=>{const ts2=prep.grid?.flat().filter(Boolean).length||0;const procs=[...new Set(prep.grid?.flat().filter(Boolean).flatMap(s=>s.processes||[]))];
+              return <div key={pi} style={{ background:TH().bgC,borderRadius:10,border:`1px solid ${TH().bdS}`,padding:"12px 14px",marginBottom:8 }}>
+                <div style={{ fontSize:12,fontWeight:700,marginBottom:4 }}>{prep.name}</div>
+                <div style={{ display:"flex",flexWrap:"wrap",gap:4,marginBottom:6 }}>{prep.laneNames?.map((ln,li)=><span key={li} style={{ fontSize:10,padding:"2px 8px",borderRadius:6,background:TH().bgS,border:`1px solid ${TH().bdS}`,color:TH().tx2 }}>{ln}</span>)}</div>
+                <div style={{ fontSize:10,color:TH().txM }}>{ts2} steps · {procs.length} processes</div>
+                <div style={{ marginTop:6 }}>{prep.grid?.flat().filter(Boolean).map((step,si)=><div key={si} style={{ display:"flex",gap:6,alignItems:"center",padding:"3px 0",borderTop:si?`1px solid ${TH().div}`:undefined }}>
+                  <div style={{ fontSize:10,flex:1,fontWeight:500 }}>{step.title}</div>
+                  <div style={{ display:"flex",gap:2 }}>{step.processes?.slice(0,3).map(p=><span key={p} style={{ fontSize:8,padding:"1px 4px",borderRadius:4,background:TH().proc+"10",color:TH().proc }}>{p}</span>)}</div>
+                </div>)}</div>
+              </div>;})}
+          </>}
+          {ipSt==="parsing" && <div style={{ textAlign:"center",padding:"48px 0" }}>
+            <div style={{ width:28,height:28,border:`3px solid ${TH().bdS}`,borderTopColor:TH().acc,borderRadius:"50%",margin:"0 auto 14px",animation:"spin 0.8s linear infinite" }}/>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600 }}>Claude is reading your recipe</div>
+            <div style={{ fontSize:11,color:TH().txM,marginTop:4 }}>Creating lanes, mapping ingredients...</div>
+          </div>}
+          {ipSt==="error" && <div style={{ padding:"12px 14px",borderRadius:8,background:TH().err+"10",border:`1px solid ${TH().err}25`,marginTop:8 }}>
+            <div style={{ fontSize:12,fontWeight:600,color:TH().err,marginBottom:4 }}>Parse failed</div>
+            <div style={{ fontSize:11,color:TH().err,opacity:0.8 }}>{ipErr}</div>
+          </div>}
+        </div>
+        <div style={{ padding:"12px 24px",borderTop:`1px solid ${TH().div}`,display:"flex",justifyContent:"space-between",background:TH().bgC }}>
+          <div>{ipS>1&&ipSt!=="parsing"&&<button onClick={()=>{if(ipS===4){setIpS(3);setIpSt("idle");setIpR(null);}else setIpS(ipS-1);}} style={{ ...S.btn("outline"),fontSize:11,padding:"5px 14px" }}>← Back</button>}</div>
+          <div style={{ display:"flex",gap:8 }}>
+            {ipS===1 && <button onClick={()=>{if(!ipN.trim()){alert("Name required.");return;}setIpS(2);}} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px" }}>Next →</button>}
+            {ipS===2 && <button onClick={()=>{if(!ipIng.trim()){alert("Add ingredients.");return;}setIpS(3);}} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px" }}>Next →</button>}
+            {ipS===3 && ipSt!=="parsing" && <button onClick={()=>{if(!ipMth.trim()){alert("Add method.");return;}runIP();setIpS(4);}} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px",background:`linear-gradient(135deg,${TH().acc},${TH().sec})` }}>Parse with AI</button>}
+            {ipS===4 && ipSt==="preview" && <button onClick={confirmIP} style={{ ...S.btn("primary"),fontSize:11,padding:"5px 16px" }}>✓ Import recipe</button>}
+          </div>
+        </div>
+      </div>
+    </div>}
+    <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     {/* Cloud Sync Settings Modal */}
     {showSettings && <div style={{ position:"fixed",inset:0,background:"rgba(42,36,32,0.5)",zIndex:1100,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)" }} onClick={()=>setShowSettings(false)}>
       <div onClick={e=>e.stopPropagation()} style={{ background:"#FDFAF5",borderRadius:16,padding:"24px 28px",maxWidth:520,width:"92%",boxShadow:"0 16px 50px rgba(42,36,32,0.25)",fontFamily:"'DM Sans',sans-serif" }}>
@@ -904,7 +989,7 @@ function App() {
       <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#B0A898" }}>{syncUrl ? "Loading from cloud..." : "Loading..."}</div>
     </div>}
     {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={r=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(r);}} oC={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}cN();}} oD={delR} t={t} isAdmin={isAdmin} isMobile={isMobile}/>}
-    {!loading && vw==="view" && act && <VwV r={act} oB={()=>sV("browse")} oE={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(act);}} t={t} lib={lib} tl={tl} lang={lang} isAdmin={isAdmin} isMobile={isMobile} syncUrl={syncUrl} onUpdatePhoto={(photoUrl)=>{setRecsAndPersist(prev=>{const idx=prev.findIndex(x=>x.id===act.id);if(idx>=0){const n=[...prev];n[idx]={...n[idx],photo:photoUrl};return n;}return prev;});}}/>}
+    {!loading && vw==="view" && act && <VwV r={act} oB={()=>sV("browse")} oE={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(act);}} t={t} lib={lib} tl={tl} lang={lang} isAdmin={isAdmin} isMobile={isMobile}/>}
     {!loading && vw==="edit" && eR && !isMobile && <EdV r={eR} sR={sER} oS={svR} oC={()=>sV(aId?"view":"browse")} mL={mL} t={t} lib={lib} tl={tl} pl={pl} aCI={isAdmin?addCI:()=>{}} aCT={isAdmin?addCT:()=>{}} aCP={isAdmin?addCP:()=>{}} favs={favs} toggleFav={toggleFav} lang={lang} isAdmin={isAdmin}/>}
   </div>);
 }
@@ -2348,10 +2433,8 @@ function FlavourRadar({ profile, t, colors, compact }) {
 }
 
 /* ═══ GANTT VIEW — auto-height arrows, named lanes, ingredient summary, module anchors ═══ */
-function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, syncUrl, onUpdatePhoto }) {
+function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile }) {
   const [sv, sSv] = useState(rc.servings);
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const photoInputRef = useRef(null);
   const base = rc.servings;
   const fc = { sweetness:"#E89EC0",richness:"#C49A6C",spiciness:"#D45B5B",acidity:"#E8B84B",umami:"#6B9FC4" };
   /* Flavour profile is auto-derived from the recipe's ingredients, processes and tools. */
@@ -2406,296 +2489,130 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, syncUrl, 
     return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); ro.disconnect(); window.removeEventListener("resize", measure); };
   }, [rc, sv, modules.length, mainPreps.length]);
 
-  /* ═══ MOBILE VIEW — Timeline / Step Detail / Flavour ═══ */
+  /* ═══ MOBILE VIEW ═══ */
   if (isMobile) {
-    const [mTab, setMTab] = useState("timeline"); /* timeline | flavour */
-    const [mStep, setMStep] = useState(null); /* stepId for detail view */
-    const laneColors = ["#4A9EAF","#C49A6C","#8B5CF6","#D45B5B","#6BAF6E","#E8B84B","#E89EC0","#7EAA7E"];
-    const deg = String.fromCharCode(176);
-
-    /* Build lane data for timeline */
-    const allPreps = [...mainPreps, ...modules];
-    const allLanes = [];
-    let colorIdx = 0;
-    allPreps.forEach(prep => {
-      const grid = prep.grid || [[]];
-      const laneCount = Math.max(0, ...grid.map(row => (row||[]).length));
-      for (let li = 0; li < laneCount; li++) {
-        const steps = [];
-        for (let ri = 0; ri < grid.length; ri++) {
-          const s = grid[ri] && grid[ri][li];
-          if (s) steps.push(s);
-        }
-        if (steps.length) {
-          const laneName = (prep.laneNames && prep.laneNames[li]) || `${t.lane||"Lane"} ${li+1}`;
-          allLanes.push({ prep, laneName, steps, color: laneColors[colorIdx % laneColors.length], isModule: prep.isModule });
-          colorIdx++;
-        }
+    const [mTab, setMTab] = useState("timeline");
+    const [mStep, setMStep] = useState(null);
+    const lnC = ["#4A9EAF","#C49A6C","#8B5CF6","#D45B5B","#6BAF6E","#E8B84B","#E89EC0","#7EAA7E"];
+    const allLanes = []; let ci2 = 0;
+    [...mainPreps,...modules].forEach(prep => {
+      const grid = prep.grid||[[]]; const lc = Math.max(0,...grid.map(r=>(r||[]).length));
+      for (let li=0;li<lc;li++) {
+        const steps = []; for (let ri=0;ri<grid.length;ri++){const s=grid[ri]&&grid[ri][li];if(s)steps.push(s);}
+        if (steps.length) { allLanes.push({prep,laneName:(prep.laneNames&&prep.laneNames[li])||`Lane ${li+1}`,steps,color:lnC[ci2%lnC.length],isModule:prep.isModule}); ci2++; }
       }
     });
-
-    /* Find step by id across all lanes */
-    const findStep = (id) => {
-      for (const lane of allLanes) {
-        const s = lane.steps.find(s => s.id === id);
-        if (s) return { step: s, lane };
-      }
-      return null;
-    };
-
-    /* Connections: build a map of stepId → [{ targetId, targetLaneName }] */
     const connMap = {};
-    allPreps.forEach(prep => {
-      flattenGrid(prep.grid||[[]]).forEach(step => {
-        (step.connectsTo || []).forEach(ct => {
-          if (!connMap[step.id]) connMap[step.id] = [];
-          /* find target lane name */
-          let tgtLaneName = "";
-          for (const ln of allLanes) {
-            if (ln.steps.some(s => s.id === ct.targetId)) { tgtLaneName = ln.laneName; break; }
-          }
-          connMap[step.id].push({ targetId: ct.targetId, laneName: tgtLaneName });
-        });
-      });
-    });
+    [...mainPreps,...modules].forEach(prep => { flattenGrid(prep.grid||[[]]).forEach(step => { (step.connectsTo||[]).forEach(ct => { if(!connMap[step.id])connMap[step.id]=[]; let tln=""; for(const ln of allLanes){if(ln.steps.some(s=>s.id===ct.targetId)){tln=ln.laneName;break;}} connMap[step.id].push({targetId:ct.targetId,laneName:tln}); }); }); });
 
-    /* Step detail view */
     if (mStep) {
-      const found = findStep(mStep);
-      if (!found) { setMStep(null); return null; }
-      const { step, lane } = found;
-      const ings = (step.ingredients||[]).filter(i => !i.isPrepRef && !i.multiplierRef);
-      const toolObj = step.tool;
-      const pP = step.processParams || {};
-      const stepIdx = lane.steps.indexOf(step);
-      const conns = connMap[step.id] || [];
-
-      return (<div style={{ minHeight:"100vh",display:"flex",flexDirection:"column",background:"#FDFAF5",fontFamily:"'DM Sans',sans-serif" }}>
-        {/* Header */}
-        <div style={{ padding:"10px 14px 8px",borderBottom:"1px solid #EDE8E0",display:"flex",alignItems:"center",gap:8 }}>
-          <button onClick={()=>setMStep(null)} style={{ background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:"#8A7E72",fontSize:12 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-            {lane.laneName}
+      let found=null; for(const ln of allLanes){const s=ln.steps.find(s=>s.id===mStep);if(s){found={step:s,lane:ln};break;}}
+      if (!found){setMStep(null);return null;}
+      const {step,lane}=found; const ings=(step.ingredients||[]).filter(i=>!i.isPrepRef&&!i.multiplierRef);
+      const si=lane.steps.indexOf(step); const conns=connMap[step.id]||[];
+      return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:TH().bg,fontFamily:"'DM Sans',sans-serif",color:TH().tx}}>
+        <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={()=>setMStep(null)} style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:TH().txM,fontSize:12}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>{lane.laneName}
           </button>
         </div>
-
-        <div style={{ flex:1,overflowY:"auto",padding:"14px 16px",WebkitOverflowScrolling:"touch" }}>
-          <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:600,margin:"0 0 3px" }}>{step.title || `Step ${stepIdx+1}`}</h2>
-          <p style={{ fontSize:11,color:"#B0A898",margin:"0 0 14px" }}>{lane.prep.name} · {lane.laneName} · Step {stepIdx+1} of {lane.steps.length}</p>
-
-          {/* Tool */}
-          {toolObj && <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:10,fontWeight:700,color:"#B0A898",textTransform:"uppercase",letterSpacing:0.5,marginBottom:5 }}>{t.tools}</div>
-            <div style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:10,border:"1px solid #EDE8E0",background:"#FFF" }}>
-              <span style={{ fontSize:18 }}>{toolObj.icon||"\uD83D\uDD27"}</span>
-              <div>
-                <div style={{ fontSize:12,fontWeight:600 }}>{toolObj.name}</div>
-                {toolObj.opts && <div style={{ fontSize:10,color:"#8A7E72",display:"flex",flexWrap:"wrap",gap:4,marginTop:2 }}>
-                  {toolObj.opts._temp != null && <span>🌡 {toolObj.opts._temp}{deg}C</span>}
-                  {toolObj.opts.heat && <span>🌡 {toolObj.opts.heat}</span>}
-                  {toolObj.opts._time != null && <span>⏱ {toolObj.opts._time} {toolObj.opts._timeUnit||"min"}</span>}
-                  {toolObj.opts._speed && <span>⚡ Speed {toolObj.opts._speed}</span>}
-                </div>}
-              </div>
-            </div>
+        <div style={{flex:1,overflowY:"auto",padding:"14px 16px",WebkitOverflowScrolling:"touch"}}>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:600,margin:"0 0 3px"}}>{step.title||`Step ${si+1}`}</h2>
+          <p style={{fontSize:11,color:TH().txD,margin:"0 0 14px"}}>{lane.prep.name} · Step {si+1} of {lane.steps.length}</p>
+          {step.tool && <div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Tool</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:10,border:`1px solid ${TH().bdS}`,background:TH().bgC}}>
+              <span style={{fontSize:18}}>{step.tool.icon||"\uD83D\uDD27"}</span><div><div style={{fontSize:12,fontWeight:600}}>{step.tool.name}</div>
+              {step.tool.opts&&<div style={{fontSize:10,color:TH().txM,display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
+                {step.tool.opts._temp!=null&&<span>\uD83C\uDF21 {step.tool.opts._temp}°C</span>}
+                {step.tool.opts.heat&&<span>\uD83C\uDF21 {step.tool.opts.heat}</span>}
+                {step.tool.opts._time!=null&&<span>⏱ {step.tool.opts._time} {step.tool.opts._timeUnit||"min"}</span>}
+              </div>}</div></div></div>}
+          {ings.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Ingredients</div>
+            {ings.map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<div key={ing.uid} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`0.5px solid ${TH().bdS}`}}><span style={{fontSize:12}}>{fi?.n||ing.ingredientId}</span><span style={{fontSize:12,color:TH().txM}}>{ing.qty?`${Math.round(ing.qty*sv/base*10)/10} ${ing.unit||""}`:""}</span></div>;})}
           </div>}
-
-          {/* Ingredients */}
-          {ings.length > 0 && <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:10,fontWeight:700,color:"#B0A898",textTransform:"uppercase",letterSpacing:0.5,marginBottom:5 }}>{t.ingredients}</div>
-            {ings.map(ing => {
-              const fi = flat.find(f => f.id === ing.ingredientId);
-              return <div key={ing.uid} style={{ display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid #EDE8E0" }}>
-                <span style={{ fontSize:12 }}>{fi?.n || ing.ingredientId}</span>
-                <span style={{ fontSize:12,color:"#8A7E72" }}>{ing.qty ? `${Math.round(ing.qty * sv / base * 10)/10} ${ing.unit||""}` : ""}</span>
-              </div>;
-            })}
-          </div>}
-
-          {/* Processes */}
-          {(step.processes||[]).length > 0 && <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:10,fontWeight:700,color:"#B0A898",textTransform:"uppercase",letterSpacing:0.5,marginBottom:5 }}>{t.processes}</div>
-            {(step.processes||[]).map(proc => {
-              const params = resolveProcessParams(proc, step.tool, step.processParams);
-              return <div key={proc} style={{ padding:"8px 10px",borderRadius:8,background:"#8B5CF608",border:"1px solid #8B5CF620",marginBottom:6 }}>
-                <div style={{ fontSize:12,fontWeight:600,color:"#8B5CF6",marginBottom:3 }}>{trN(proc,"proc",lang)}</div>
-                <div style={{ display:"flex",flexWrap:"wrap",gap:4 }}>
-                  {params.map(r => {
-                    if (r.policy === "F") return null;
-                    const icon = r.param === "time" ? "⏱" : "🌡";
-                    const isOk = r.source === "tool" || r.source === "tool_cat" || r.source === "process";
-                    let label = "";
-                    if (r.source === "tool" || r.source === "tool_cat") label = `← ${toolObj?.name||"tool"}`;
-                    else if (r.source === "process") label = r.param === "time" ? `${pP._time||"?"} ${pP._timeUnit||"min"}` : `${pP._temp||"?"}${deg}C`;
-                    else if (r.policy === "R") label = "needed";
-                    else label = "optional";
-                    return <span key={r.param} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:5,background:isOk?"#6BAF6E10":"#D45B5B08",border:`1px solid ${isOk?"#6BAF6E25":"#D45B5B20"}`,fontSize:10,color:isOk?"#6BAF6E":"#D45B5B" }}>
-                      {icon} <span style={{ fontWeight:600 }}>{r.param === "time" ? t.timeLabel : t.tempLabel}</span> {label}
-                    </span>;
-                  })}
-                </div>
-              </div>;
-            })}
-          </div>}
-
-          {/* Description/notes */}
-          {step.desc && <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:10,fontWeight:700,color:"#B0A898",textTransform:"uppercase",letterSpacing:0.5,marginBottom:5 }}>Notes</div>
-            <p style={{ fontSize:12,color:"#6A6058",lineHeight:1.55,margin:0 }}>{step.desc}</p>
-          </div>}
-
-          {/* Connections out */}
-          {conns.length > 0 && <div style={{ padding:"8px 10px",borderRadius:8,background:"#F5F2ED",border:"1px solid #EDE8E0" }}>
-            <div style={{ fontSize:10,color:"#B0A898",marginBottom:3 }}>Feeds into</div>
-            {conns.map((c,ci) => <div key={ci} style={{ fontSize:12,color:"#8B5CF6" }}>→ {c.laneName}</div>)}
-          </div>}
-        </div>
-      </div>);
+          {(step.processes||[]).length>0&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Processes</div>
+            {step.processes.map(proc=><div key={proc} style={{padding:"8px 10px",borderRadius:8,background:TH().proc+"08",border:`1px solid ${TH().proc}20`,marginBottom:6}}>
+              <div style={{fontSize:12,fontWeight:600,color:TH().proc}}>{trN(proc,"proc",lang)}</div>
+            </div>)}</div>}
+          {step.desc&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Notes</div><p style={{fontSize:12,color:TH().tx2,lineHeight:1.55,margin:0}}>{step.desc}</p></div>}
+          {conns.length>0&&<div style={{padding:"8px 10px",borderRadius:8,background:TH().bgS,border:`1px solid ${TH().bdS}`}}><div style={{fontSize:10,color:TH().txD,marginBottom:3}}>Feeds into</div>{conns.map((c,ci3)=><div key={ci3} style={{fontSize:12,color:TH().acc}}>→ {c.laneName}</div>)}</div>}
+        </div></div>);
     }
 
-    /* Main mobile tabs */
-    return (<div style={{ minHeight:"100vh",display:"flex",flexDirection:"column",background:"#FDFAF5",fontFamily:"'DM Sans',sans-serif" }}>
-      {/* Header */}
-      <div style={{ padding:"10px 14px 8px",borderBottom:"1px solid #EDE8E0",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-        <button onClick={oB} style={{ background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:"#8A7E72",fontSize:12 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-          Recipes
+    return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:TH().bg,fontFamily:"'DM Sans',sans-serif",color:TH().tx}}>
+      <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <button onClick={oB} style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:TH().txM,fontSize:12}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>Recipes
         </button>
-        <div style={{ fontSize:9,color:"#B0A898" }}>view only</div>
+        <div style={{fontSize:9,color:TH().txD}}>view only</div>
       </div>
-
-      {/* Recipe title + photo + mini flavour bar */}
-      <div style={{ padding:"12px 16px 8px" }}>
-        <h1 style={{ fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,margin:"0 0 3px" }}>{rc.name}</h1>
-        <p style={{ fontSize:11,color:"#B0A898",margin:"0 0 8px" }}>{sv} {t.servingsUnit} · {rc.tags?.join(", ")}</p>
-        {/* Photo */}
-        {rc.photo && <div style={{ borderRadius:10,overflow:"hidden",marginBottom:8,border:`1px solid ${TH().borderSubtle}` }}>
-          <img src={rc.photo} alt={rc.name} style={{ width:"100%",maxHeight:200,objectFit:"cover",display:"block" }}/>
-        </div>}
-        {/* Mini flavour sparkline */}
-        <div style={{ display:"flex",alignItems:"flex-end",gap:5,marginBottom:4 }}>
-          {["sweetness","richness","spiciness","acidity","umami"].map(k => {
-            const v = flavourProfile[k] || 0;
-            const c = fc[k];
-            return <div key={k} style={{ textAlign:"center" }}>
-              <div style={{ height:24,width:7,background:"#EDE8E0",borderRadius:4,position:"relative",margin:"0 auto" }}>
-                <div style={{ position:"absolute",bottom:0,left:0,right:0,height:`${v}%`,background:c,borderRadius:4 }}/>
-              </div>
-              <div style={{ fontSize:7,color:"#B0A898",marginTop:2 }}>{k[0].toUpperCase()}</div>
-            </div>;
-          })}
-          <div style={{ fontSize:8,color:"#B0A898",marginLeft:4,marginBottom:1 }}>→ Flavour</div>
+      <div style={{padding:"12px 16px 8px"}}>
+        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,margin:"0 0 3px"}}>{rc.name}</h1>
+        <p style={{fontSize:11,color:TH().txD,margin:"0 0 8px"}}>{sv} {t.servingsUnit} · {rc.tags?.join(", ")}</p>
+        <div style={{display:"flex",alignItems:"flex-end",gap:5,marginBottom:4}}>
+          {["sweetness","richness","spiciness","acidity","umami"].map(k=>{const v=flavourProfile[k]||0;return<div key={k} style={{textAlign:"center"}}><div style={{height:24,width:7,background:TH().bdS,borderRadius:4,position:"relative",margin:"0 auto"}}><div style={{position:"absolute",bottom:0,left:0,right:0,height:`${v}%`,background:fc[k],borderRadius:4}}/></div><div style={{fontSize:7,color:TH().txD,marginTop:2}}>{k[0].toUpperCase()}</div></div>;})}
         </div>
       </div>
-      <div style={{ height:1,background:"#EDE8E0",margin:"0 16px" }}/>
-
-      {/* Tab content */}
-      <div style={{ flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
-        {mTab === "timeline" && <div style={{ padding:"12px 16px" }}>
-          {allLanes.map((lane, li) => {
-            const isLast = li === allLanes.length - 1;
-            return <div key={li} style={{ marginBottom:isLast?8:14 }}>
-              {/* Lane header */}
-              <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:6 }}>
-                <div style={{ width:9,height:9,borderRadius:"50%",background:lane.color,flexShrink:0 }}/>
-                <span style={{ fontSize:11,fontWeight:600,color:"#2A2420" }}>{lane.laneName}</span>
-                {lane.isModule && <span style={{ fontSize:8,padding:"1px 5px",borderRadius:4,background:"#9B7EB815",color:"#9B7EB8",border:"0.5px solid #9B7EB830" }}>Module</span>}
-                <span style={{ fontSize:9,color:"#B0A898" }}>({lane.prep.name})</span>
-              </div>
-              {/* Steps on timeline */}
-              <div style={{ position:"relative",paddingLeft:18,marginBottom:4 }}>
-                <div style={{ position:"absolute",left:4,top:0,bottom:0,width:1.5,background:lane.color+"30",borderRadius:1 }}/>
-                {lane.steps.map((step, si) => {
-                  const ings = (step.ingredients||[]).filter(i => !i.isPrepRef && !i.multiplierRef);
-                  const conns = connMap[step.id] || [];
-                  return <div key={step.id}>
-                    <div onClick={()=>setMStep(step.id)} style={{ position:"relative",padding:"8px 10px",borderRadius:8,border:"0.5px solid #EDE8E0",background:"#FFF",marginBottom:conns.length?4:6,cursor:"pointer",transition:"background 0.15s" }}>
-                      {/* Node dot */}
-                      <div style={{ position:"absolute",left:-18,top:"50%",transform:"translateY(-50%)",width:9,height:9,borderRadius:"50%",border:`2px solid ${lane.color}`,background:"#FDFAF5" }}/>
-                      {/* Title */}
-                      <div style={{ fontSize:12,fontWeight:600,color:"#2A2420",marginBottom:3 }}>{step.title || `Step ${si+1}`}</div>
-                      {/* Ingredients */}
-                      {ings.length > 0 && <div style={{ display:"flex",flexWrap:"wrap",gap:3,marginBottom:3 }}>
-                        {ings.slice(0,4).map(ing => {
-                          const fi = flat.find(f => f.id === ing.ingredientId);
-                          return <span key={ing.uid} style={{ fontSize:9,padding:"1px 5px",borderRadius:4,border:"0.5px solid #EDE8E0",color:"#8A7E72" }}>{fi?.n||ing.ingredientId} {ing.qty?`${Math.round(ing.qty*sv/base*10)/10}${ing.unit?""+ing.unit:""}`:""}</span>;
-                        })}
-                        {ings.length > 4 && <span style={{ fontSize:9,color:"#B0A898" }}>+{ings.length-4}</span>}
-                      </div>}
-                      {/* Processes + params */}
-                      {(step.processes||[]).length > 0 && <div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>
-                        {step.processes.map(proc => <span key={proc} style={{ fontSize:9,padding:"1px 5px",borderRadius:4,background:"#8B5CF610",border:"0.5px solid #8B5CF625",color:"#8B5CF6" }}>{trN(proc,"proc",lang)}</span>)}
-                        {(()=>{
-                          const params = step.processes.flatMap(p => resolveProcessParams(p, step.tool, step.processParams));
-                          const shown = params.filter(r => (r.policy==="R"||r.policy==="O") && (r.source==="tool"||r.source==="tool_cat"||r.source==="process"));
-                          const seen = new Set();
-                          return shown.filter(r=>{if(seen.has(r.param))return false;seen.add(r.param);return true;}).map(r => {
-                            const icon = r.param==="time"?"⏱":"🌡";
-                            const pP2 = step.processParams||{};
-                            let val = "";
-                            if (r.source==="tool"||r.source==="tool_cat") val = `← ${step.tool?.name||"tool"}`;
-                            else if (r.source==="process") val = r.param==="time"?`${pP2._time||""} ${pP2._timeUnit||"min"}`:`${pP2._temp||""}${deg}C`;
-                            return <span key={r.param} style={{ fontSize:8,padding:"1px 5px",borderRadius:4,background:"#6BAF6E10",border:"0.5px solid #6BAF6E25",color:"#6BAF6E" }}>{icon} {val}</span>;
-                          });
-                        })()}
-                      </div>}
-                      {/* Tool */}
-                      {step.tool && <div style={{ fontSize:9,color:"#B0A898",marginTop:3 }}>{step.tool.icon||"🔧"} {step.tool.name}</div>}
-                      {/* Tap hint */}
-                      <div style={{ position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:"#D5CEBC" }}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
-                      </div>
+      <div style={{height:1,background:TH().div,margin:"0 16px"}}/>
+      <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+        {mTab==="timeline"&&<div style={{padding:"12px 16px"}}>
+          {allLanes.map((lane,li)=><div key={li} style={{marginBottom:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+              <div style={{width:9,height:9,borderRadius:"50%",background:lane.color,flexShrink:0}}/>
+              <span style={{fontSize:11,fontWeight:600}}>{lane.laneName}</span>
+              {lane.isModule&&<span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:TH().mod+"15",color:TH().mod,border:`0.5px solid ${TH().mod}30`}}>Module</span>}
+              <span style={{fontSize:9,color:TH().txD}}>({lane.prep.name})</span>
+            </div>
+            <div style={{position:"relative",paddingLeft:18,marginBottom:4}}>
+              <div style={{position:"absolute",left:4,top:0,bottom:0,width:1.5,background:lane.color+"30",borderRadius:1}}/>
+              {lane.steps.map((step,si)=>{const ings2=(step.ingredients||[]).filter(i=>!i.isPrepRef&&!i.multiplierRef);const conns=connMap[step.id]||[];
+                return<div key={step.id}>
+                  <div onClick={()=>setMStep(step.id)} style={{position:"relative",padding:"8px 10px",borderRadius:8,border:`0.5px solid ${TH().bdS}`,background:TH().bgC,marginBottom:conns.length?4:6,cursor:"pointer"}}>
+                    <div style={{position:"absolute",left:-18,top:"50%",transform:"translateY(-50%)",width:9,height:9,borderRadius:"50%",border:`2px solid ${lane.color}`,background:TH().bg}}/>
+                    <div style={{fontSize:12,fontWeight:600,marginBottom:3}}>{step.title||`Step ${si+1}`}</div>
+                    {ings2.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginBottom:3}}>
+                      {ings2.slice(0,4).map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<span key={ing.uid} style={{fontSize:9,padding:"1px 5px",borderRadius:4,border:`0.5px solid ${TH().bdS}`,color:TH().txM}}>{fi?.n||ing.ingredientId}</span>;})}
+                      {ings2.length>4&&<span style={{fontSize:9,color:TH().txD}}>+{ings2.length-4}</span>}
+                    </div>}
+                    {(step.processes||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3}}>
+                      {step.processes.map(proc=><span key={proc} style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:TH().proc+"10",border:`0.5px solid ${TH().proc}25`,color:TH().proc}}>{trN(proc,"proc",lang)}</span>)}
+                    </div>}
+                    {step.tool&&<div style={{fontSize:9,color:TH().txD,marginTop:3}}>{step.tool.icon||"🔧"} {step.tool.name}</div>}
+                    <div style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:TH().bdS}}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
-                    {/* Connections */}
-                    {conns.map((c,ci) => <div key={ci} style={{ display:"flex",alignItems:"center",gap:6,padding:"0 0 4px 4px",marginBottom:4 }}>
-                      <span style={{ fontSize:9,color:"#8B5CF6" }}>↘ connects to</span>
-                      <div style={{ flex:1,height:0,borderTop:"1px dashed #8B5CF640" }}/>
-                      <span style={{ fontSize:9,color:"#8B5CF6",fontWeight:600 }}>{c.laneName}</span>
-                    </div>)}
-                  </div>;
-                })}
-              </div>
-            </div>;
-          })}
+                  </div>
+                  {conns.map((c,ci3)=><div key={ci3} style={{display:"flex",alignItems:"center",gap:6,padding:"0 0 4px 4px",marginBottom:4}}>
+                    <span style={{fontSize:9,color:TH().acc}}>↘ connects to</span><div style={{flex:1,height:0,borderTop:`1px dashed ${TH().acc}40`}}/><span style={{fontSize:9,color:TH().acc,fontWeight:600}}>{c.laneName}</span>
+                  </div>)}
+                </div>;})}
+            </div>
+          </div>)}
         </div>}
-
-        {mTab === "flavour" && <div style={{ padding:"14px 16px" }}>
-          <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:600,margin:"0 0 12px" }}>Flavour Profile</h2>
-          {["sweetness","richness","spiciness","acidity","umami"].map(k => {
-            const v = flavourProfile[k] || 0;
-            const c = fc[k];
-            return <div key={k} style={{ marginBottom:10 }}>
-              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:3 }}>
-                <span style={{ fontSize:12,color:"#6A6058" }}>{t[k]}</span>
-                <span style={{ fontSize:12,fontWeight:600,color:c }}>{v}</span>
-              </div>
-              <div style={{ height:6,borderRadius:3,background:"#EDE8E0" }}>
-                <div style={{ height:6,borderRadius:3,background:c,width:`${v}%`,transition:"width 0.3s" }}/>
-              </div>
-            </div>;
-          })}
-          <div style={{ height:1,background:"#EDE8E0",margin:"14px 0" }}/>
-          <div style={{ fontSize:11,color:"#6A6058",lineHeight:1.6 }}>
-            <span style={{ fontWeight:600 }}>Engine v2.0</span> — scores are computed from ingredient composition, quantity scaling, cumulative process modifiers, tool kinetics (Maillard, reduction, caramelisation curves), cross-lane connection inheritance, and modular recipe propagation.
-          </div>
+        {mTab==="flavour"&&<div style={{padding:"14px 16px"}}>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:600,margin:"0 0 12px"}}>Flavour Profile</h2>
+          {["sweetness","richness","spiciness","acidity","umami"].map(k=>{const v=flavourProfile[k]||0;return<div key={k} style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,color:TH().tx2}}>{t[k]}</span><span style={{fontSize:12,fontWeight:600,color:fc[k]}}>{v}</span></div>
+            <div style={{height:6,borderRadius:3,background:TH().bdS}}><div style={{height:6,borderRadius:3,background:fc[k],width:`${v}%`,transition:"width 0.3s"}}/></div>
+          </div>;})}
+          <div style={{height:1,background:TH().div,margin:"14px 0"}}/>
+          <div style={{fontSize:11,color:TH().tx2,lineHeight:1.6}}>Engine v2.0 — scores computed from ingredients, processes, tool kinetics, cross-lane inheritance, and module propagation.</div>
         </div>}
       </div>
-
-      {/* Bottom tab bar */}
-      <div style={{ display:"flex",borderTop:"1px solid #EDE8E0",background:"#FDFAF5",padding:"6px 0 4px",flexShrink:0 }}>
-        <div onClick={()=>setMTab("timeline")} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer" }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={mTab==="timeline"?"#C49A6C":"#B0A898"} strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill={mTab==="timeline"?"#C49A6C":"none"}/><circle cx="4" cy="12" r="1" fill={mTab==="timeline"?"#C49A6C":"none"}/><circle cx="4" cy="18" r="1" fill={mTab==="timeline"?"#C49A6C":"none"}/></svg>
-          <span style={{ fontSize:9,color:mTab==="timeline"?"#C49A6C":"#B0A898",fontWeight:mTab==="timeline"?600:400 }}>Timeline</span>
+      <div style={{display:"flex",borderTop:`1px solid ${TH().div}`,background:TH().bg,padding:"6px 0 4px",flexShrink:0}}>
+        <div onClick={()=>setMTab("timeline")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer"}}>
+          <span style={{fontSize:16}}>{mTab==="timeline"?"\uD83D\uDCCB":"\uD83D\uDCCB"}</span>
+          <span style={{fontSize:9,color:mTab==="timeline"?TH().sec:TH().txD,fontWeight:mTab==="timeline"?600:400}}>Timeline</span>
         </div>
-        <div onClick={()=>setMTab("flavour")} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer" }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={mTab==="flavour"?"#C49A6C":"#B0A898"} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          <span style={{ fontSize:9,color:mTab==="flavour"?"#C49A6C":"#B0A898",fontWeight:mTab==="flavour"?600:400 }}>Flavour</span>
+        <div onClick={()=>setMTab("flavour")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer"}}>
+          <span style={{fontSize:16}}>⭐</span>
+          <span style={{fontSize:9,color:mTab==="flavour"?TH().sec:TH().txD,fontWeight:mTab==="flavour"?600:400}}>Flavour</span>
         </div>
       </div>
     </div>);
   }
 
-  /* ═══ DESKTOP VIEW (existing Gantt) ═══ */
+  /* ═══ DESKTOP VIEW ═══ */
   return (<>
     <div style={{ maxWidth:1400,margin:"0 auto",padding:"28px 24px" }}>
     <button onClick={oB} style={{ ...S.btn("outline"),marginBottom:16,fontSize:12 }}>{t.back}</button>
@@ -2708,64 +2625,13 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, syncUrl, 
     <p style={{ fontFamily:"'DM Sans',sans-serif",color:"#8A7E72",fontSize:13,margin:"4px 0 20px",lineHeight:1.5 }}>{rc.description}</p>
 
     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:28 }}>
-      <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #EDE8E0",padding:"14px 18px",display:"flex",flexDirection:"column" }}>
+      <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #EDE8E0",padding:"14px 18px" }}>
         <div style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:"#B0A898",textTransform:"uppercase",letterSpacing:1,marginBottom:10 }}>{t.servings}</div>
-        <div style={{ display:"flex",alignItems:"center",gap:14,marginBottom:12 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:14 }}>
           <button style={{ ...S.btn("outline"),padding:"3px 10px",fontSize:16 }} onClick={()=>sSv(Math.max(1,sv-1))}>&minus;</button>
           <span style={{ fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:700,minWidth:36,textAlign:"center" }}>{sv}</span>
           <button style={{ ...S.btn("outline"),padding:"3px 10px",fontSize:16 }} onClick={()=>sSv(sv+1)}>+</button>
         </div>
-        {/* ── Photo inside Servings card ── */}
-        <input ref={photoInputRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={e=>{
-          const f = e.target.files?.[0];
-          if (!f) return;
-          if (f.size > 10*1024*1024) { alert("Photo must be under 10MB."); e.target.value=""; return; }
-          setPhotoUploading(true);
-          const reader = new FileReader();
-          reader.onload = ev => {
-            const dataUrl = ev.target.result;
-            /* Save as data URL immediately (works offline, no cloud needed) */
-            onUpdatePhoto(dataUrl);
-            /* If cloud sync is configured, also upload to Drive in background */
-            if (syncUrl) {
-              const base64 = dataUrl.split(",")[1];
-              fetch(syncUrl + "?action=uploadPhoto", {
-                method:"POST", headers:{"Content-Type":"text/plain"},
-                body: JSON.stringify({ recipeId:rc.id, recipeName:rc.name, fileName:f.name, mimeType:f.type, data:base64 })
-              }).then(r=>r.json()).then(result=>{
-                if (result.url) onUpdatePhoto(result.url); /* replace data URL with Drive URL */
-              }).catch(()=>{}); /* silently keep data URL if Drive upload fails */
-            }
-            setPhotoUploading(false);
-          };
-          reader.onerror = () => { setPhotoUploading(false); alert("Failed to read file."); };
-          reader.readAsDataURL(f);
-          e.target.value = "";
-        }}/>
-        {rc.photo ? (
-          <div style={{ position:"relative",borderRadius:8,overflow:"hidden",flex:1,minHeight:0 }}>
-            <img src={rc.photo} alt={rc.name} style={{ width:"100%",height:"100%",minHeight:100,maxHeight:220,objectFit:"cover",display:"block",borderRadius:8 }}/>
-            {isAdmin && <div style={{ position:"absolute",top:6,right:6,display:"flex",gap:4 }}>
-              <button onClick={()=>photoInputRef.current?.click()} style={{ background:"rgba(42,36,32,0.7)",backdropFilter:"blur(6px)",border:"none",borderRadius:6,padding:"4px 8px",color:"#FFF",fontSize:10,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",display:"flex",alignItems:"center",gap:3 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                Change
-              </button>
-              <button onClick={()=>{if(confirm("Remove photo?"))onUpdatePhoto(null);}} style={{ background:"rgba(212,91,91,0.8)",border:"none",borderRadius:6,padding:"4px 6px",color:"#FFF",fontSize:10,cursor:"pointer" }}>✕</button>
-            </div>}
-          </div>
-        ) : isAdmin ? (
-          <div onClick={()=>photoInputRef.current?.click()} style={{ flex:1,minHeight:80,borderRadius:8,border:`1.5px dashed ${TH().borderDefault}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",background:TH().bgSurfaceHover,transition:"background 0.2s",padding:"12px 8px" }}>
-            {photoUploading ? (
-              <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().textMuted }}>Uploading...</div>
-            ) : (<>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={TH().textDisabled} strokeWidth="1.5" style={{ marginBottom:4 }}>
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-              </svg>
-              <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:600,color:TH().textMuted }}>Add plating photo</div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:8,color:TH().textDisabled,marginTop:2 }}>Camera or gallery</div>
-            </>)}
-          </div>
-        ) : null}
       </div>
       <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #EDE8E0",padding:"10px 14px 6px" }}>
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2 }}>
