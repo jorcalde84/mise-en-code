@@ -396,17 +396,78 @@ const getSuggestedTools = (cat, tLib) => {
 };
 const fmtQ = (qty, unit) => `${qty} ${unit}`;
 
-/* ═══ Styles ═══ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   THEME SYSTEM — Light + Dark mode with full colour palette
+   ─────────────────────────────────────────────────────────────────────────
+   All colours flow through the TH object. Components reference TH() to
+   get the current theme's colour values. The theme state lives in React
+   context and persists to localStorage.
+═══════════════════════════════════════════════════════════════════════════ */
+const THEMES = {
+  light: {
+    bgMain:"#FDFAF5", bgSecondary:"#F5F2ED", bgSurface:"#FFFFFF", bgSurfaceElevated:"#FFFFFF",
+    bgSurfaceHover:"#FAF7F2", bgInput:"#FDFAF5", bgTableHeader:"#F5F0E8",
+    borderDefault:"#E0D9CF", borderSubtle:"#EDE8E0", borderStrong:"#D5CEBC", divider:"#EDE8E0",
+    textPrimary:"#2A2420", textSecondary:"#6A6058", textMuted:"#8A7E72", textDisabled:"#B0A898",
+    textOnPrimary:"#FDFAF5", textOnAccent:"#FFFFFF",
+    primary:"#2A2420", primaryHover:"#3D352E", primaryActive:"#1A1614",
+    accent:"#8B5CF6", accentHover:"#7C4FE0", accentActive:"#6D42CC",
+    secondary:"#C49A6C", secondaryHover:"#B5926C",
+    focusRing:"#8B5CF640",
+    success:"#6BAF6E", successBg:"#6BAF6E12", successBorder:"#6BAF6E30",
+    warning:"#E8B84B", warningBg:"#E8B84B15", warningBorder:"#E8B84B30",
+    error:"#D45B5B", errorBg:"#D45B5B10", errorBorder:"#D45B5B25",
+    info:"#4A9EAF", infoBg:"#4A9EAF12", infoBorder:"#4A9EAF30",
+    module:"#9B7EB8", moduleBg:"#9B7EB815", moduleBorder:"#9B7EB830",
+    proc:"#8B5CF6", procBg:"#8B5CF610", procBorder:"#8B5CF625",
+    hdrBg:"rgba(253,250,245,0.95)",
+    shadowSm:"0 2px 8px rgba(42,36,32,0.04)", shadowMd:"0 4px 16px rgba(42,36,32,0.08)",
+    shadowLg:"0 8px 32px rgba(42,36,32,0.12)", shadowOverlay:"0 20px 60px rgba(42,36,32,0.25)",
+    overlayBg:"rgba(42,36,32,0.55)",
+    cardGradient:`linear-gradient(90deg,#C49A6C,#8B5CF6,#6BAF6E,#D45B5B,#4A9EAF)`,
+  },
+  dark: {
+    bgMain:"#1A1714", bgSecondary:"#221F1B", bgSurface:"#2A2622", bgSurfaceElevated:"#332E29",
+    bgSurfaceHover:"#332E29", bgInput:"#221F1B", bgTableHeader:"#2A2622",
+    borderDefault:"#3D3830", borderSubtle:"#332E29", borderStrong:"#4A443C", divider:"#332E29",
+    textPrimary:"#F0EBE3", textSecondary:"#C2B8A8", textMuted:"#8A7E72", textDisabled:"#5A5048",
+    textOnPrimary:"#1A1714", textOnAccent:"#FFFFFF",
+    primary:"#F0EBE3", primaryHover:"#E0D8CC", primaryActive:"#D0C8BC",
+    accent:"#A78BFA", accentHover:"#B99CFF", accentActive:"#C4ABFF",
+    secondary:"#D4A87A", secondaryHover:"#E0B88A",
+    focusRing:"#A78BFA40",
+    success:"#7BC47E", successBg:"#7BC47E15", successBorder:"#7BC47E30",
+    warning:"#F0C65A", warningBg:"#F0C65A15", warningBorder:"#F0C65A30",
+    error:"#E06B6B", errorBg:"#E06B6B12", errorBorder:"#E06B6B25",
+    info:"#5AB8CA", infoBg:"#5AB8CA15", infoBorder:"#5AB8CA30",
+    module:"#B99ADE", moduleBg:"#B99ADE15", moduleBorder:"#B99ADE30",
+    proc:"#A78BFA", procBg:"#A78BFA15", procBorder:"#A78BFA30",
+    hdrBg:"rgba(26,23,20,0.92)",
+    shadowSm:"0 2px 8px rgba(0,0,0,0.20)", shadowMd:"0 4px 16px rgba(0,0,0,0.30)",
+    shadowLg:"0 8px 32px rgba(0,0,0,0.40)", shadowOverlay:"0 20px 60px rgba(0,0,0,0.50)",
+    overlayBg:"rgba(0,0,0,0.55)",
+    cardGradient:`linear-gradient(90deg,#D4A87A,#A78BFA,#7BC47E,#E06B6B,#5AB8CA)`,
+  }
+};
+
+const LS_THEME = "mise_en_code_theme";
+const getInitialTheme = () => { try { return localStorage.getItem(LS_THEME) || "light"; } catch { return "light"; } };
+
+/* Global mutable ref — components call TH() to get current palette */
+let _currentTheme = getInitialTheme();
+const TH = () => THEMES[_currentTheme] || THEMES.light;
+
+/* ═══ Styles (theme-aware) ═══ */
 const S = {
-  app:{fontFamily:"'Cormorant Garamond','Georgia',serif",minHeight:"100vh",background:"#FDFAF5",color:"#2A2420"},
-  hdr:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 20px",borderBottom:"1px solid #E8E2D8",background:"rgba(253,250,245,0.95)",backdropFilter:"blur(10px)",position:"sticky",top:0,zIndex:100},
-  nb:a=>({padding:"5px 12px",borderRadius:20,border:"none",background:a?"#2A2420":"transparent",color:a?"#FDFAF5":"#8A7E72",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:4}),
-  card:{background:"#FFF",borderRadius:14,border:"1px solid #EDE8E0",overflow:"hidden",cursor:"pointer",transition:"all 0.25s",boxShadow:"0 2px 10px rgba(42,36,32,0.04)"},
+  app:()=>({fontFamily:"'Cormorant Garamond','Georgia',serif",minHeight:"100vh",background:TH().bgMain,color:TH().textPrimary,transition:"background 0.3s, color 0.3s"}),
+  hdr:()=>({display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 20px",borderBottom:`1px solid ${TH().divider}`,background:TH().hdrBg,backdropFilter:"blur(10px)",position:"sticky",top:0,zIndex:100,transition:"background 0.3s, border-color 0.3s"}),
+  nb:a=>({padding:"5px 12px",borderRadius:20,border:"none",background:a?TH().primary:"transparent",color:a?TH().textOnPrimary:TH().textMuted,fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"background 0.2s, color 0.2s"}),
+  card:()=>({background:TH().bgSurface,borderRadius:14,border:`1px solid ${TH().borderSubtle}`,overflow:"hidden",cursor:"pointer",transition:"all 0.25s",boxShadow:TH().shadowSm}),
   tag:c=>({display:"inline-flex",alignItems:"center",gap:3,padding:"2px 8px",borderRadius:10,background:c+"16",color:c,fontSize:11,fontFamily:"'DM Sans',sans-serif",fontWeight:600,whiteSpace:"nowrap",border:`1px solid ${c}28`}),
-  btn:(v="primary")=>({padding:v==="sm"?"4px 10px":"7px 14px",borderRadius:v==="sm"?6:10,border:v==="outline"?"1.5px solid #2A2420":"none",background:v==="primary"?"#2A2420":v==="danger"?"#D45B5B":"transparent",color:v==="primary"||v==="danger"?"#FDFAF5":"#2A2420",fontFamily:"'DM Sans',sans-serif",fontSize:v==="sm"?11:12,fontWeight:600,cursor:"pointer"}),
-  inp:{padding:"6px 10px",borderRadius:8,border:"1.5px solid #E0D9CF",background:"#FDFAF5",fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#2A2420",outline:"none",width:"100%",boxSizing:"border-box"},
-  sel:{padding:"4px 8px",borderRadius:6,border:"1.5px solid #E0D9CF",background:"#FDFAF5",fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#2A2420",outline:"none",cursor:"pointer"},
-  olbl:{fontFamily:"'DM Sans',sans-serif",fontSize:9,color:"#8A7E72",fontWeight:600,letterSpacing:0.3},
+  btn:(v="primary")=>{const th=TH();return{padding:v==="sm"?"4px 10px":"7px 14px",borderRadius:v==="sm"?6:10,border:v==="outline"?`1.5px solid ${th.primary}`:"none",background:v==="primary"?th.primary:v==="danger"?th.error:"transparent",color:v==="primary"||v==="danger"?th.textOnPrimary:th.textPrimary,fontFamily:"'DM Sans',sans-serif",fontSize:v==="sm"?11:12,fontWeight:600,cursor:"pointer",transition:"background 0.2s, color 0.2s, border-color 0.2s"};},
+  inp:()=>({padding:"6px 10px",borderRadius:8,border:`1.5px solid ${TH().borderDefault}`,background:TH().bgInput,fontFamily:"'DM Sans',sans-serif",fontSize:12,color:TH().textPrimary,outline:"none",width:"100%",boxSizing:"border-box",transition:"background 0.3s, border-color 0.3s, color 0.3s"}),
+  sel:()=>({padding:"4px 8px",borderRadius:6,border:`1.5px solid ${TH().borderDefault}`,background:TH().bgInput,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().textPrimary,outline:"none",cursor:"pointer",transition:"background 0.3s, border-color 0.3s, color 0.3s"}),
+  olbl:()=>({fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().textMuted,fontWeight:600,letterSpacing:0.3}),
 };
 
 const Ic = {
@@ -437,38 +498,38 @@ function ToolOpts({ meta, opts, onChange, t }) {
   const o = meta.o || {};
   const [tU, sTU] = useState("C");
   const set = (k, v) => onChange({ ...opts, [k]: v });
-  const ni = { width:48,padding:"2px 4px",borderRadius:4,border:"1px solid #DDD",textAlign:"center",fontSize:10,fontFamily:"'DM Sans',sans-serif" };
+  const ni = { width:60,padding:"4px 6px",borderRadius:6,border:"1.5px solid #DDD",textAlign:"center",fontSize:13,fontFamily:"'DM Sans',sans-serif" };
   const deg = String.fromCharCode(176);
-  const tV = opts?._temp || o._temp?.min || 0;
+  const tV = opts?._temp ?? o._temp?.default ?? o._temp?.min ?? 0;
   const dT = tU === "C" ? tV : c2f(tV);
   const sTemp = v => set("_temp", tU === "C" ? v : Math.round((v-32)*5/9));
   const timeUnits = o._timeUnit ? o._timeUnit : (o._time ? ["min"] : null);
   const curTimeUnit = opts?._timeUnit || (timeUnits ? timeUnits[0] : "min");
   return (<div style={{ display:"flex",flexWrap:"wrap",gap:5,alignItems:"center",marginTop:4 }}>
     {o._temp && <div style={{ display:"flex",alignItems:"center",gap:3 }}>
-      <span style={S.olbl}>{t.tempLabel}</span>
+      <span style={S.olbl()}>{t.tempLabel}</span>
       <input type="number" min={tU==="C"?o._temp.min:c2f(o._temp.min)} max={tU==="C"?o._temp.max:c2f(o._temp.max)} step={o._temp.step} value={dT} onChange={e=>sTemp(+e.target.value)} style={ni}/>
-      <button onClick={()=>sTU(tU==="C"?"F":"C")} style={{ padding:"1px 5px",borderRadius:4,border:"1px solid #DDD",background:tU==="C"?"#2A2420":"#E88C5A",color:"#FFF",fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>{deg}{tU}</button>
+      <button onClick={()=>sTU(tU==="C"?"F":"C")} style={{ padding:"3px 7px",borderRadius:4,border:"1px solid #DDD",background:tU==="C"?"#2A2420":"#E88C5A",color:"#FFF",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>{deg}{tU}</button>
     </div>}
-    {o._speed && <div style={{ display:"flex",alignItems:"center",gap:3 }}><span style={S.olbl}>{t.speedLabel}</span><select value={opts?._speed||""} onChange={e=>set("_speed",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">--</option>{o._speed.map(s=><option key={s} value={s}>{s}</option>)}</select></div>}
+    {o._speed && <div style={{ display:"flex",alignItems:"center",gap:4 }}><span style={S.olbl()}>{t.speedLabel}</span><select value={opts?._speed||""} onChange={e=>set("_speed",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">--</option>{o._speed.map(s=><option key={s} value={s}>{s}</option>)}</select></div>}
     {o._time && <div style={{ display:"flex",alignItems:"center",gap:3 }}>
-      <span style={S.olbl}>{t.timeLabel}</span>
+      <span style={S.olbl()}>{t.timeLabel}</span>
       <input type="number" min={o._time.min} max={o._time.max} value={opts?._time||""} onChange={e=>{
         /* Save time AND current time unit together so unit defaults persist */
         onChange({ ...opts, _time: +e.target.value, _timeUnit: curTimeUnit });
-      }} placeholder={curTimeUnit} style={{...ni,width:38}}/>
-      {timeUnits && timeUnits.length > 1 ? <select value={curTimeUnit} onChange={e=>set("_timeUnit",e.target.value)} style={{...S.sel,padding:"1px 3px",fontSize:9}}>{timeUnits.map(u=><option key={u} value={u}>{u}</option>)}</select> : <span style={{fontSize:9,color:"#8A7E72"}}>{curTimeUnit}</span>}
+      }} placeholder={curTimeUnit} style={{...ni,width:50}}/>
+      {timeUnits && timeUnits.length > 1 ? <select value={curTimeUnit} onChange={e=>set("_timeUnit",e.target.value)} style={{...S.sel(),padding:"3px 5px",fontSize:12}}>{timeUnits.map(u=><option key={u} value={u}>{u}</option>)}</select> : <span style={{fontSize:11,color:"#8A7E72"}}>{curTimeUnit}</span>}
     </div>}
-    {o._scale && <div style={{ display:"flex",alignItems:"center",gap:3 }}><span style={S.olbl}>{t.scaleLabel}</span><input type="number" min={o._scale.min} max={o._scale.max} value={opts?._scale||""} onChange={e=>set("_scale",+e.target.value)} placeholder="g" style={{...ni,width:44}}/><span style={{fontSize:9,color:"#8A7E72"}}>g</span></div>}
-    {o.ovenMode && <select value={opts?.ovenMode||""} onChange={e=>set("ovenMode",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Mode</option>{o.ovenMode.map(m=><option key={m} value={m}>{m}</option>)}</select>}
-    {o.attachment && <select value={opts?.attachment||""} onChange={e=>set("attachment",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Attach.</option>{o.attachment.map(a=><option key={a} value={a}>{a}</option>)}</select>}
-    {o.func && <select value={opts?.func||""} onChange={e=>set("func",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Function</option>{o.func.map(f=><option key={f} value={f}>{f}</option>)}</select>}
-    {o.capacity && <select value={opts?.capacity||""} onChange={e=>set("capacity",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Measure</option>{o.capacity.map(c=><option key={c} value={c}>{c}</option>)}</select>}
-    {o.cut && <select value={opts?.cut||""} onChange={e=>set("cut",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Cut</option>{o.cut.map(c=><option key={c} value={c}>{c}</option>)}</select>}
-    {o.grade && <select value={opts?.grade||""} onChange={e=>set("grade",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Grade</option>{o.grade.map(g=><option key={g} value={g}>{g}</option>)}</select>}
-    {o.size && <select value={opts?.size||""} onChange={e=>set("size",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Size</option>{o.size.map(s=><option key={s} value={s}>{s}</option>)}</select>}
-    {o.heat && <select value={opts?.heat||""} onChange={e=>set("heat",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Heat</option>{o.heat.map(h=><option key={h} value={h}>{h}</option>)}</select>}
-    {o.type && <select value={opts?.type||""} onChange={e=>set("type",e.target.value)} style={{...S.sel,padding:"2px 4px",fontSize:10}}><option value="">Type</option>{o.type.map(x=><option key={x} value={x}>{x}</option>)}</select>}
+    {o._scale && <div style={{ display:"flex",alignItems:"center",gap:4 }}><span style={S.olbl()}>{t.scaleLabel}</span><input type="number" min={o._scale.min} max={o._scale.max} value={opts?._scale||""} onChange={e=>set("_scale",+e.target.value)} placeholder="g" style={{...ni,width:56}}/><span style={{fontSize:11,color:"#8A7E72"}}>g</span></div>}
+    {o.ovenMode && <select value={opts?.ovenMode||""} onChange={e=>set("ovenMode",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Mode</option>{o.ovenMode.map(m=><option key={m} value={m}>{m}</option>)}</select>}
+    {o.attachment && <select value={opts?.attachment||""} onChange={e=>set("attachment",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Attach.</option>{o.attachment.map(a=><option key={a} value={a}>{a}</option>)}</select>}
+    {o.func && <select value={opts?.func||""} onChange={e=>set("func",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Function</option>{o.func.map(f=><option key={f} value={f}>{f}</option>)}</select>}
+    {o.capacity && <select value={opts?.capacity||""} onChange={e=>set("capacity",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Measure</option>{o.capacity.map(c=><option key={c} value={c}>{c}</option>)}</select>}
+    {o.cut && <select value={opts?.cut||""} onChange={e=>set("cut",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Cut</option>{o.cut.map(c=><option key={c} value={c}>{c}</option>)}</select>}
+    {o.grade && <select value={opts?.grade||""} onChange={e=>set("grade",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Grade</option>{o.grade.map(g=><option key={g} value={g}>{g}</option>)}</select>}
+    {o.size && <select value={opts?.size||""} onChange={e=>set("size",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Size</option>{o.size.map(s=><option key={s} value={s}>{s}</option>)}</select>}
+    {o.heat && <select value={opts?.heat||""} onChange={e=>set("heat",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Heat</option>{o.heat.map(h=><option key={h} value={h}>{h}</option>)}</select>}
+    {o.type && <select value={opts?.type||""} onChange={e=>set("type",e.target.value)} style={{...S.sel(),padding:"4px 8px",fontSize:13}}><option value="">Type</option>{o.type.map(x=><option key={x} value={x}>{x}</option>)}</select>}
   </div>);
 }
 
@@ -585,6 +646,14 @@ function App() {
   const [loginError, setLoginError] = useState(false);
   const isAdmin = role === "admin";
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const [theme, setTheme] = useState(getInitialTheme);
+  _currentTheme = theme; /* sync global ref */
+  const toggleTheme = () => {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    _currentTheme = next;
+    try { localStorage.setItem(LS_THEME, next); } catch {}
+  };
   /* Initial data — will be overwritten by loadBootData */
   const [recs, sR] = useState(SAMP);
   const [aId, sAId] = useState(null);
@@ -721,10 +790,10 @@ function App() {
   const filt = recs.filter(r => r.name.toLowerCase().includes(sr.toLowerCase()) || r.tags?.some(x => x.toLowerCase().includes(sr.toLowerCase())));
   const mL = recs.flatMap(r => r.preparations.filter(p => p.isModule).map(p => ({ ...p, fromRecipe:r.name, recipeId:r.id })));
 
-  return (<div style={S.app}>
+  return (<div style={S.app()}>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
     <input ref={fileRef} type="file" accept=".json" style={{ display:"none" }} onChange={importData}/>
-    <div style={{...S.hdr,flexWrap:"wrap",gap:isMobile?6:0,padding:isMobile?"8px 12px":"10px 24px"}}>
+    <div style={{...S.hdr(),flexWrap:"wrap",gap:isMobile?6:0,padding:isMobile?"8px 12px":"10px 24px"}}>
       <span style={{ fontFamily:"'Playfair Display',serif",fontSize:isMobile?16:20,fontWeight:700,cursor:"pointer" }} onClick={()=>sV("browse")}><span style={{ color:"#C49A6C" }}>&#9670;</span> Mise en Code</span>
       <div style={{ display:"flex",gap:isMobile?3:5,alignItems:"center",flexWrap:"wrap" }}>
         {!isMobile && <div style={{ display:"flex",borderRadius:16,overflow:"hidden",border:"1px solid #E0D9CF",marginRight:6 }}>
@@ -747,8 +816,15 @@ function App() {
           {syncUrl ? (syncStatus === "saving" ? "\u2B6E" : syncStatus === "saved" ? "\u2714" : syncStatus === "error" ? "\u26A0" : "\u2601") : "Sync"}
           {syncUrl && <span style={{ position:"absolute",top:2,right:2,width:6,height:6,borderRadius:"50%",background:syncStatus==="error"?"#D45B5B":syncStatus==="saving"?"#E8B84B":"#6BAF6E" }}/>}
         </button></>}
+        {/* Theme toggle */}
+        <div style={{ width:1,height:16,background:TH().divider }}/>
+        <button onClick={toggleTheme} style={{...S.nb(false),fontSize:11,padding:"4px 8px"}} title={theme==="light"?"Switch to dark mode":"Switch to light mode"}>
+          {theme==="light"
+            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>}
+        </button>
         {/* Role badge + login/logout */}
-        <div style={{ width:1,height:16,background:"#E0D9CF" }}/>
+        <div style={{ width:1,height:16,background:TH().divider }}/>
         <button onClick={()=>{if(isAdmin){setRole("guest");try{localStorage.setItem(LS_ROLE,"guest");}catch{}}else{setShowLogin(true);setLoginPw("");setLoginError(false);}}} style={{...S.nb(false),fontSize:10,padding:"4px 10px",position:"relative",gap:4}}>
           <span style={{ width:7,height:7,borderRadius:"50%",background:isAdmin?"#6BAF6E":"#E8B84B",display:"inline-block",flexShrink:0 }}/>
           <span>{isAdmin ? "Admin" : "Guest"}</span>
@@ -828,7 +904,7 @@ function App() {
       <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#B0A898" }}>{syncUrl ? "Loading from cloud..." : "Loading..."}</div>
     </div>}
     {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={r=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(r);}} oC={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}cN();}} oD={delR} t={t} isAdmin={isAdmin} isMobile={isMobile}/>}
-    {!loading && vw==="view" && act && <VwV r={act} oB={()=>sV("browse")} oE={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(act);}} t={t} lib={lib} tl={tl} lang={lang} isAdmin={isAdmin} isMobile={isMobile}/>}
+    {!loading && vw==="view" && act && <VwV r={act} oB={()=>sV("browse")} oE={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(act);}} t={t} lib={lib} tl={tl} lang={lang} isAdmin={isAdmin} isMobile={isMobile} syncUrl={syncUrl} onUpdatePhoto={(photoUrl)=>{setRecsAndPersist(prev=>{const idx=prev.findIndex(x=>x.id===act.id);if(idx>=0){const n=[...prev];n[idx]={...n[idx],photo:photoUrl};return n;}return prev;});}}/>}
     {!loading && vw==="edit" && eR && !isMobile && <EdV r={eR} sR={sER} oS={svR} oC={()=>sV(aId?"view":"browse")} mL={mL} t={t} lib={lib} tl={tl} pl={pl} aCI={isAdmin?addCI:()=>{}} aCT={isAdmin?addCT:()=>{}} aCP={isAdmin?addCP:()=>{}} favs={favs} toggleFav={toggleFav} lang={lang} isAdmin={isAdmin}/>}
   </div>);
 }
@@ -859,7 +935,7 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, t, isAdmin, isMobile }) {
     <p style={{ fontFamily:"'DM Sans',sans-serif",color:"#8A7E72",fontSize:13,margin:"6px 0 20px" }}>{t.subtitle}</p>
     <div style={{ position:"relative",marginBottom:16,maxWidth:360 }}>
       <div style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#B0A898" }}><Ic.S/></div>
-      <input style={{ ...S.inp,paddingLeft:32 }} placeholder={t.search} value={sr} onChange={e=>sSr(e.target.value)}/>
+      <input style={{ ...S.inp(),paddingLeft:32 }} placeholder={t.search} value={sr} onChange={e=>sSr(e.target.value)}/>
     </div>
     {/* Category tab bar */}
     <div style={{ display:"flex",gap:4,borderBottom:"1px solid #EDE8E0",marginBottom:20,overflowX:"auto" }}>
@@ -870,10 +946,10 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, t, isAdmin, isMobile }) {
       <button onClick={()=>setActiveCat("Drinks & Cocktails")} style={tabStyle(activeCat==="Drinks & Cocktails")}>{t.catDrinks||"Drinks & Cocktails"} <span style={{ marginLeft:4,fontSize:10,color:"#B0A898" }}>{countFor("Drinks & Cocktails")}</span></button>
     </div>
     <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(auto-fill,minmax(150px,1fr))":"repeat(auto-fill,minmax(260px,1fr))",gap:isMobile?10:16 }}>
-      {!isMobile && <div style={{ ...S.card,display:"flex",alignItems:"center",justifyContent:"center",minHeight:180,border:"2px dashed #DDD5C8",background:"transparent",boxShadow:"none" }} onClick={oC}>
+      {!isMobile && <div style={{ ...S.card(),display:"flex",alignItems:"center",justifyContent:"center",minHeight:180,border:"2px dashed #DDD5C8",background:"transparent",boxShadow:"none" }} onClick={oC}>
         <div style={{ textAlign:"center",color:"#B0A898" }}><div style={{ fontSize:28,marginBottom:6 }}>+</div><div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600 }}>{t.newRecipe}</div></div>
       </div>}
-      {catRs.map(r => <div key={r.id} style={S.card} onClick={()=>oO(r.id)} onMouseEnter={e=>{if(!isMobile){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 24px rgba(42,36,32,0.10)";}}} onMouseLeave={e=>{if(!isMobile){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}}>        <div style={{ height:5,background:`linear-gradient(90deg,${Object.values(CC).slice(0,5).join(",")})` }}/>
+      {catRs.map(r => <div key={r.id} style={S.card()} onClick={()=>oO(r.id)} onMouseEnter={e=>{if(!isMobile){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 24px rgba(42,36,32,0.10)";}}} onMouseLeave={e=>{if(!isMobile){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}}>        <div style={{ height:5,background:`linear-gradient(90deg,${Object.values(CC).slice(0,5).join(",")})` }}/>
         <div style={{ padding:"14px 16px 16px" }}>
           <div style={{ display:"flex",justifyContent:"space-between",marginBottom:6,alignItems:"flex-start" }}>
             <h3 style={{ fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:600,margin:0,flex:1 }}>{r.name||"Untitled"}</h3>
@@ -1440,16 +1516,16 @@ const PROC_PARAMS = {
   "decant":    { time:"F", temp:"F" },
 
   /* ── Hydration / Penetration ────────────── */
-  "soak":      { time:"R", temp:"O", src:"process" },
-  "hydrate":   { time:"R", temp:"O", src:"process" },
-  "reconstitute":{ time:"R", temp:"O", src:"process" },
-  "brine":     { time:"R", temp:"O", src:"process" },
-  "marinate":  { time:"R", temp:"O", src:"process" },
-  "cure":      { time:"R", temp:"O", src:"process" },
-  "steep":     { time:"R", temp:"R", src:"tool_first" },
-  "infuse":    { time:"R", temp:"R", src:"tool_first" },
-  "bloom gelatin":{ time:"R", temp:"F", src:"process" },
-  "bloom yeast":{ time:"R", temp:"R", src:"process" },
+  "soak":      { time:"R", temp:"O", src:"process", defaults:{ _time:30, _timeUnit:"min" } },
+  "hydrate":   { time:"R", temp:"O", src:"process", defaults:{ _time:10, _timeUnit:"min" } },
+  "reconstitute":{ time:"R", temp:"O", src:"process", defaults:{ _time:20, _timeUnit:"min" } },
+  "brine":     { time:"R", temp:"O", src:"process", defaults:{ _time:2, _timeUnit:"hr", _temp:4 } },
+  "marinate":  { time:"R", temp:"O", src:"process", defaults:{ _time:2, _timeUnit:"hr", _temp:4 } },
+  "cure":      { time:"R", temp:"O", src:"process", defaults:{ _time:24, _timeUnit:"hr", _temp:4 } },
+  "steep":     { time:"R", temp:"R", src:"tool_first", defaults:{ _time:5, _timeUnit:"min", _temp:90 } },
+  "infuse":    { time:"R", temp:"R", src:"tool_first", defaults:{ _time:10, _timeUnit:"min", _temp:85 } },
+  "bloom gelatin":{ time:"R", temp:"F", src:"process", defaults:{ _time:5, _timeUnit:"min" } },
+  "bloom yeast":{ time:"R", temp:"R", src:"process", defaults:{ _time:10, _timeUnit:"min", _temp:35 } },
 
   /* ── Combining / Dispersion ─────────────── */
   "mix":       { time:"O", temp:"F" },
@@ -1465,66 +1541,66 @@ const PROC_PARAMS = {
   "dollop":    { time:"F", temp:"F" },
 
   /* ── Emulsion / Foam / Aeration ─────────── */
-  "emulsify":  { time:"R", temp:"O", src:"tool_first" },
-  "foam":      { time:"R", temp:"F", src:"tool_first" },
-  "whip":      { time:"R", temp:"F", src:"tool_first" },
-  "beat":      { time:"R", temp:"F", src:"tool_first" },
+  "emulsify":  { time:"R", temp:"O", src:"tool_first", defaults:{ _time:3, _timeUnit:"min" } },
+  "foam":      { time:"R", temp:"F", src:"tool_first", defaults:{ _time:2, _timeUnit:"min" } },
+  "whip":      { time:"R", temp:"F", src:"tool_first", defaults:{ _time:5, _timeUnit:"min" } },
+  "beat":      { time:"R", temp:"F", src:"tool_first", defaults:{ _time:5, _timeUnit:"min" } },
   "whisk":     { time:"O", temp:"F" },
   "aerate":    { time:"O", temp:"F" },
 
   /* ── Structure / Biology / Rest ─────────── */
-  "knead":     { time:"R", temp:"F", src:"tool_first" },
-  "ferment":   { time:"R", temp:"R", src:"process" },
-  "proof":     { time:"R", temp:"R", src:"process" },
-  "rest":      { time:"R", temp:"O" },
+  "knead":     { time:"R", temp:"F", src:"tool_first", defaults:{ _time:8, _timeUnit:"min" } },
+  "ferment":   { time:"R", temp:"R", src:"process", defaults:{ _time:24, _timeUnit:"hr", _temp:20 } },
+  "proof":     { time:"R", temp:"R", src:"process", defaults:{ _time:1, _timeUnit:"hr", _temp:30 } },
+  "rest":      { time:"R", temp:"O", defaults:{ _time:15, _timeUnit:"min" } },
 
   /* ── Dry Heat ───────────────────────────── */
-  "bake":      { time:"R", temp:"R", src:"tool_first" },
-  "roast":     { time:"R", temp:"R", src:"tool_first" },
-  "grill":     { time:"R", temp:"R", src:"tool_first" },
-  "toast":     { time:"R", temp:"R", src:"tool_first" },
-  "sear":      { time:"R", temp:"R", src:"tool_first" },
-  "saut\u00E9":{ time:"R", temp:"R", src:"tool_first" },
-  "caramelize":{ time:"R", temp:"R", src:"tool_first" },
-  "flamb\u00E9":{ time:"R", temp:"O" },
-  "torching":  { time:"R", temp:"O", src:"tool_first" },
+  "bake":      { time:"R", temp:"R", src:"tool_first", defaults:{ _time:30, _timeUnit:"min", _temp:180 } },
+  "roast":     { time:"R", temp:"R", src:"tool_first", defaults:{ _time:45, _timeUnit:"min", _temp:200 } },
+  "grill":     { time:"R", temp:"R", src:"tool_first", defaults:{ _time:10, _timeUnit:"min", _temp:230 } },
+  "toast":     { time:"R", temp:"R", src:"tool_first", defaults:{ _time:3, _timeUnit:"min", _temp:200 } },
+  "sear":      { time:"R", temp:"R", src:"tool_first", defaults:{ _time:3, _timeUnit:"min" } },
+  "saut\u00E9":{ time:"R", temp:"R", src:"tool_first", defaults:{ _time:5, _timeUnit:"min" } },
+  "caramelize":{ time:"R", temp:"R", src:"tool_first", defaults:{ _time:15, _timeUnit:"min" } },
+  "flamb\u00E9":{ time:"R", temp:"O", defaults:{ _time:1, _timeUnit:"min" } },
+  "torching":  { time:"R", temp:"O", src:"tool_first", defaults:{ _time:30, _timeUnit:"sec" } },
 
   /* ── Moist Heat ─────────────────────────── */
-  "boil":      { time:"R", temp:"R", src:"tool_first" },
-  "simmer":    { time:"R", temp:"R", src:"tool_first" },
-  "steam":     { time:"R", temp:"R", src:"tool_first" },
-  "blanch":    { time:"R", temp:"R", src:"tool_first" },
-  "poach":     { time:"R", temp:"R", src:"tool_first" },
-  "braise":    { time:"R", temp:"R", src:"tool_first" },
-  "stew":      { time:"R", temp:"R", src:"tool_first" },
+  "boil":      { time:"R", temp:"R", src:"tool_first", defaults:{ _time:10, _timeUnit:"min", _temp:100 } },
+  "simmer":    { time:"R", temp:"R", src:"tool_first", defaults:{ _time:20, _timeUnit:"min", _temp:90 } },
+  "steam":     { time:"R", temp:"R", src:"tool_first", defaults:{ _time:10, _timeUnit:"min", _temp:100 } },
+  "blanch":    { time:"R", temp:"R", src:"tool_first", defaults:{ _time:2, _timeUnit:"min", _temp:100 } },
+  "poach":     { time:"R", temp:"R", src:"tool_first", defaults:{ _time:10, _timeUnit:"min", _temp:78 } },
+  "braise":    { time:"R", temp:"R", src:"tool_first", defaults:{ _time:2, _timeUnit:"hr", _temp:160 } },
+  "stew":      { time:"R", temp:"R", src:"tool_first", defaults:{ _time:90, _timeUnit:"min", _temp:85 } },
 
   /* ── Fat-Mediated / Surface ─────────────── */
-  "pan-fry":   { time:"R", temp:"R", src:"tool_first" },
-  "shallow-fry":{ time:"R", temp:"R", src:"tool_first" },
-  "deep-fry":  { time:"R", temp:"R", src:"tool_first" },
-  "confit":    { time:"R", temp:"R", src:"tool_first" },
-  "pan-roast": { time:"R", temp:"R", src:"tool_first" },
+  "pan-fry":   { time:"R", temp:"R", src:"tool_first", defaults:{ _time:8, _timeUnit:"min" } },
+  "shallow-fry":{ time:"R", temp:"R", src:"tool_first", defaults:{ _time:5, _timeUnit:"min" } },
+  "deep-fry":  { time:"R", temp:"R", src:"tool_first", defaults:{ _time:5, _timeUnit:"min", _temp:175 } },
+  "confit":    { time:"R", temp:"R", src:"tool_first", defaults:{ _time:2, _timeUnit:"hr", _temp:85 } },
+  "pan-roast": { time:"R", temp:"R", src:"tool_first", defaults:{ _time:10, _timeUnit:"min" } },
 
   /* ── Reduction / Sauce ──────────────────── */
-  "reduce":    { time:"R", temp:"R", src:"tool_first" },
-  "deglaze":   { time:"R", temp:"R", src:"tool_first" },
-  "glaze":     { time:"R", temp:"R", src:"tool_first" },
-  "evaporate": { time:"R", temp:"R", src:"tool_first" },
-  "concentrate":{ time:"R", temp:"R", src:"tool_first" },
+  "reduce":    { time:"R", temp:"R", src:"tool_first", defaults:{ _time:15, _timeUnit:"min", _temp:95 } },
+  "deglaze":   { time:"R", temp:"R", src:"tool_first", defaults:{ _time:2, _timeUnit:"min" } },
+  "glaze":     { time:"R", temp:"R", src:"tool_first", defaults:{ _time:5, _timeUnit:"min" } },
+  "evaporate": { time:"R", temp:"R", src:"tool_first", defaults:{ _time:10, _timeUnit:"min", _temp:95 } },
+  "concentrate":{ time:"R", temp:"R", src:"tool_first", defaults:{ _time:20, _timeUnit:"min", _temp:90 } },
   "check viscosity":{ time:"F", temp:"F" },
   "check doneness":{ time:"F", temp:"F" },
 
   /* ── Preservation / Holding ─────────────── */
-  "smoke":     { time:"R", temp:"R", src:"tool_first" },
-  "pickle":    { time:"R", temp:"O", src:"process" },
-  "cool":      { time:"R", temp:"O" },
-  "chill":     { time:"R", temp:"O" },
-  "freeze":    { time:"R", temp:"O" },
-  "temper":    { time:"R", temp:"R", src:"process" },
-  "dehydrate": { time:"R", temp:"R", src:"tool_first" },
-  "salt-cure": { time:"R", temp:"O", src:"process" },
-  "sugar-preserve":{ time:"R", temp:"O", src:"process" },
-  "age":       { time:"R", temp:"O", src:"process" },
+  "smoke":     { time:"R", temp:"R", src:"tool_first", defaults:{ _time:4, _timeUnit:"hr", _temp:115 } },
+  "pickle":    { time:"R", temp:"O", src:"process", defaults:{ _time:24, _timeUnit:"hr", _temp:4 } },
+  "cool":      { time:"R", temp:"O", defaults:{ _time:20, _timeUnit:"min" } },
+  "chill":     { time:"R", temp:"O", defaults:{ _time:2, _timeUnit:"hr", _temp:4 } },
+  "freeze":    { time:"R", temp:"O", defaults:{ _time:4, _timeUnit:"hr", _temp:-18 } },
+  "temper":    { time:"R", temp:"R", src:"process", defaults:{ _time:30, _timeUnit:"min", _temp:20 } },
+  "dehydrate": { time:"R", temp:"R", src:"tool_first", defaults:{ _time:6, _timeUnit:"hr", _temp:65 } },
+  "salt-cure": { time:"R", temp:"O", src:"process", defaults:{ _time:24, _timeUnit:"hr", _temp:4 } },
+  "sugar-preserve":{ time:"R", temp:"O", src:"process", defaults:{ _time:12, _timeUnit:"hr" } },
+  "age":       { time:"R", temp:"O", src:"process", defaults:{ _time:24, _timeUnit:"hr", _temp:4 } },
 
   /* ── Finishing / Plating ────────────────── */
   "season":    { time:"F", temp:"F" },
@@ -2272,8 +2348,10 @@ function FlavourRadar({ profile, t, colors, compact }) {
 }
 
 /* ═══ GANTT VIEW — auto-height arrows, named lanes, ingredient summary, module anchors ═══ */
-function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile }) {
+function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, syncUrl, onUpdatePhoto }) {
   const [sv, sSv] = useState(rc.servings);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoInputRef = useRef(null);
   const base = rc.servings;
   const fc = { sweetness:"#E89EC0",richness:"#C49A6C",spiciness:"#D45B5B",acidity:"#E8B84B",umami:"#6B9FC4" };
   /* Flavour profile is auto-derived from the recipe's ingredients, processes and tools. */
@@ -2328,6 +2406,296 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile }) {
     return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); ro.disconnect(); window.removeEventListener("resize", measure); };
   }, [rc, sv, modules.length, mainPreps.length]);
 
+  /* ═══ MOBILE VIEW — Timeline / Step Detail / Flavour ═══ */
+  if (isMobile) {
+    const [mTab, setMTab] = useState("timeline"); /* timeline | flavour */
+    const [mStep, setMStep] = useState(null); /* stepId for detail view */
+    const laneColors = ["#4A9EAF","#C49A6C","#8B5CF6","#D45B5B","#6BAF6E","#E8B84B","#E89EC0","#7EAA7E"];
+    const deg = String.fromCharCode(176);
+
+    /* Build lane data for timeline */
+    const allPreps = [...mainPreps, ...modules];
+    const allLanes = [];
+    let colorIdx = 0;
+    allPreps.forEach(prep => {
+      const grid = prep.grid || [[]];
+      const laneCount = Math.max(0, ...grid.map(row => (row||[]).length));
+      for (let li = 0; li < laneCount; li++) {
+        const steps = [];
+        for (let ri = 0; ri < grid.length; ri++) {
+          const s = grid[ri] && grid[ri][li];
+          if (s) steps.push(s);
+        }
+        if (steps.length) {
+          const laneName = (prep.laneNames && prep.laneNames[li]) || `${t.lane||"Lane"} ${li+1}`;
+          allLanes.push({ prep, laneName, steps, color: laneColors[colorIdx % laneColors.length], isModule: prep.isModule });
+          colorIdx++;
+        }
+      }
+    });
+
+    /* Find step by id across all lanes */
+    const findStep = (id) => {
+      for (const lane of allLanes) {
+        const s = lane.steps.find(s => s.id === id);
+        if (s) return { step: s, lane };
+      }
+      return null;
+    };
+
+    /* Connections: build a map of stepId → [{ targetId, targetLaneName }] */
+    const connMap = {};
+    allPreps.forEach(prep => {
+      flattenGrid(prep.grid||[[]]).forEach(step => {
+        (step.connectsTo || []).forEach(ct => {
+          if (!connMap[step.id]) connMap[step.id] = [];
+          /* find target lane name */
+          let tgtLaneName = "";
+          for (const ln of allLanes) {
+            if (ln.steps.some(s => s.id === ct.targetId)) { tgtLaneName = ln.laneName; break; }
+          }
+          connMap[step.id].push({ targetId: ct.targetId, laneName: tgtLaneName });
+        });
+      });
+    });
+
+    /* Step detail view */
+    if (mStep) {
+      const found = findStep(mStep);
+      if (!found) { setMStep(null); return null; }
+      const { step, lane } = found;
+      const ings = (step.ingredients||[]).filter(i => !i.isPrepRef && !i.multiplierRef);
+      const toolObj = step.tool;
+      const pP = step.processParams || {};
+      const stepIdx = lane.steps.indexOf(step);
+      const conns = connMap[step.id] || [];
+
+      return (<div style={{ minHeight:"100vh",display:"flex",flexDirection:"column",background:"#FDFAF5",fontFamily:"'DM Sans',sans-serif" }}>
+        {/* Header */}
+        <div style={{ padding:"10px 14px 8px",borderBottom:"1px solid #EDE8E0",display:"flex",alignItems:"center",gap:8 }}>
+          <button onClick={()=>setMStep(null)} style={{ background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:"#8A7E72",fontSize:12 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+            {lane.laneName}
+          </button>
+        </div>
+
+        <div style={{ flex:1,overflowY:"auto",padding:"14px 16px",WebkitOverflowScrolling:"touch" }}>
+          <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:600,margin:"0 0 3px" }}>{step.title || `Step ${stepIdx+1}`}</h2>
+          <p style={{ fontSize:11,color:"#B0A898",margin:"0 0 14px" }}>{lane.prep.name} · {lane.laneName} · Step {stepIdx+1} of {lane.steps.length}</p>
+
+          {/* Tool */}
+          {toolObj && <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:10,fontWeight:700,color:"#B0A898",textTransform:"uppercase",letterSpacing:0.5,marginBottom:5 }}>{t.tools}</div>
+            <div style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:10,border:"1px solid #EDE8E0",background:"#FFF" }}>
+              <span style={{ fontSize:18 }}>{toolObj.icon||"\uD83D\uDD27"}</span>
+              <div>
+                <div style={{ fontSize:12,fontWeight:600 }}>{toolObj.name}</div>
+                {toolObj.opts && <div style={{ fontSize:10,color:"#8A7E72",display:"flex",flexWrap:"wrap",gap:4,marginTop:2 }}>
+                  {toolObj.opts._temp != null && <span>🌡 {toolObj.opts._temp}{deg}C</span>}
+                  {toolObj.opts.heat && <span>🌡 {toolObj.opts.heat}</span>}
+                  {toolObj.opts._time != null && <span>⏱ {toolObj.opts._time} {toolObj.opts._timeUnit||"min"}</span>}
+                  {toolObj.opts._speed && <span>⚡ Speed {toolObj.opts._speed}</span>}
+                </div>}
+              </div>
+            </div>
+          </div>}
+
+          {/* Ingredients */}
+          {ings.length > 0 && <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:10,fontWeight:700,color:"#B0A898",textTransform:"uppercase",letterSpacing:0.5,marginBottom:5 }}>{t.ingredients}</div>
+            {ings.map(ing => {
+              const fi = flat.find(f => f.id === ing.ingredientId);
+              return <div key={ing.uid} style={{ display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"0.5px solid #EDE8E0" }}>
+                <span style={{ fontSize:12 }}>{fi?.n || ing.ingredientId}</span>
+                <span style={{ fontSize:12,color:"#8A7E72" }}>{ing.qty ? `${Math.round(ing.qty * sv / base * 10)/10} ${ing.unit||""}` : ""}</span>
+              </div>;
+            })}
+          </div>}
+
+          {/* Processes */}
+          {(step.processes||[]).length > 0 && <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:10,fontWeight:700,color:"#B0A898",textTransform:"uppercase",letterSpacing:0.5,marginBottom:5 }}>{t.processes}</div>
+            {(step.processes||[]).map(proc => {
+              const params = resolveProcessParams(proc, step.tool, step.processParams);
+              return <div key={proc} style={{ padding:"8px 10px",borderRadius:8,background:"#8B5CF608",border:"1px solid #8B5CF620",marginBottom:6 }}>
+                <div style={{ fontSize:12,fontWeight:600,color:"#8B5CF6",marginBottom:3 }}>{trN(proc,"proc",lang)}</div>
+                <div style={{ display:"flex",flexWrap:"wrap",gap:4 }}>
+                  {params.map(r => {
+                    if (r.policy === "F") return null;
+                    const icon = r.param === "time" ? "⏱" : "🌡";
+                    const isOk = r.source === "tool" || r.source === "tool_cat" || r.source === "process";
+                    let label = "";
+                    if (r.source === "tool" || r.source === "tool_cat") label = `← ${toolObj?.name||"tool"}`;
+                    else if (r.source === "process") label = r.param === "time" ? `${pP._time||"?"} ${pP._timeUnit||"min"}` : `${pP._temp||"?"}${deg}C`;
+                    else if (r.policy === "R") label = "needed";
+                    else label = "optional";
+                    return <span key={r.param} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:5,background:isOk?"#6BAF6E10":"#D45B5B08",border:`1px solid ${isOk?"#6BAF6E25":"#D45B5B20"}`,fontSize:10,color:isOk?"#6BAF6E":"#D45B5B" }}>
+                      {icon} <span style={{ fontWeight:600 }}>{r.param === "time" ? t.timeLabel : t.tempLabel}</span> {label}
+                    </span>;
+                  })}
+                </div>
+              </div>;
+            })}
+          </div>}
+
+          {/* Description/notes */}
+          {step.desc && <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:10,fontWeight:700,color:"#B0A898",textTransform:"uppercase",letterSpacing:0.5,marginBottom:5 }}>Notes</div>
+            <p style={{ fontSize:12,color:"#6A6058",lineHeight:1.55,margin:0 }}>{step.desc}</p>
+          </div>}
+
+          {/* Connections out */}
+          {conns.length > 0 && <div style={{ padding:"8px 10px",borderRadius:8,background:"#F5F2ED",border:"1px solid #EDE8E0" }}>
+            <div style={{ fontSize:10,color:"#B0A898",marginBottom:3 }}>Feeds into</div>
+            {conns.map((c,ci) => <div key={ci} style={{ fontSize:12,color:"#8B5CF6" }}>→ {c.laneName}</div>)}
+          </div>}
+        </div>
+      </div>);
+    }
+
+    /* Main mobile tabs */
+    return (<div style={{ minHeight:"100vh",display:"flex",flexDirection:"column",background:"#FDFAF5",fontFamily:"'DM Sans',sans-serif" }}>
+      {/* Header */}
+      <div style={{ padding:"10px 14px 8px",borderBottom:"1px solid #EDE8E0",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+        <button onClick={oB} style={{ background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:"#8A7E72",fontSize:12 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+          Recipes
+        </button>
+        <div style={{ fontSize:9,color:"#B0A898" }}>view only</div>
+      </div>
+
+      {/* Recipe title + photo + mini flavour bar */}
+      <div style={{ padding:"12px 16px 8px" }}>
+        <h1 style={{ fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,margin:"0 0 3px" }}>{rc.name}</h1>
+        <p style={{ fontSize:11,color:"#B0A898",margin:"0 0 8px" }}>{sv} {t.servingsUnit} · {rc.tags?.join(", ")}</p>
+        {/* Photo */}
+        {rc.photo && <div style={{ borderRadius:10,overflow:"hidden",marginBottom:8,border:`1px solid ${TH().borderSubtle}` }}>
+          <img src={rc.photo} alt={rc.name} style={{ width:"100%",maxHeight:200,objectFit:"cover",display:"block" }}/>
+        </div>}
+        {/* Mini flavour sparkline */}
+        <div style={{ display:"flex",alignItems:"flex-end",gap:5,marginBottom:4 }}>
+          {["sweetness","richness","spiciness","acidity","umami"].map(k => {
+            const v = flavourProfile[k] || 0;
+            const c = fc[k];
+            return <div key={k} style={{ textAlign:"center" }}>
+              <div style={{ height:24,width:7,background:"#EDE8E0",borderRadius:4,position:"relative",margin:"0 auto" }}>
+                <div style={{ position:"absolute",bottom:0,left:0,right:0,height:`${v}%`,background:c,borderRadius:4 }}/>
+              </div>
+              <div style={{ fontSize:7,color:"#B0A898",marginTop:2 }}>{k[0].toUpperCase()}</div>
+            </div>;
+          })}
+          <div style={{ fontSize:8,color:"#B0A898",marginLeft:4,marginBottom:1 }}>→ Flavour</div>
+        </div>
+      </div>
+      <div style={{ height:1,background:"#EDE8E0",margin:"0 16px" }}/>
+
+      {/* Tab content */}
+      <div style={{ flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
+        {mTab === "timeline" && <div style={{ padding:"12px 16px" }}>
+          {allLanes.map((lane, li) => {
+            const isLast = li === allLanes.length - 1;
+            return <div key={li} style={{ marginBottom:isLast?8:14 }}>
+              {/* Lane header */}
+              <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:6 }}>
+                <div style={{ width:9,height:9,borderRadius:"50%",background:lane.color,flexShrink:0 }}/>
+                <span style={{ fontSize:11,fontWeight:600,color:"#2A2420" }}>{lane.laneName}</span>
+                {lane.isModule && <span style={{ fontSize:8,padding:"1px 5px",borderRadius:4,background:"#9B7EB815",color:"#9B7EB8",border:"0.5px solid #9B7EB830" }}>Module</span>}
+                <span style={{ fontSize:9,color:"#B0A898" }}>({lane.prep.name})</span>
+              </div>
+              {/* Steps on timeline */}
+              <div style={{ position:"relative",paddingLeft:18,marginBottom:4 }}>
+                <div style={{ position:"absolute",left:4,top:0,bottom:0,width:1.5,background:lane.color+"30",borderRadius:1 }}/>
+                {lane.steps.map((step, si) => {
+                  const ings = (step.ingredients||[]).filter(i => !i.isPrepRef && !i.multiplierRef);
+                  const conns = connMap[step.id] || [];
+                  return <div key={step.id}>
+                    <div onClick={()=>setMStep(step.id)} style={{ position:"relative",padding:"8px 10px",borderRadius:8,border:"0.5px solid #EDE8E0",background:"#FFF",marginBottom:conns.length?4:6,cursor:"pointer",transition:"background 0.15s" }}>
+                      {/* Node dot */}
+                      <div style={{ position:"absolute",left:-18,top:"50%",transform:"translateY(-50%)",width:9,height:9,borderRadius:"50%",border:`2px solid ${lane.color}`,background:"#FDFAF5" }}/>
+                      {/* Title */}
+                      <div style={{ fontSize:12,fontWeight:600,color:"#2A2420",marginBottom:3 }}>{step.title || `Step ${si+1}`}</div>
+                      {/* Ingredients */}
+                      {ings.length > 0 && <div style={{ display:"flex",flexWrap:"wrap",gap:3,marginBottom:3 }}>
+                        {ings.slice(0,4).map(ing => {
+                          const fi = flat.find(f => f.id === ing.ingredientId);
+                          return <span key={ing.uid} style={{ fontSize:9,padding:"1px 5px",borderRadius:4,border:"0.5px solid #EDE8E0",color:"#8A7E72" }}>{fi?.n||ing.ingredientId} {ing.qty?`${Math.round(ing.qty*sv/base*10)/10}${ing.unit?""+ing.unit:""}`:""}</span>;
+                        })}
+                        {ings.length > 4 && <span style={{ fontSize:9,color:"#B0A898" }}>+{ings.length-4}</span>}
+                      </div>}
+                      {/* Processes + params */}
+                      {(step.processes||[]).length > 0 && <div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>
+                        {step.processes.map(proc => <span key={proc} style={{ fontSize:9,padding:"1px 5px",borderRadius:4,background:"#8B5CF610",border:"0.5px solid #8B5CF625",color:"#8B5CF6" }}>{trN(proc,"proc",lang)}</span>)}
+                        {(()=>{
+                          const params = step.processes.flatMap(p => resolveProcessParams(p, step.tool, step.processParams));
+                          const shown = params.filter(r => (r.policy==="R"||r.policy==="O") && (r.source==="tool"||r.source==="tool_cat"||r.source==="process"));
+                          const seen = new Set();
+                          return shown.filter(r=>{if(seen.has(r.param))return false;seen.add(r.param);return true;}).map(r => {
+                            const icon = r.param==="time"?"⏱":"🌡";
+                            const pP2 = step.processParams||{};
+                            let val = "";
+                            if (r.source==="tool"||r.source==="tool_cat") val = `← ${step.tool?.name||"tool"}`;
+                            else if (r.source==="process") val = r.param==="time"?`${pP2._time||""} ${pP2._timeUnit||"min"}`:`${pP2._temp||""}${deg}C`;
+                            return <span key={r.param} style={{ fontSize:8,padding:"1px 5px",borderRadius:4,background:"#6BAF6E10",border:"0.5px solid #6BAF6E25",color:"#6BAF6E" }}>{icon} {val}</span>;
+                          });
+                        })()}
+                      </div>}
+                      {/* Tool */}
+                      {step.tool && <div style={{ fontSize:9,color:"#B0A898",marginTop:3 }}>{step.tool.icon||"🔧"} {step.tool.name}</div>}
+                      {/* Tap hint */}
+                      <div style={{ position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:"#D5CEBC" }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                      </div>
+                    </div>
+                    {/* Connections */}
+                    {conns.map((c,ci) => <div key={ci} style={{ display:"flex",alignItems:"center",gap:6,padding:"0 0 4px 4px",marginBottom:4 }}>
+                      <span style={{ fontSize:9,color:"#8B5CF6" }}>↘ connects to</span>
+                      <div style={{ flex:1,height:0,borderTop:"1px dashed #8B5CF640" }}/>
+                      <span style={{ fontSize:9,color:"#8B5CF6",fontWeight:600 }}>{c.laneName}</span>
+                    </div>)}
+                  </div>;
+                })}
+              </div>
+            </div>;
+          })}
+        </div>}
+
+        {mTab === "flavour" && <div style={{ padding:"14px 16px" }}>
+          <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:600,margin:"0 0 12px" }}>Flavour Profile</h2>
+          {["sweetness","richness","spiciness","acidity","umami"].map(k => {
+            const v = flavourProfile[k] || 0;
+            const c = fc[k];
+            return <div key={k} style={{ marginBottom:10 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:3 }}>
+                <span style={{ fontSize:12,color:"#6A6058" }}>{t[k]}</span>
+                <span style={{ fontSize:12,fontWeight:600,color:c }}>{v}</span>
+              </div>
+              <div style={{ height:6,borderRadius:3,background:"#EDE8E0" }}>
+                <div style={{ height:6,borderRadius:3,background:c,width:`${v}%`,transition:"width 0.3s" }}/>
+              </div>
+            </div>;
+          })}
+          <div style={{ height:1,background:"#EDE8E0",margin:"14px 0" }}/>
+          <div style={{ fontSize:11,color:"#6A6058",lineHeight:1.6 }}>
+            <span style={{ fontWeight:600 }}>Engine v2.0</span> — scores are computed from ingredient composition, quantity scaling, cumulative process modifiers, tool kinetics (Maillard, reduction, caramelisation curves), cross-lane connection inheritance, and modular recipe propagation.
+          </div>
+        </div>}
+      </div>
+
+      {/* Bottom tab bar */}
+      <div style={{ display:"flex",borderTop:"1px solid #EDE8E0",background:"#FDFAF5",padding:"6px 0 4px",flexShrink:0 }}>
+        <div onClick={()=>setMTab("timeline")} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={mTab==="timeline"?"#C49A6C":"#B0A898"} strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill={mTab==="timeline"?"#C49A6C":"none"}/><circle cx="4" cy="12" r="1" fill={mTab==="timeline"?"#C49A6C":"none"}/><circle cx="4" cy="18" r="1" fill={mTab==="timeline"?"#C49A6C":"none"}/></svg>
+          <span style={{ fontSize:9,color:mTab==="timeline"?"#C49A6C":"#B0A898",fontWeight:mTab==="timeline"?600:400 }}>Timeline</span>
+        </div>
+        <div onClick={()=>setMTab("flavour")} style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={mTab==="flavour"?"#C49A6C":"#B0A898"} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span style={{ fontSize:9,color:mTab==="flavour"?"#C49A6C":"#B0A898",fontWeight:mTab==="flavour"?600:400 }}>Flavour</span>
+        </div>
+      </div>
+    </div>);
+  }
+
+  /* ═══ DESKTOP VIEW (existing Gantt) ═══ */
   return (<>
     <div style={{ maxWidth:1400,margin:"0 auto",padding:"28px 24px" }}>
     <button onClick={oB} style={{ ...S.btn("outline"),marginBottom:16,fontSize:12 }}>{t.back}</button>
@@ -2338,6 +2706,70 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile }) {
       </div>
     </div>
     <p style={{ fontFamily:"'DM Sans',sans-serif",color:"#8A7E72",fontSize:13,margin:"4px 0 20px",lineHeight:1.5 }}>{rc.description}</p>
+
+    {/* ── Recipe photo ── */}
+    {(()=>{
+      const handlePhotoUpload = async (file) => {
+        if (!file) return;
+        if (!syncUrl) { alert("Connect to cloud sync first (Settings) to enable photo uploads."); return; }
+        if (file.size > 10 * 1024 * 1024) { alert("Photo must be under 10MB."); return; }
+        setPhotoUploading(true);
+        try {
+          const reader = new FileReader();
+          const base64 = await new Promise((res, rej) => {
+            reader.onload = () => res(reader.result.split(",")[1]);
+            reader.onerror = rej;
+            reader.readAsDataURL(file);
+          });
+          const resp = await fetch(syncUrl + "?action=uploadPhoto", {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({ recipeId: rc.id, recipeName: rc.name, fileName: file.name, mimeType: file.type, data: base64 }),
+          });
+          const result = await resp.json();
+          if (result.url) {
+            onUpdatePhoto(result.url);
+          } else {
+            alert("Upload failed: " + (result.error || "unknown error"));
+          }
+        } catch (e) {
+          alert("Upload error: " + e.message);
+        }
+        setPhotoUploading(false);
+      };
+
+      const removePhoto = () => { if (confirm("Remove this photo?")) onUpdatePhoto(null); };
+
+      return <div style={{ marginBottom:20 }}>
+        <input ref={photoInputRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={e=>{const f=e.target.files?.[0];if(f)handlePhotoUpload(f);e.target.value="";}}/>
+        {rc.photo ? (
+          <div style={{ position:"relative",borderRadius:14,overflow:"hidden",border:`1px solid ${TH().borderSubtle}`,maxHeight:360 }}>
+            <img src={rc.photo} alt={rc.name} style={{ width:"100%",maxHeight:360,objectFit:"cover",display:"block" }}/>
+            {isAdmin && <div style={{ position:"absolute",top:10,right:10,display:"flex",gap:6 }}>
+              <button onClick={()=>photoInputRef.current?.click()} style={{ background:"rgba(42,36,32,0.7)",backdropFilter:"blur(8px)",border:"none",borderRadius:8,padding:"6px 12px",color:"#FFF",fontSize:11,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",display:"flex",alignItems:"center",gap:4 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Change
+              </button>
+              <button onClick={removePhoto} style={{ background:"rgba(212,91,91,0.85)",backdropFilter:"blur(8px)",border:"none",borderRadius:8,padding:"6px 10px",color:"#FFF",fontSize:11,fontFamily:"'DM Sans',sans-serif",cursor:"pointer" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>}
+          </div>
+        ) : isAdmin && (
+          <div onClick={()=>photoInputRef.current?.click()} style={{ borderRadius:14,border:`2px dashed ${TH().borderDefault}`,padding:"32px 24px",textAlign:"center",cursor:"pointer",background:TH().bgSurfaceHover,transition:"all 0.2s" }}>
+            {photoUploading ? (
+              <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:13,color:TH().textMuted }}>Uploading photo...</div>
+            ) : (<>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={TH().textDisabled} strokeWidth="1.5" style={{ marginBottom:8 }}>
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+              </svg>
+              <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:TH().textMuted,marginBottom:3 }}>Add a plating photo</div>
+              <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,color:TH().textDisabled }}>Tap to take a photo or choose from gallery</div>
+            </>)}
+          </div>
+        )}
+      </div>;
+    })()}
 
     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:28 }}>
       <div style={{ background:"#FFF",borderRadius:12,border:"1px solid #EDE8E0",padding:"14px 18px" }}>
@@ -3080,16 +3512,56 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
       } else if (drag.type === "tool") {
         const tl = drag.data;
         if (!g[row][lane]) g[row][lane] = { id:uid(), title:"", instruction:"", ingredients:[], processes:[], tool:null };
-        /* Initialize default opts from tool meta: if the tool has a _timeUnit array, pre-seed with its first value
-           so that time entered later will be rendered with the correct unit. */
+        /* Initialize default opts from tool meta — pre-seed every field that has a
+           defined default so the user sees sensible values immediately on drop. */
         const defaultOpts = {};
-        if (Array.isArray(tl.o?._timeUnit) && tl.o._timeUnit.length) defaultOpts._timeUnit = tl.o._timeUnit[0];
+        if (Array.isArray(tl.o?._timeUnit) && tl.o._timeUnit.length)
+          defaultOpts._timeUnit = tl.o._timeUnit[0];
+        if (tl.o?._temp?.default != null)
+          defaultOpts._temp = tl.o._temp.default;
+        if (Array.isArray(tl.o?.ovenMode) && tl.o.ovenMode.length)
+          defaultOpts.ovenMode = tl.o.ovenMode[0];
+        if (Array.isArray(tl.o?.heat) && tl.o.heat.length)
+          defaultOpts.heat = tl.o.heat[Math.floor(tl.o.heat.length / 2)]; /* default to middle heat (Medium) */
+        if (Array.isArray(tl.o?.attachment) && tl.o.attachment.length)
+          defaultOpts.attachment = tl.o.attachment[0];
+        if (Array.isArray(tl.o?.cut) && tl.o.cut.length)
+          defaultOpts.cut = tl.o.cut[0];
+        if (Array.isArray(tl.o?.grade) && tl.o.grade.length)
+          defaultOpts.grade = tl.o.grade[0];
+        if (Array.isArray(tl.o?.size) && tl.o.size.length)
+          defaultOpts.size = tl.o.size[Math.floor(tl.o.size.length / 2)]; /* default to medium size */
+        if (Array.isArray(tl.o?.func) && tl.o.func.length)
+          defaultOpts.func = tl.o.func[0];
+        if (Array.isArray(tl.o?.capacity) && tl.o.capacity.length)
+          defaultOpts.capacity = tl.o.capacity[0];
+        if (Array.isArray(tl.o?.type) && tl.o.type.length)
+          defaultOpts.type = tl.o.type[0];
         g[row][lane].tool = { uid:uid(), toolId:tl.id, name:tl.n, opts:defaultOpts };
       } else if (drag.type === "proc") {
         const p = drag.data;
         if (!g[row][lane]) g[row][lane] = { id:uid(), title:"", instruction:"", ingredients:[], processes:[], tool:null };
         if (!g[row][lane].processes) g[row][lane].processes = [];
-        if (!g[row][lane].processes.includes(p)) g[row][lane].processes.push(p);
+        if (!g[row][lane].processes.includes(p)) {
+          g[row][lane].processes.push(p);
+          /* Apply process defaults to processParams, but only for fields not already
+             satisfied by the tool or existing processParams */
+          const pp = PROC_PARAMS[p];
+          if (pp?.defaults) {
+            const step = g[row][lane];
+            const toolOpts = step.tool?.opts || {};
+            const toolHasTime = toolOpts._time != null;
+            const toolHasTemp = toolOpts._temp != null || toolOpts.heat != null;
+            const existing = step.processParams || {};
+            const merged = { ...pp.defaults, ...existing }; /* existing values win */
+            /* Don't write time default if tool already provides it */
+            if (toolHasTime) { delete merged._time; delete merged._timeUnit; }
+            /* Don't write temp default if tool already provides it */
+            if (toolHasTemp) delete merged._temp;
+            if (Object.keys(merged).length > 0)
+              g[row][lane].processParams = merged;
+          }
+        }
       }
       c.preparations[aPI].grid = g;
     });
@@ -3244,7 +3716,7 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
         <div style={{ padding:"10px 10px 8px",borderBottom:"1px solid #EDE8E0" }}>
           <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600,marginBottom:8 }}>{t.ingredients}</div>
           <div style={{ position:"relative" }}><div style={{ position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",color:"#C0B8AE" }}><Ic.S/></div>
-            <input style={{ ...S.inp,paddingLeft:28,fontSize:11 }} placeholder={t.searchIng} value={sI} onChange={e=>sSI(e.target.value)}/></div>
+            <input style={{ ...S.inp(),paddingLeft:28,fontSize:11 }} placeholder={t.searchIng} value={sI} onChange={e=>sSI(e.target.value)}/></div>
         </div>
         <div style={{ flex:1,overflowY:"auto",padding:"4px 0" }}>
           {/* FAVOURITES section — shown if any favourites exist */}
@@ -3291,9 +3763,9 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
       {/* CENTER */}
       <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}>
         <div style={{ padding:"8px 20px",borderBottom:"1px solid #EDE8E0",display:"flex",alignItems:"center",gap:10,background:"#FFF",flexWrap:"wrap" }}>
-          <input value={r.name} onChange={e=>up(c=>{c.name=e.target.value;})} style={{ ...S.inp,fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:600,border:"none",background:"transparent",padding:"3px 0",flex:"1 1 180px" }} placeholder={t.recipeName}/>
+          <input value={r.name} onChange={e=>up(c=>{c.name=e.target.value;})} style={{ ...S.inp(),fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:600,border:"none",background:"transparent",padding:"3px 0",flex:"1 1 180px" }} placeholder={t.recipeName}/>
           <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#B0A898" }}>{t.serves}</span>
-          <input type="number" min="1" value={r.servings} onChange={e=>{const v=Math.max(1,+e.target.value);up(c=>{c.servings=v;});sES(v);}} style={{ ...S.inp,width:46,textAlign:"center",padding:"4px",fontSize:13,fontWeight:600 }}/>
+          <input type="number" min="1" value={r.servings} onChange={e=>{const v=Math.max(1,+e.target.value);up(c=>{c.servings=v;});sES(v);}} style={{ ...S.inp(),width:46,textAlign:"center",padding:"4px",fontSize:13,fontWeight:600 }}/>
           <div style={{ display:"flex",alignItems:"center",gap:4,marginLeft:4,padding:"2px 8px",background:"#F5F0E8",borderRadius:8 }}>
             <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"#8A7E72" }}>preview:</span>
             <button onClick={()=>sES(Math.max(1,editServ-1))} style={{ border:"none",background:"transparent",cursor:"pointer",color:"#5A5048" }}>&minus;</button>
@@ -3306,11 +3778,11 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
           <button onClick={()=>{const c=JSON.parse(JSON.stringify(r));c.status="published";sR(c);oS(c, true);}} style={{ ...S.btn("primary"),background:"#6BAF6E",borderColor:"#6BAF6E",display:"flex",alignItems:"center",gap:4,fontSize:11,padding:"5px 12px" }} title="Publish recipe"><Ic.Pu/>{t.publish}</button>
         </div>
         <div style={{ padding:"8px 20px",borderBottom:"1px solid #EDE8E0",background:"#FDFCF9" }}>
-          <input value={r.description} onChange={e=>up(c=>{c.description=e.target.value;})} style={{ ...S.inp,marginBottom:4,fontSize:12 }} placeholder={t.recipeDesc}/>
+          <input value={r.description} onChange={e=>up(c=>{c.description=e.target.value;})} style={{ ...S.inp(),marginBottom:4,fontSize:12 }} placeholder={t.recipeDesc}/>
           <input value={tagsStr} onChange={e=>{
             setTagsStr(e.target.value);
             up(c=>{c.tags=e.target.value.split(/[,;]/).map(x=>x.trim()).filter(Boolean);});
-          }} style={{ ...S.inp,fontSize:11,marginBottom:6 }} placeholder={t.tags}/>
+          }} style={{ ...S.inp(),fontSize:11,marginBottom:6 }} placeholder={t.tags}/>
           {/* Category picker — toggle pills, always visible so the user sees the choice and current selection */}
           <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
             <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:700,color:"#8A7E72",textTransform:"uppercase",letterSpacing:0.6,flexShrink:0 }}>{t.recipeCategory||"Category"}</span>
@@ -3345,11 +3817,11 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
           <div style={{ flex:1,overflowY:"auto",overflowX:"auto",padding:"16px 20px",background:"#FDFAF5" }}>
             {prep && (<>
               <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4 }}>
-                <input value={prep.name} onChange={e=>up(c=>{c.preparations[aPI].name=e.target.value;})} style={{ ...S.inp,fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:600,border:"none",background:"transparent",padding:"2px 0",flex:1 }} placeholder={t.preparations+"..."}/>
+                <input value={prep.name} onChange={e=>up(c=>{c.preparations[aPI].name=e.target.value;})} style={{ ...S.inp(),fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:600,border:"none",background:"transparent",padding:"2px 0",flex:1 }} placeholder={t.preparations+"..."}/>
                 <label style={{ display:"flex",alignItems:"center",gap:4,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#8A7E72",cursor:"pointer",whiteSpace:"nowrap" }}><input type="checkbox" checked={prep.isModule} onChange={e=>up(c=>{c.preparations[aPI].isModule=e.target.checked;})} style={{ accentColor:"#9B7EB8" }}/><Ic.Mo/>{t.reusableModule}</label>
                 {r.preparations.length > 1 && <button onClick={()=>rmPrep(aPI)} style={{ ...S.btn("sm"),background:"transparent",color:"#D45B5B" }}><Ic.X/></button>}
               </div>
-              <textarea value={prep.comment||""} onChange={e=>up(c=>{c.preparations[aPI].comment=e.target.value;})} placeholder={t.prepComment} rows={1} style={{ ...S.inp,fontSize:11,color:"#8A7E72",resize:"vertical",lineHeight:1.4,marginBottom:6,fontStyle:"italic" }}/>
+              <textarea value={prep.comment||""} onChange={e=>up(c=>{c.preparations[aPI].comment=e.target.value;})} placeholder={t.prepComment} rows={3} style={{ ...S.inp(),fontSize:13,color:"#8A7E72",resize:"vertical",lineHeight:1.5,marginBottom:6,fontStyle:"italic" }}/>
 
               {/* Module anchor picker */}
               {prep.isModule && <ModuleAnchorPicker recipe={r} prep={prep} pi={aPI} up={up} t={t}/>}
@@ -3506,7 +3978,7 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
         <div style={{ padding:"10px 10px 8px",borderBottom:"1px solid #EDE8E0" }}>
           <div style={{ fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600,marginBottom:8,display:"flex",alignItems:"center",gap:4 }}><Ic.Wr/>{t.tools}</div>
           <div style={{ position:"relative" }}><div style={{ position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",color:"#C0B8AE" }}><Ic.S/></div>
-            <input style={{ ...S.inp,paddingLeft:28,fontSize:11 }} placeholder={t.searchTool} value={sT} onChange={e=>sST(e.target.value)}/></div>
+            <input style={{ ...S.inp(),paddingLeft:28,fontSize:11 }} placeholder={t.searchTool} value={sT} onChange={e=>sST(e.target.value)}/></div>
         </div>
         <div style={{ flex:1,overflowY:"auto",padding:"4px 0" }}>
           {Object.entries(filtTL).map(([cat,items]) => <div key={cat}>
@@ -3532,7 +4004,7 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
         <span style={{ fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600 }}>{t.procPanelTitle}</span>
         <div style={{ position:"relative",flex:1,maxWidth:260 }}>
           <div style={{ position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",color:"#C0B8AE" }}><Ic.S/></div>
-          <input style={{ ...S.inp,paddingLeft:28,fontSize:11 }} placeholder={t.searchProc} value={sP} onChange={e=>sSP(e.target.value)}/>
+          <input style={{ ...S.inp(),paddingLeft:28,fontSize:11 }} placeholder={t.searchProc} value={sP} onChange={e=>sSP(e.target.value)}/>
         </div>
         {isAdmin && <button onClick={()=>sSAP(true)} style={{ ...S.btn("outline"),fontSize:10,padding:"4px 10px",display:"flex",alignItems:"center",gap:3 }}><Ic.P/>{t.addProcess}</button>}
         <span style={{ marginLeft:"auto",fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"#B0A898",transition:"transform 0.3s",transform:drawerOpen?"rotate(180deg)":"rotate(0deg)" }}>{"\u25B2"}</span>
@@ -3609,7 +4081,7 @@ function ToolSuggestModal({ ingName, ingCat, tLib, t, lang, onSelect, onSkip }) 
       <div style={{ marginBottom:10 }}>
         <div style={{ position:"relative" }}>
           <div style={{ position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",color:"#C0B8AE" }}><Ic.S/></div>
-          <input style={{ ...S.inp,paddingLeft:28,fontSize:11 }} placeholder={t.searchTool||"Search all tools..."} value={search} onChange={e=>setSearch(e.target.value)}/>
+          <input style={{ ...S.inp(),paddingLeft:28,fontSize:11 }} placeholder={t.searchTool||"Search all tools..."} value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
         {filtered.length > 0 && <div style={{ maxHeight:120,overflowY:"auto",marginTop:4,display:"flex",flexWrap:"wrap",gap:4 }}>
           {filtered.slice(0,12).map(tl => (
@@ -3643,19 +4115,19 @@ function ModuleAnchorPicker({ recipe, prep, pi, up, t }) {
     </div>
     <div style={{ display:"flex",gap:6,alignItems:"center",flexWrap:"wrap" }}>
       <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"#6A6058" }}>Anchor main prep:</span>
-      <select value={prep.anchorPrepId||""} onChange={e=>up(c=>{ c.preparations[pi].anchorPrepId = e.target.value || undefined; c.preparations[pi].anchorStepId = undefined; })} style={{ ...S.sel,fontSize:11 }}>
+      <select value={prep.anchorPrepId||""} onChange={e=>up(c=>{ c.preparations[pi].anchorPrepId = e.target.value || undefined; c.preparations[pi].anchorStepId = undefined; })} style={{ ...S.sel(),fontSize:11 }}>
         <option value="">{t.selectAnchor||"(default: last)"}</option>
         {mainPreps.map(mp => <option key={mp.id} value={mp.id}>{mp.name}</option>)}
       </select>
       {anchorPrep && <>
         <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"#6A6058" }}>at main step:</span>
-        <select value={prep.anchorStepId||""} onChange={e=>up(c=>{ c.preparations[pi].anchorStepId = e.target.value || undefined; })} style={{ ...S.sel,fontSize:11 }}>
+        <select value={prep.anchorStepId||""} onChange={e=>up(c=>{ c.preparations[pi].anchorStepId = e.target.value || undefined; })} style={{ ...S.sel(),fontSize:11 }}>
           <option value="">(last)</option>
           {mainSteps.map(s => <option key={s.id} value={s.id}>{s.title||s.id}</option>)}
         </select>
       </>}
       <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"#6A6058" }}>from module step:</span>
-      <select value={prep.anchorModuleStepId||""} onChange={e=>up(c=>{ c.preparations[pi].anchorModuleStepId = e.target.value || undefined; })} style={{ ...S.sel,fontSize:11 }}>
+      <select value={prep.anchorModuleStepId||""} onChange={e=>up(c=>{ c.preparations[pi].anchorModuleStepId = e.target.value || undefined; })} style={{ ...S.sel(),fontSize:11 }}>
         <option value="">(last)</option>
         {moduleSteps.map(s => <option key={s.id} value={s.id}>{s.title||s.id}</option>)}
       </select>
@@ -3713,22 +4185,22 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
 
     <div style={{ display:"flex",alignItems:"center",gap:5,marginBottom:4 }}>
       <Ic.G/>
-      <input value={step.title||""} onChange={e=>onUpdate(s=>{s.title=e.target.value;})} placeholder={t.stepTitle} style={{ ...S.inp,fontFamily:"'Playfair Display',serif",fontSize:12,fontWeight:600,padding:"3px 6px",flex:1 }}/>
+      <input value={step.title||""} onChange={e=>onUpdate(s=>{s.title=e.target.value;})} placeholder={t.stepTitle} style={{ ...S.inp(),fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600,padding:"3px 6px",flex:1 }}/>
       <button onClick={onRemove} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#D45B5B",padding:2 }}><Ic.X/></button>
     </div>
-    <textarea value={step.instruction||""} onChange={e=>onUpdate(s=>{s.instruction=e.target.value;})} placeholder={t.stepDesc} rows={1} style={{ ...S.inp,resize:"vertical",lineHeight:1.3,fontSize:10,color:"#6A6058",padding:"3px 6px",marginBottom:4 }}/>
+    <textarea value={step.instruction||""} onChange={e=>onUpdate(s=>{s.instruction=e.target.value;})} placeholder={t.stepDesc} rows={2} style={{ ...S.inp(),resize:"vertical",lineHeight:1.4,fontSize:12,color:"#6A6058",padding:"4px 6px",marginBottom:4 }}/>
 
     <div style={{ display:"flex",flexDirection:"column",gap:3,marginBottom:4 }}>
       {(step.processes||[]).map(p => {
         const params = resolveProcessParams(p, step.tool, step.processParams);
         const hasReqs = params.some(r => r.policy === "R" || r.policy === "O");
         const deg = String.fromCharCode(176);
-        const ni = { width:42,padding:"2px 3px",borderRadius:4,border:"1px solid #DDD",textAlign:"center",fontSize:9,fontFamily:"'DM Sans',sans-serif" };
+        const ni = { width:48,padding:"3px 4px",borderRadius:4,border:"1px solid #DDD",textAlign:"center",fontSize:11,fontFamily:"'DM Sans',sans-serif" };
         const pP = step.processParams || {};
         const setPP = (k,v) => onUpdate(s => { if(!s.processParams) s.processParams={}; s.processParams[k]=v; });
         return <div key={p} style={{ display:"flex",flexDirection:"column",gap:2 }}>
           <div style={{ display:"flex",alignItems:"center" }}>
-            <span style={{ ...S.tag(PROC_COL),fontSize:9,padding:"1px 6px",display:"inline-flex",alignItems:"center",gap:3 }}><Ic.Fn/>{trN(p,"proc",lang)}<button onClick={()=>onRemoveProc(p)} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:11 }}>&times;</button></span>
+            <span style={{ ...S.tag(PROC_COL),fontSize:12,padding:"3px 8px",display:"inline-flex",alignItems:"center",gap:3 }}><Ic.Fn/>{trN(p,"proc",lang)}<button onClick={()=>onRemoveProc(p)} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:13 }}>&times;</button></span>
           </div>
           {hasReqs && <div style={{ display:"flex",flexWrap:"wrap",gap:3,paddingLeft:4,alignItems:"center" }}>
             {params.map(r => {
@@ -3739,7 +4211,7 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
 
               /* Case 1: Tool provides it — show green read-only badge */
               if (r.source === "tool" || r.source === "tool_cat") {
-                return <span key={r.param} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"1px 6px",borderRadius:5,background:"#6BAF6E12",border:"1px solid #6BAF6E30",fontFamily:"'DM Sans',sans-serif",fontSize:8,color:"#6BAF6E",lineHeight:1.4 }}>
+                return <span key={r.param} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:5,background:"#6BAF6E12",border:"1px solid #6BAF6E30",fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#6BAF6E",lineHeight:1.4 }}>
                   <span>{icon}</span>
                   <span style={{ fontWeight:600 }}>{label}</span>
                   <span style={{ opacity:0.8 }}>{r.source === "tool_cat" ? "\u2190 heat" : "\u2190 " + (step.tool?.name||"tool")}</span>
@@ -3756,7 +4228,7 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
 
               if (r.param === "time") {
                 const curUnit = pP._timeUnit || "min";
-                return <div key={r.param} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"2px 5px",borderRadius:5,background:bgCol,border:`1px solid ${borderCol}`,fontFamily:"'DM Sans',sans-serif",fontSize:8 }}>
+                return <div key={r.param} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"3px 6px",borderRadius:5,background:bgCol,border:`1px solid ${borderCol}`,fontFamily:"'DM Sans',sans-serif",fontSize:11 }}>
                   <span>{icon}</span>
                   <span style={{ fontWeight:600,color:labelCol }}>{label}</span>
                   <input type="number" min="0" step="any"
@@ -3764,18 +4236,18 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
                     onMouseDown={e=>e.stopPropagation()}
                     onFocus={e=>e.stopPropagation()}
                     onChange={e=>onUpdate(s=>{ if(!s.processParams) s.processParams={}; s.processParams._time=+e.target.value; s.processParams._timeUnit=curUnit; })}
-                    placeholder="?" style={{...ni,width:32,borderColor:hasValue?"#6BAF6E60":(isReq?"#D45B5B60":"#DDD")}}/>
+                    placeholder="?" style={{...ni,width:40,borderColor:hasValue?"#6BAF6E60":(isReq?"#D45B5B60":"#DDD")}}/>
                   <select value={curUnit}
                     onMouseDown={e=>e.stopPropagation()}
                     onChange={e=>onUpdate(s=>{ if(!s.processParams) s.processParams={}; s.processParams._timeUnit=e.target.value; })}
-                    style={{ padding:"1px 2px",borderRadius:3,border:"1px solid #DDD",fontSize:8,fontFamily:"'DM Sans',sans-serif",background:"#FFF" }}>
+                    style={{ padding:"2px 3px",borderRadius:3,border:"1px solid #DDD",fontSize:11,fontFamily:"'DM Sans',sans-serif",background:"#FFF" }}>
                     <option value="sec">sec</option><option value="min">min</option><option value="hr">hr</option>
                   </select>
                 </div>;
               }
 
               if (r.param === "temp") {
-                return <div key={r.param} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"2px 5px",borderRadius:5,background:bgCol,border:`1px solid ${borderCol}`,fontFamily:"'DM Sans',sans-serif",fontSize:8 }}>
+                return <div key={r.param} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"3px 6px",borderRadius:5,background:bgCol,border:`1px solid ${borderCol}`,fontFamily:"'DM Sans',sans-serif",fontSize:11 }}>
                   <span>{icon}</span>
                   <span style={{ fontWeight:600,color:labelCol }}>{label}</span>
                   <input type="number" min="0" step="1"
@@ -3783,8 +4255,8 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
                     onMouseDown={e=>e.stopPropagation()}
                     onFocus={e=>e.stopPropagation()}
                     onChange={e=>onUpdate(s=>{ if(!s.processParams) s.processParams={}; s.processParams._temp=+e.target.value; })}
-                    placeholder="?" style={{...ni,width:36,borderColor:hasValue?"#6BAF6E60":(isReq?"#D45B5B60":"#DDD")}}/>
-                  <span style={{ color:"#8A7E72",fontSize:8 }}>{deg}C</span>
+                    placeholder="?" style={{...ni,width:42,borderColor:hasValue?"#6BAF6E60":(isReq?"#D45B5B60":"#DDD")}}/>
+                  <span style={{ color:"#8A7E72",fontSize:11 }}>{deg}C</span>
                 </div>;
               }
               return null;
@@ -3798,38 +4270,38 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
       <div style={{ background:TC+"08",border:`1px solid ${TC}25`,borderRadius:8,padding:"6px 8px",marginBottom:4 }}>
         <div style={{ display:"flex",alignItems:"center",gap:4 }}>
           <span style={{ fontSize:13 }}>{meta?.ic||"\uD83D\uDD27"}</span>
-          <span style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TC,flex:1 }}>{trN(step.tool.name,"tool",lang)}</span>
-          <button onClick={onRemoveTool} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",fontSize:11 }}>&times;</button>
+          <span style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:13,color:TC,flex:1 }}>{trN(step.tool.name,"tool",lang)}</span>
+          <button onClick={onRemoveTool} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",fontSize:13 }}>&times;</button>
         </div>
         <ToolOpts meta={meta} opts={step.tool.opts} onChange={onUpdateToolOpts} t={t}/>
       </div>
-    ) : <div style={{ fontSize:9,color:TC+"80",fontStyle:"italic",marginBottom:4,padding:"2px 4px" }}>{t.dropToolHere}</div>}
+    ) : <div style={{ fontSize:11,color:TC+"80",fontStyle:"italic",marginBottom:4,padding:"2px 4px" }}>{t.dropToolHere}</div>}
 
     <div style={{ display:"flex",flexWrap:"wrap",gap:3 }}>
       {step.ingredients.map(ing => {
         if (ing.isPrepRef) { const rp = rc.preparations.find(p => p.id === ing.prepId); return (
-          <div key={ing.uid} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"2px 5px",borderRadius:6,background:PC+"14",border:`1px solid ${PC}28`,fontSize:10 }}>
+          <div key={ing.uid} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"3px 7px",borderRadius:6,background:PC+"14",border:`1px solid ${PC}28`,fontSize:12 }}>
             <Ic.Lk/><span style={{ fontWeight:600,color:PC }}>{rp?.name||ing.name}</span>
-            <button onClick={()=>onRemoveIng(ing.uid)} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:11 }}>&times;</button>
+            <button onClick={()=>onRemoveIng(ing.uid)} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:13 }}>&times;</button>
           </div>);}
         const cat = flat.find(fi=>fi.id===ing.ingredientId)?.category || "";
         const col = CC[cat] || "#8A7E72";
         const eg = eG(ing);
         /* LIVE scaled preview for editor */
         const scaled = rQ(ing, allIngs, editServ, base);
-        return (<div key={ing.uid} style={{ display:"inline-flex",alignItems:"center",gap:2,padding:"2px 4px",borderRadius:6,background:col+"12",border:`1px solid ${col}28`,fontFamily:"'DM Sans',sans-serif",fontSize:10 }}>
+        return (<div key={ing.uid} style={{ display:"inline-flex",alignItems:"center",gap:2,padding:"3px 6px",borderRadius:6,background:col+"12",border:`1px solid ${col}28`,fontFamily:"'DM Sans',sans-serif",fontSize:12 }}>
           {ing.isEgg && <Ic.Eg/>}{ing.isChilli && <Ic.Ci/>}<span style={{ fontWeight:600,color:col }}>{trN(ing.name,"ing",lang)}</span>
-          {eg && <span style={{ fontSize:9,color:"#999" }}>({ing.eggSize})</span>}
-          <input type="number" step="any" min="0" value={ing.qty} onChange={e=>onUpdateIng(ing.uid,"qty",+e.target.value)} style={{ width:36,padding:"1px 2px",borderRadius:3,border:"1px solid #DDD",textAlign:"center",fontSize:9 }}/>
-          <select value={ing.unit} onChange={e=>onUpdateIng(ing.uid,"unit",e.target.value)} style={{ ...S.sel,padding:"1px 2px",fontSize:9 }}>{aU.map(u=><option key={u} value={u}>{u==="\u00D7"?"\u00D7":u}</option>)}</select>
-          {editServ !== base && <span style={{ fontSize:9,color:"#6BAF6E",fontWeight:700,background:"#6BAF6E12",padding:"0 4px",borderRadius:3 }}>→ {fmtQ(scaled, displayUnit(ing, allIngs))}</span>}
+          {eg && <span style={{ fontSize:11,color:"#999" }}>({ing.eggSize})</span>}
+          <input type="number" step="any" min="0" value={ing.qty} onChange={e=>onUpdateIng(ing.uid,"qty",+e.target.value)} style={{ width:44,padding:"2px 3px",borderRadius:3,border:"1px solid #DDD",textAlign:"center",fontSize:11 }}/>
+          <select value={ing.unit} onChange={e=>onUpdateIng(ing.uid,"unit",e.target.value)} style={{ ...S.sel(),padding:"2px 3px",fontSize:11 }}>{aU.map(u=><option key={u} value={u}>{u==="\u00D7"?"\u00D7":u}</option>)}</select>
+          {editServ !== base && <span style={{ fontSize:11,color:"#6BAF6E",fontWeight:700,background:"#6BAF6E12",padding:"0 4px",borderRadius:3 }}>→ {fmtQ(scaled, displayUnit(ing, allIngs))}</span>}
           {ing.unit === "\u00D7" && <>
-            <select value={ing.multiplierRef||""} onChange={e=>onUpdateIng(ing.uid,"multiplierRef",e.target.value)} style={{ ...S.sel,padding:"1px 2px",fontSize:9,maxWidth:60 }}><option value="">ref?</option>{allIngs.filter(a=>a.uid!==ing.uid).map(a=><option key={a.uid} value={a.uid}>{a.name}</option>)}</select>
-            <select value={ing.multiplierUnit||"g"} onChange={e=>onUpdateIng(ing.uid,"multiplierUnit",e.target.value)} style={{ ...S.sel,padding:"1px 2px",fontSize:9,maxWidth:32 }}>{["g","kg","ml","L"].map(u=><option key={u} value={u}>{u}</option>)}</select>
+            <select value={ing.multiplierRef||""} onChange={e=>onUpdateIng(ing.uid,"multiplierRef",e.target.value)} style={{ ...S.sel(),padding:"2px 3px",fontSize:11,maxWidth:70 }}><option value="">ref?</option>{allIngs.filter(a=>a.uid!==ing.uid).map(a=><option key={a.uid} value={a.uid}>{a.name}</option>)}</select>
+            <select value={ing.multiplierUnit||"g"} onChange={e=>onUpdateIng(ing.uid,"multiplierUnit",e.target.value)} style={{ ...S.sel(),padding:"2px 3px",fontSize:11,maxWidth:36 }}>{["g","kg","ml","L"].map(u=><option key={u} value={u}>{u}</option>)}</select>
           </>}
-          {ing.isEgg && <select value={ing.eggSize||"Large"} onChange={e=>onUpdateIng(ing.uid,"eggSize",e.target.value)} style={{ ...S.sel,padding:"1px 2px",fontSize:9 }}>{Object.keys(ED).map(s=><option key={s} value={s}>{s}</option>)}</select>}
-          {ing.isChilli && <select value={ing.chilliHeat||"md"} onChange={e=>onUpdateIng(ing.uid,"chilliHeat",e.target.value)} title={t.chilliHeatHint} style={{ ...S.sel,padding:"1px 2px",fontSize:9 }}>{Object.entries(CH).map(([k,d])=><option key={k} value={k}>{d.label}</option>)}</select>}
-          <button onClick={()=>onRemoveIng(ing.uid)} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:11 }}>&times;</button>
+          {ing.isEgg && <select value={ing.eggSize||"Large"} onChange={e=>onUpdateIng(ing.uid,"eggSize",e.target.value)} style={{ ...S.sel(),padding:"2px 3px",fontSize:11 }}>{Object.keys(ED).map(s=><option key={s} value={s}>{s}</option>)}</select>}
+          {ing.isChilli && <select value={ing.chilliHeat||"md"} onChange={e=>onUpdateIng(ing.uid,"chilliHeat",e.target.value)} title={t.chilliHeatHint} style={{ ...S.sel(),padding:"2px 3px",fontSize:11 }}>{Object.entries(CH).map(([k,d])=><option key={k} value={k}>{d.label}</option>)}</select>}
+          <button onClick={()=>onRemoveIng(ing.uid)} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:13 }}>&times;</button>
         </div>);
       })}
     </div>
@@ -4072,11 +4544,11 @@ function AddM({ t, title, cats, showUnit, onAdd, onClose, nameP, isIngredient })
     <div onClick={e=>e.stopPropagation()} style={{ background:"#FFF",borderRadius:16,padding:"22px 26px",maxWidth:isIngredient?460:380,width:"92%",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 16px 50px rgba(42,36,32,0.2)" }}>
       <h3 style={{ fontFamily:"'Playfair Display',serif",fontSize:18,margin:"0 0 14px" }}>{title}</h3>
       <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
-        <input value={n} onChange={e=>sN(e.target.value)} placeholder={nameP} style={S.inp}/>
+        <input value={n} onChange={e=>sN(e.target.value)} placeholder={nameP} style={S.inp()}/>
         <div><label style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#8A7E72",marginBottom:3,display:"block" }}>{t.customIngCat} *</label>
-        <select value={c} onChange={e=>sC(e.target.value)} style={{ ...S.sel,width:"100%",padding:"6px 10px" }}>{cats.map(x=><option key={x} value={x}>{x}</option>)}</select></div>
+        <select value={c} onChange={e=>sC(e.target.value)} style={{ ...S.sel(),width:"100%",padding:"6px 10px" }}>{cats.map(x=><option key={x} value={x}>{x}</option>)}</select></div>
         {showUnit && <div><label style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#8A7E72",marginBottom:3,display:"block" }}>{t.customIngUnit}</label>
-        <select value={u} onChange={e=>sU(e.target.value)} style={{ ...S.sel,width:"100%",padding:"6px 10px" }}>{AU_UNITS.map(x=><option key={x} value={x}>{x}</option>)}</select></div>}
+        <select value={u} onChange={e=>sU(e.target.value)} style={{ ...S.sel(),width:"100%",padding:"6px 10px" }}>{AU_UNITS.map(x=><option key={x} value={x}>{x}</option>)}</select></div>}
 
         {/* AI / flavour vector — only for ingredients */}
         {isIngredient && (<>
@@ -4103,7 +4575,7 @@ function AddM({ t, title, cats, showUnit, onAdd, onClose, nameP, isIngredient })
               <label style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,color:"#6A6150",marginBottom:3,display:"flex",alignItems:"center",gap:4,fontWeight:600 }}>
                 {!apiKey && <span style={{ color:"#E8B84B" }}>&#9888;</span>}{t.apiKey}
               </label>
-              <input type="password" value={apiKey} onChange={e=>saveApiKey(e.target.value)} placeholder="sk-ant-..." style={{ ...S.inp,fontSize:11,fontFamily:"'JetBrains Mono',monospace" }}/>
+              <input type="password" value={apiKey} onChange={e=>saveApiKey(e.target.value)} placeholder="sk-ant-..." style={{ ...S.inp(),fontSize:11,fontFamily:"'JetBrains Mono',monospace" }}/>
               <div style={{ fontSize:9,color:"#8A7E72",marginTop:3,fontStyle:"italic" }}>{t.apiKeyHint}</div>
               {!apiKey && <div style={{ fontSize:10,color:"#8A5E00",marginTop:4,fontWeight:600 }}>{t.aiNeedsKey}</div>}
             </div>
@@ -4131,7 +4603,7 @@ function AddM({ t, title, cats, showUnit, onAdd, onClose, nameP, isIngredient })
           <label style={{ display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#6A6150",fontFamily:"'DM Sans',sans-serif",cursor:"pointer" }}>
             <input type="checkbox" checked={isChilli} onChange={e=>setIsChilli(e.target.checked)}/>
             <Ic.Ci/>{t.markAsChilli}
-            {isChilli && <select value={defaultHeat} onChange={e=>setDefaultHeat(e.target.value)} style={{ ...S.sel,padding:"1px 4px",fontSize:10,marginLeft:6 }}>{Object.entries(CH).map(([k,d])=><option key={k} value={k}>{d.label}</option>)}</select>}
+            {isChilli && <select value={defaultHeat} onChange={e=>setDefaultHeat(e.target.value)} style={{ ...S.sel(),padding:"1px 4px",fontSize:10,marginLeft:6 }}>{Object.entries(CH).map(([k,d])=><option key={k} value={k}>{d.label}</option>)}</select>}
           </label>
         </>)}
 
