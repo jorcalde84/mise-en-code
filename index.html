@@ -558,7 +558,6 @@ function Tip({ tx, ch }) {
 const LS_KEY = "mise_en_code_data";
 const LS_SYNC_URL = "mise_en_code_sync_url";
 const DEFAULT_SYNC_URL = "https://script.google.com/macros/s/AKfycbwiyt6lJMSOsHvfpJ9r7NBRMG2GWIsHUBfGQLa_hX7jbhB6Di1SjrSR8sG4kZW_gMG6/exec";
-
 const LS_ROLE = "mise_en_code_role";
 const ADMIN_HASH = "U2FudGlhZ28yMg=="; /* base64 of the admin password */
 
@@ -610,7 +609,7 @@ function App() {
   const [lang, sL] = useState("en"); const t = T[lang];
   const [vw, sV] = useState("browse");
   const [loading, setLoading] = useState(true);
-  const [syncUrl, setSyncUrl] = useState(() => { try { return localStorage.getItem(LS_SYNC_URL) || ""; } catch { return ""; }});
+  const [syncUrl, setSyncUrl] = useState(() => { try { return localStorage.getItem(LS_SYNC_URL) || DEFAULT_SYNC_URL; } catch { return DEFAULT_SYNC_URL; }});
   const [syncStatus, setSyncStatus] = useState("idle");
   const [showSettings, setShowSettings] = useState(false);
   const [role, setRole] = useState(() => { try { return localStorage.getItem(LS_ROLE) || "guest"; } catch { return "guest"; }});
