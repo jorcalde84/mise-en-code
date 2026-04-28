@@ -675,11 +675,34 @@ function App() {
     return () => { cancelled = true; };
   }, []);  /* run once on mount */
 
+  /* ── Auto-pull: refresh from cloud when user returns to the tab ── */
+  useEffect(() => {
+    if (!syncUrl) return;
+    const handleVisibility = async () => {
+      if (document.visibilityState !== "visible") return;
+      const cloud = await loadFromCloud(syncUrl);
+      if (!cloud) return;
+      sR(cloud.recipes || SAMP);
+      if (cloud.customIngredients) sCI(cloud.customIngredients);
+      if (cloud.customTools)       sCT(cloud.customTools);
+      if (cloud.customProcesses)   sCP(cloud.customProcesses);
+      if (cloud.favourites)        sFavs(new Set(cloud.favourites));
+      saveToLocal(cloud);
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [syncUrl]);
+
   /* ── Persist helper: saves to localStorage + cloud on every state change ── */
   const persistRef = useRef(null);
   const persist = (newRecs, newCI, newCT, newCP, newFavs) => {
+    // Use explicit undefined check so callers can pass null to mean "use current"
     const data = buildExportData(
-      newRecs || recs, newCI || cI, newCT || cT, newCP || cP, newFavs || favs
+      newRecs !== undefined && newRecs !== null ? newRecs : recs,
+      newCI   !== undefined && newCI   !== null ? newCI   : cI,
+      newCT   !== undefined && newCT   !== null ? newCT   : cT,
+      newCP   !== undefined && newCP   !== null ? newCP   : cP,
+      newFavs !== undefined && newFavs !== null ? newFavs : favs,
     );
     saveToLocal(data);
     /* Debounced cloud save */
@@ -1061,18 +1084,19 @@ function App() {
           <p style={{ fontSize:10,fontWeight:700,color:"#6A6058",margin:"0 0 6px" }}>Setup Instructions</p>
           <ol style={{ fontSize:10,color:"#8A7E72",lineHeight:1.7,margin:0,paddingLeft:18 }}>
             <li>Go to <b>script.google.com</b> and create a new project</li>
-            <li>Replace the code in <b>Code.gs</b> with the Apps Script code (see documentation)</li>
+            <li>Replace the code in <b>Code.gs</b> with the v3 Apps Script code</li>
             <li>Click <b>Deploy → New deployment → Web app</b></li>
-            <li>Set "Execute as" to <b>Me</b>, "Who has access" to <b>Anyone</b></li>
-            <li>Copy the deployment URL and paste it above</li>
-            <li>Click <b>"Test &amp; Load"</b> to verify the connection</li>
+            <li>Set "Execute as" to <b>Me</b> and "Who has access" to <b>Anyone</b> — this is required for other users to read/write shared data</li>
+            <li>Copy the <b>/exec</b> URL (not /dev — /dev is for testing only and will not work for other users)</li>
+            <li>Paste it above, then click <b>"Test &amp; Load"</b> to verify</li>
           </ol>
+          <p style={{ fontSize:9,color:"#D45B5B",marginTop:6,lineHeight:1.5 }}>⚠ After any code change, you must create a new deployment version — editing and re-saving Code.gs alone does not update the live /exec endpoint.</p>
         </div>
         <div style={{ borderTop:"1px solid #EDE8E0",paddingTop:12,marginTop:12 }}>
           <p style={{ fontSize:10,fontWeight:700,color:"#6A6058",margin:"0 0 4px" }}>Status</p>
           <div style={{ display:"flex",alignItems:"center",gap:6 }}>
             <span style={{ width:8,height:8,borderRadius:"50%",background:!syncUrl?"#B0A898":syncStatus==="error"?"#D45B5B":syncStatus==="saving"||syncStatus==="loading"?"#E8B84B":"#6BAF6E" }}/>
-            <span style={{ fontSize:11,color:"#6A6058" }}>{!syncUrl ? "Not configured — using localStorage only" : syncStatus==="saving"?"Saving to cloud...":syncStatus==="loading"?"Loading from cloud...":syncStatus==="saved"?"Synced \u2714":syncStatus==="error"?"Sync error — check URL":"Connected \u2014 auto-sync active"}</span>
+            <span style={{ fontSize:11,color:"#6A6058" }}>{!syncUrl ? "Not configured — using localStorage only" : syncStatus==="saving"?"Saving to cloud...":syncStatus==="loading"?"Loading from cloud...":syncStatus==="saved"?"Synced ✔":syncStatus==="error"?"Sync error — check URL and deployment settings":"Connected — auto-sync active, refreshes on tab focus"}</span>
           </div>
           <p style={{ fontSize:9,color:"#B0A898",marginTop:6 }}>Data is always saved to localStorage as a fast offline backup, regardless of cloud sync status.</p>
         </div>
