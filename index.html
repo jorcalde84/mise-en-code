@@ -538,7 +538,13 @@ function fmtOpts(opts, meta) {
 function Tip({ tx, ch }) {
   const [s, ss] = useState(false);
   if (!tx) return ch;
-  return (<div style={{ position:"relative",width:"100%" }} onMouseEnter={()=>ss(true)} onMouseLeave={()=>ss(false)}>{ch}
+  /* Important: this wrapper sits between the cell's measured div and StepNode's bordered
+     box. StepNode uses flex:1 to fill its row's height. If this wrapper is a plain block,
+     flex:1 has no flex container to grow inside, so the bordered box collapses to content
+     height while the cell wrapper still stretches to row height — and the lane arrow's
+     y-start ends up below the visible container. Making this wrapper itself a column flex
+     container with flex:1 forwards the stretch through to StepNode. */
+  return (<div style={{ position:"relative",width:"100%",display:"flex",flexDirection:"column",flex:1 }} onMouseEnter={()=>ss(true)} onMouseLeave={()=>ss(false)}>{ch}
     {s && <div style={{ position:"absolute",left:"50%",top:"100%",transform:"translateX(-50%)",marginTop:6,padding:"10px 14px",borderRadius:10,background:"#2A2420",color:"#F5F0E8",fontSize:12,lineHeight:1.5,fontFamily:"'DM Sans',sans-serif",maxWidth:400,minWidth:180,boxShadow:"0 10px 35px rgba(42,36,32,0.25)",zIndex:200 }}>{tx}</div>}
   </div>);
 }
@@ -4911,7 +4917,10 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
             <marker id={`arrH-${prep.id}`} markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#6BAF6E"/></marker>
           </defs>
 
-          {/* Vertical arrows: actual bottom of source box \u2192 actual top of target box */}
+          {/* Vertical arrows: leave source perpendicularly from its bottom, arrive at target's
+              top perpendicularly. When the two containers have different widths (so their
+              horizontal centres don't align), draw a 3-segment elbow so both endpoints are
+              vertical instead of slanting diagonally between bottom-centre and top-centre. */}
           {connectors.vert.map(({ from, to }, i) => {
             const a = layout[from], b = layout[to];
             if (!a || !b) return null;
@@ -4919,7 +4928,12 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
             const y1 = a.top + a.height + 1;  /* just outside source bottom */
             const x2 = b.left + b.width/2;
             const y2 = b.top - 2;              /* just above target top so arrowhead tip touches edge */
-            return <path key={`v-${i}`} d={`M ${x1} ${y1} L ${x2} ${y2}`} stroke={LANE_COL} strokeWidth="2" fill="none" markerEnd={`url(#arr-${prep.id})`}/>;
+            const aligned = Math.abs(x1 - x2) < 0.5;
+            const midY = (y1 + y2) / 2;
+            const d = aligned
+              ? `M ${x1} ${y1} L ${x2} ${y2}`
+              : `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
+            return <path key={`v-${i}`} d={d} stroke={LANE_COL} strokeWidth="2" fill="none" markerEnd={`url(#arr-${prep.id})`}/>;
           })}
 
           {/* Horizontal connectors between lanes (Visio-style elbow routing
