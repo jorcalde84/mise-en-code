@@ -1517,7 +1517,36 @@ function WeekPlanPhaseAPlaceholder({
   const [previewCardSlot, setPreviewCardSlot] = useState(null);
   const [draggingUid, setDraggingUid] = useState(null);
   const [hoverTarget, setHoverTarget] = useState(null); /* "pool" | day key | null */
-  const [showShoppingList, setShowShoppingList] = useState(true);
+
+  /* ── Mobile-first redesign state ──
+     mobileTab: segmented control on phones (Plan / Shopping / Saved).
+     moveSheetSlot: bottom action sheet when tapping a chip on mobile (replaces drag).
+     hideChecked: shopping-list filter — hide collected items.
+     collapsedCats: per-category collapse state in the shopping list.
+     checkedItems: persistent checkbox state for shopping items, keyed by lowercased name. */
+  const [mobileTab, setMobileTab] = useState("plan");
+  const [moveSheetSlot, setMoveSheetSlot] = useState(null);
+  const [hideChecked, setHideChecked] = useState(false);
+  const [collapsedCats, setCollapsedCats] = useState(new Set());
+  const [checkedItems, setCheckedItems] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("mise_en_code_shopping_checked") || "[]")); }
+    catch { return new Set(); }
+  });
+  const toggleChecked = (key) => {
+    setCheckedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { localStorage.setItem("mise_en_code_shopping_checked", JSON.stringify(Array.from(next))); } catch {}
+      return next;
+    });
+  };
+  const clearChecked = () => {
+    setCheckedItems(new Set());
+    try { localStorage.removeItem("mise_en_code_shopping_checked"); } catch {}
+  };
+  const toggleCatCollapse = (cat) => {
+    setCollapsedCats(prev => { const n = new Set(prev); if (n.has(cat)) n.delete(cat); else n.add(cat); return n; });
+  };
 
   const th = TH();
   const publishedRecs = (recs || []).filter(r => r.status === "published" || r.status !== "draft");
@@ -1679,267 +1708,751 @@ function WeekPlanPhaseAPlaceholder({
     return { byCategory, sortedCats, total: aggregate.size };
   }, [weekPlan.slots, recs, parametricCards]);
 
-  /* ══ Render ══ */
+  /* ══ Render — mobile-first redesign ══ */
   const totalSlots = (weekPlan.slots || []).length;
   const scheduledCount = (weekPlan.slots || []).filter(s => s.day).length;
 
-  /* Recipe chip — used in pool and in days */
+  /* Shopping list helpers + derived stats */
+  const itemKey = (it) => (it.name || "").toLowerCase().trim();
+  const fmtMass = (g) => g > 0 ? (g >= 1000 ? `${(g/1000).toFixed(2)} kg` : `${Math.round(g)} g`) : null;
+  const allShoppingItems = Object.values(shoppingList.byCategory).flat();
+  const checkedCount = allShoppingItems.filter(it => checkedItems.has(itemKey(it))).length;
+  const totalMassG = allShoppingItems.reduce((acc, it) => acc + (it.totalGrams || 0), 0);
+  const progress = shoppingList.total > 0 ? checkedCount / shoppingList.total : 0;
+
+  /* Tap-target sizing — Apple HIG ≥44pt on phones, smaller on desktop. */
+  const TAP = isMobile ? 44 : 32;
+
+  /* Recipe chip — used in tray and in days. Larger and tap-friendly on mobile. */
   const SlotChip = ({ slot, location }) => {
     const resolved = resolveCard(slot.recipeId);
     const meta = statusMeta[resolved.status];
     const isDragging = draggingUid === slot.uid;
-    return <div
-      onClick={e => e.stopPropagation()}
-      draggable={true}
-      onDragStart={e => onDragStart(e, slot.uid)}
-      onDragEnd={onDragEnd}
-      style={{
-        background: th.bgC,
-        border: `1px solid ${th.bdS}`,
-        borderRadius: 8,
-        padding: "6px 8px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 3,
-        cursor: "grab",
-        userSelect: "none",
-        opacity: isDragging ? 0.4 : 1,
-        boxShadow: isDragging ? "none" : "0 1px 3px rgba(42,36,32,0.04)",
-        transition: "opacity 0.15s, box-shadow 0.15s",
-        minWidth: location === "pool" ? 130 : 0,
-        flexShrink: 0,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 11, fontWeight: 600, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }} title={slot.name}>{slot.name}</div>
-        </div>
-        <button
-          onClick={() => wpRemoveSlot(slot.uid)}
-          onMouseDown={e => e.stopPropagation()}
-          title="Remove"
-          style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, color: th.txM, fontSize: 13, lineHeight: 1, flexShrink: 0 }}
-        >&times;</button>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+    /* On mobile, tap the chip body to open the move/remove action sheet (no drag).
+       On desktop, drag remains the primary affordance and tap is inert (per-button). */
+    const onChipClick = (e) => {
+      e.stopPropagation();
+      if (isMobile) setMoveSheetSlot(slot);
+    };
+    return (
+      <div
+        onClick={onChipClick}
+        draggable={!isMobile}
+        onDragStart={!isMobile ? (e => onDragStart(e, slot.uid)) : undefined}
+        onDragEnd={!isMobile ? onDragEnd : undefined}
+        style={{
+          background: th.bgC,
+          border: `1px solid ${isDragging ? th.acc : th.bdS}`,
+          borderRadius: 12,
+          padding: isMobile ? "12px 14px" : "10px 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          cursor: isMobile ? "pointer" : "grab",
+          userSelect: "none",
+          opacity: isDragging ? 0.4 : 1,
+          boxShadow: isDragging ? "none" : "0 1px 4px rgba(42,36,32,0.05)",
+          transition: "opacity 0.15s, box-shadow 0.15s, border-color 0.15s",
+          minWidth: location === "pool" ? (isMobile ? 200 : 160) : 0,
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <span title={meta.label} style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, marginTop: 7, flexShrink: 0 }}/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontFamily: "'Playfair Display',serif",
+              fontSize: isMobile ? 14 : 13, fontWeight: 600, lineHeight: 1.3,
+              color: th.tx,
+              overflow: "hidden", textOverflow: "ellipsis",
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical"
+            }} title={slot.name}>{slot.name}</div>
+          </div>
           <button
-            onClick={e => { e.stopPropagation(); wpSetServings(slot.uid, slot.servings - 1); }}
+            onClick={e => { e.stopPropagation(); wpRemoveSlot(slot.uid); }}
             onMouseDown={e => e.stopPropagation()}
-            style={{ width: 16, height: 16, borderRadius: 3, border: `1px solid ${th.bd}`, background: th.bgH, color: th.tx, cursor: "pointer", fontSize: 10, lineHeight: 1, padding: 0 }}>&minus;</button>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, fontWeight: 700, minWidth: 12, textAlign: "center" }}>{slot.servings}</span>
-          <button
-            onClick={e => { e.stopPropagation(); wpSetServings(slot.uid, slot.servings + 1); }}
-            onMouseDown={e => e.stopPropagation()}
-            style={{ width: 16, height: 16, borderRadius: 3, border: `1px solid ${th.bd}`, background: th.bgH, color: th.tx, cursor: "pointer", fontSize: 10, lineHeight: 1, padding: 0 }}>+</button>
+            title="Remove" aria-label="Remove"
+            style={{
+              width: 28, height: 28, borderRadius: "50%",
+              background: "transparent", border: "none", cursor: "pointer",
+              color: th.txD, fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >×</button>
         </div>
-        <div style={{ display: "flex", gap: 3 }}>
-          {(resolved.status === "available" || resolved.status === "stale") && resolved.card && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, background: th.bgH, borderRadius: 999, padding: 2, border: `1px solid ${th.div}` }}>
             <button
-              onClick={e => { e.stopPropagation(); setPreviewCardSlot(slot); }}
+              onClick={e => { e.stopPropagation(); wpSetServings(slot.uid, slot.servings - 1); }}
               onMouseDown={e => e.stopPropagation()}
-              title="Preview parametric card"
-              style={{ background: "transparent", border: "none", padding: "1px 3px", cursor: "pointer", fontSize: 11, color: th.tx2 }}>{"\u{1F441}"}</button>
-          )}
-          <span title={meta.label} style={{ width: 6, height: 6, borderRadius: "50%", background: meta.color, alignSelf: "center" }}/>
+              aria-label="Decrease servings"
+              style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "transparent", color: th.tx, cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>−</button>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 700, minWidth: 22, textAlign: "center", color: th.tx2 }}>{slot.servings}</span>
+            <button
+              onClick={e => { e.stopPropagation(); wpSetServings(slot.uid, slot.servings + 1); }}
+              onMouseDown={e => e.stopPropagation()}
+              aria-label="Increase servings"
+              style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "transparent", color: th.tx, cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0 }}>+</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 600, color: th.txD, textTransform: "uppercase", letterSpacing: 0.6 }}>servings</span>
+            {(resolved.status === "available" || resolved.status === "stale") && resolved.card && (
+              <button
+                onClick={e => { e.stopPropagation(); setPreviewCardSlot(slot); }}
+                onMouseDown={e => e.stopPropagation()}
+                title="View card" aria-label="View card"
+                style={{
+                  width: 30, height: 30, borderRadius: "50%",
+                  border: `1px solid ${th.bdS}`, background: th.bgH,
+                  cursor: "pointer", color: th.tx2, padding: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center"
+                }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>;
+    );
   };
 
-  const dayColumn = (day) => {
+  /* Day card — full-width on mobile, 7-col grid tile on desktop. Header strip shows
+     day name + count + an inline "+" button. Empty state is an elegant ghost button
+     instead of small italic text. */
+  const DayCard = (day) => {
     const slots = slotsByDay[day] || [];
     const isHovered = hoverTarget === day;
-    return <div key={day}
-      onClick={() => openAddRecipeModal(day)}
-      onDragOver={e => onDragOver(e, day)}
-      onDragLeave={e => onDragLeave(e, day)}
-      onDrop={e => onDrop(e, day)}
-      style={{
-        background: isHovered ? `${th.acc}15` : th.bg,
-        border: `1.5px ${isHovered ? "solid" : "dashed"} ${isHovered ? th.acc : th.bdS}`,
-        borderRadius: 8,
-        padding: 8,
-        minHeight: isMobile ? 100 : 200,
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-        transition: "background 0.15s, border-color 0.15s",
-        cursor: "pointer",
-      }}
-    >
-      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, textAlign: "center", paddingBottom: 4, borderBottom: `1px solid ${th.div}40` }}>
-        {WP_DAY_SHORT[day]} <span style={{ color: th.txD, fontWeight: 400 }}>· {slots.length}</span>
-      </div>
-      {slots.length === 0 ? (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: th.txD, fontSize: 9, fontStyle: "italic", fontFamily: "'Cormorant Garamond',serif" }}>
-          click / tap to add recipe
-        </div>
-      ) : (
-        slots.map(slot => <SlotChip key={slot.uid} slot={slot} location="day"/>)
-      )}
-    </div>;
-  };
-
-  return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "16px 12px" : "24px 24px", color: th.tx }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
-        <div>
-          <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 22 : 28, fontWeight: 700, margin: 0 }}>Weekly Meal Plan</h1>
-          <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: th.txM, margin: "4px 0 0" }}>
-            {totalSlots === 0 ? "No recipes yet — add some to get started." :
-              `${pool.length} unscheduled · ${scheduledCount} scheduled · ${weekPlanSnapshots.length} snapshot${weekPlanSnapshots.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => openAddRecipeModal(null)} style={{ ...S.btn("primary"), padding: "7px 14px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            Add Recipe
-          </button>
-          {totalSlots > 0 && <button onClick={() => setShowSnapForm(true)} style={{ ...S.btn("outline"), padding: "7px 14px", fontSize: 12 }}>{"\uD83D\uDCBE"} Save Snapshot</button>}
-          {totalSlots > 0 && <button onClick={() => { if (window.confirm("Reset the active week plan?")) wpResetWeek(); }} style={{ ...S.btn("outline"), padding: "7px 14px", fontSize: 12 }}>{"\u21BB"} Reset</button>}
-        </div>
-      </div>
-
-      {/* Pool / Tray */}
-      <div
-        onDragOver={e => onDragOver(e, "pool")}
-        onDragLeave={e => onDragLeave(e, "pool")}
-        onDrop={e => onDrop(e, "pool")}
+    const isToday = (() => {
+      const today = new Date();
+      const dayIdx = (today.getDay() + 6) % 7; /* mon=0 */
+      return WP_DAYS[dayIdx] === day;
+    })();
+    return (
+      <div key={day}
+        onDragOver={!isMobile ? (e => onDragOver(e, day)) : undefined}
+        onDragLeave={!isMobile ? (e => onDragLeave(e, day)) : undefined}
+        onDrop={!isMobile ? (e => onDrop(e, day)) : undefined}
         style={{
-          background: hoverTarget === "pool" ? `${th.acc}15` : th.bgC,
-          border: `1.5px ${hoverTarget === "pool" ? "solid" : "solid"} ${hoverTarget === "pool" ? th.acc : th.bdS}`,
-          borderRadius: 12,
-          padding: "10px 12px",
-          marginBottom: 16,
+          background: isHovered ? `${th.acc}10` : th.bgC,
+          border: `1px solid ${isHovered ? th.acc : (isToday ? th.sec : th.bdS)}`,
+          borderRadius: 14,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: isMobile ? 0 : 220,
+          overflow: "hidden",
           transition: "background 0.15s, border-color 0.15s",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 1 }}>Recipes Tray</span>
-          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: th.txD }}>· {pool.length}</span>
-          <span style={{ marginLeft: "auto", fontFamily: "'Cormorant Garamond',serif", fontSize: 11, fontStyle: "italic", color: th.txD }}>drag chips into days below</span>
-        </div>
-        {pool.length === 0 ? (
-          <div style={{ padding: "14px 8px", textAlign: "center", color: th.txD, fontSize: 11, fontStyle: "italic", fontFamily: "'Cormorant Garamond',serif" }}>
-            Tray is empty. Click "Add Recipe", or click/tap a day to add a recipe directly there.
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-            {pool.map(slot => <SlotChip key={slot.uid} slot={slot} location="pool"/>)}
-          </div>
-        )}
-      </div>
-
-      {/* Week Calendar */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Week Calendar</div>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(7, 1fr)", gap: 6 }}>
-          {WP_DAYS.map(d => dayColumn(d))}
-        </div>
-      </div>
-
-      {/* Shopping List */}
-      {totalSlots > 0 && (
-        <div style={{ background: th.bgC, border: `1px solid ${th.bdS}`, borderRadius: 12, marginBottom: 18, overflow: "hidden" }}>
-          <button
-            onClick={() => setShowShoppingList(v => !v)}
-            style={{ width: "100%", padding: "12px 14px", border: "none", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: th.tx2, textTransform: "uppercase", letterSpacing: 0.8 }}
-          >
-            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span>{"\uD83D\uDED2"}</span>
-              <span>Shopping List</span>
-              <span style={{ color: th.txM, fontWeight: 400 }}>· {shoppingList.total} item{shoppingList.total === 1 ? "" : "s"} from {totalSlots} recipe{totalSlots === 1 ? "" : "s"}</span>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: isMobile ? "10px 14px" : "10px 12px",
+          background: isToday ? `${th.sec}12` : th.bgH,
+          borderBottom: `1px solid ${th.div}`,
+        }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+            <span style={{
+              fontFamily: "'Playfair Display',serif",
+              fontSize: isMobile ? 14 : 12, fontWeight: 700,
+              color: isToday ? th.sec : th.tx, letterSpacing: 0.3,
+            }}>
+              {isMobile ? WP_DAY_LABELS[day] : WP_DAY_SHORT[day]}
             </span>
-            <span style={{ fontSize: 14 }}>{showShoppingList ? "\u2212" : "+"}</span>
+            {isToday && <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.sec, textTransform: "uppercase", letterSpacing: 0.8 }}>Today</span>}
+            {slots.length > 0 && (
+              <span style={{
+                fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600,
+                color: th.txM, background: th.bgC, border: `1px solid ${th.bdS}`,
+                padding: "1px 7px", borderRadius: 999,
+              }}>
+                {slots.length}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => openAddRecipeModal(day)}
+            title={`Add to ${WP_DAY_LABELS[day]}`} aria-label={`Add to ${WP_DAY_LABELS[day]}`}
+            style={{
+              width: 32, height: 32, borderRadius: "50%",
+              border: `1px solid ${th.bdS}`, background: th.bgC, color: th.tx2,
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+              flexShrink: 0,
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
           </button>
-          {showShoppingList && (
-            <div style={{ padding: "0 14px 14px" }}>
-              {shoppingList.total === 0 ? (
-                <div style={{ padding: "8px 0", color: th.txM, fontSize: 11, fontStyle: "italic" }}>No ingredients to aggregate yet.</div>
-              ) : (
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: 14 }}>
-                  {shoppingList.sortedCats.map(cat => (
-                    <div key={cat}>
-                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.acc, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5, paddingBottom: 3, borderBottom: `1px solid ${th.div}` }}>{cat}</div>
-                      {shoppingList.byCategory[cat].map((item, i) => (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 11, fontFamily: "'DM Sans',sans-serif", borderBottom: `1px solid ${th.div}30` }}>
-                          <span style={{ flex: 1, minWidth: 0 }} title={`From: ${Array.from(item.recipes).join(", ")}`}>
-                            <span>{item.name}</span>
-                            {item.fallback && <span style={{ marginLeft: 4, fontSize: 9, color: th.txD, fontStyle: "italic" }}>(no card)</span>}
-                          </span>
-                          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: th.tx2, marginLeft: 8 }}>
-                            {item.totalGrams > 0 ? `${item.totalGrams >= 1000 ? (item.totalGrams/1000).toFixed(2) + " kg" : Math.round(item.totalGrams) + " g"}` : "—"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+        </div>
+        <div style={{ padding: isMobile ? "10px 12px 12px" : "10px", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+          {slots.length === 0 ? (
+            <button onClick={() => openAddRecipeModal(day)} style={{
+              padding: isMobile ? "16px" : "12px",
+              border: `1.5px dashed ${th.bd}`, borderRadius: 10, background: "transparent",
+              color: th.txM, fontFamily: "'Cormorant Garamond',serif",
+              fontSize: isMobile ? 14 : 12, fontStyle: "italic",
+              cursor: "pointer", textAlign: "center", flex: 1,
+              minHeight: isMobile ? 0 : 110,
+            }}>
+              + Add a recipe
+            </button>
+          ) : (
+            slots.map(slot => <SlotChip key={slot.uid} slot={slot} location="day"/>)
           )}
         </div>
-      )}
+      </div>
+    );
+  };
 
-      {/* Snapshots */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: th.txM, marginBottom: 8 }}>Snapshot History — {weekPlanSnapshots.length}</div>
-        {weekPlanSnapshots.length === 0 && (
-          <div style={{ background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 10, padding: 14, textAlign: "center", fontFamily: "'Cormorant Garamond',serif", fontStyle: "italic", color: th.txD, fontSize: 12 }}>No saved snapshots.</div>
-        )}
-        {weekPlanSnapshots.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {weekPlanSnapshots.map(snap => (
-              <div key={snap.id} style={{ background: th.bgC, border: `1px solid ${th.bdS}`, borderRadius: 8, padding: "7px 11px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 12, fontWeight: 600 }}>{snap.name}</div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, color: th.txM, marginTop: 1 }}>
-                    {snap.slots.length} recipe{snap.slots.length === 1 ? "" : "s"} · {fmtTime(snap.savedAt)}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button onClick={() => { if (window.confirm("Restore this snapshot? Current plan will be replaced.")) wpRestoreSnapshot(snap.id); }} style={{ ...S.btn("outline"), padding: "3px 9px", fontSize: 10 }}>Restore</button>
-                  <button onClick={() => wpDuplicateSnapshot(snap.id)} style={{ ...S.btn("outline"), padding: "3px 9px", fontSize: 10 }}>Duplicate</button>
-                  <button onClick={() => { if (window.confirm("Delete this snapshot?")) wpDeleteSnapshot(snap.id); }} style={{ ...S.btn("outline"), padding: "3px 9px", fontSize: 10, borderColor: "#D45B5B", color: "#D45B5B" }}>Delete</button>
-                </div>
+  /* Mobile bottom action sheet for moving / removing a slot — replaces drag on touch. */
+  const sheetBtn = (active) => ({
+    padding: "12px 10px", borderRadius: 12,
+    border: `1px solid ${active ? th.acc : th.bdS}`,
+    background: active ? `${th.acc}15` : th.bgH,
+    color: active ? th.acc : th.tx,
+    fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+  });
+  const renderMoveSheet = () => {
+    if (!moveSheetSlot) return null;
+    const close = () => setMoveSheetSlot(null);
+    const moveTo = (target) => { wpScheduleSlot(moveSheetSlot.uid, target); close(); };
+    return (
+      <div onClick={close} style={{
+        position: "fixed", inset: 0, background: th.ov, zIndex: 1500,
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        backdropFilter: "blur(6px)",
+      }}>
+        <div onClick={e => e.stopPropagation()} style={{
+          background: th.bgC, width: "100%", maxWidth: 520,
+          borderTopLeftRadius: 18, borderTopRightRadius: 18,
+          padding: "10px 16px 24px", maxHeight: "82vh", overflowY: "auto",
+          boxShadow: th.shO,
+        }}>
+          <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 700, color: th.tx, marginBottom: 2 }}>{moveSheetSlot.name}</div>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 12, fontStyle: "italic", color: th.txM, marginBottom: 14 }}>Move to…</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 12 }}>
+            <button onClick={() => moveTo(null)} style={sheetBtn(moveSheetSlot.day === null)}>Tray</button>
+            {WP_DAYS.map(d => (
+              <button key={d} onClick={() => moveTo(d)} style={sheetBtn(moveSheetSlot.day === d)}>
+                {WP_DAY_LABELS[d]}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => { wpRemoveSlot(moveSheetSlot.uid); close(); }} style={{
+            width: "100%", padding: "13px", borderRadius: 12,
+            border: `1px solid ${th.err}40`, background: `${th.err}10`, color: th.err,
+            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
+          }}>Remove from plan</button>
+          <button onClick={close} style={{
+            width: "100%", padding: "12px", borderRadius: 12,
+            border: "none", background: "transparent", color: th.txM,
+            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 6,
+          }}>Cancel</button>
+        </div>
+      </div>
+    );
+  };
+
+  /* ── Section: Plan (Tray + Week calendar) ── */
+  const renderPlanSection = () => (
+    <>
+      {/* Tray */}
+      <div
+        onDragOver={!isMobile ? (e => onDragOver(e, "pool")) : undefined}
+        onDragLeave={!isMobile ? (e => onDragLeave(e, "pool")) : undefined}
+        onDrop={!isMobile ? (e => onDrop(e, "pool")) : undefined}
+        style={{
+          background: hoverTarget === "pool" ? `${th.acc}10` : th.bgC,
+          border: `1px solid ${hoverTarget === "pool" ? th.acc : th.bdS}`,
+          borderRadius: 14,
+          padding: isMobile ? "14px 14px 10px" : "12px 14px",
+          marginBottom: 18,
+          transition: "background 0.15s, border-color 0.15s",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx }}>Tray</span>
+            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: th.txM, background: th.bgH, padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>{pool.length}</span>
+          </div>
+          <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 11, fontStyle: "italic", color: th.txD, textAlign: "right" }}>
+            {isMobile ? "tap a chip to move" : "drag chips into days below"}
+          </span>
+        </div>
+        {pool.length === 0 ? (
+          <button onClick={() => openAddRecipeModal(null)} style={{
+            width: "100%", padding: isMobile ? "18px" : "14px",
+            borderRadius: 12, border: `1.5px dashed ${th.bd}`, background: "transparent",
+            color: th.txM, fontFamily: "'Cormorant Garamond',serif",
+            fontSize: isMobile ? 14 : 13, fontStyle: "italic", cursor: "pointer",
+          }}>
+            Tray is empty — tap to add a recipe.
+          </button>
+        ) : (
+          <div style={{
+            display: "flex", gap: 10, overflowX: "auto",
+            paddingBottom: 6, marginRight: -14, paddingRight: 14,
+            scrollSnapType: "x proximity",
+            WebkitOverflowScrolling: "touch",
+          }}>
+            {pool.map(slot => (
+              <div key={slot.uid} style={{ scrollSnapAlign: "start" }}>
+                <SlotChip slot={slot} location="pool"/>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Add recipe modal */}
-      {showAdd && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(42,36,32,0.55)", zIndex: 1300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)", padding: 16 }} onClick={closeAddRecipeModal}>
-          <div onClick={e => e.stopPropagation()} style={{ background: th.bgC, borderRadius: 16, maxWidth: 480, width: "100%", padding: "20px 22px", boxShadow: th.shO, color: th.tx }}>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{addTargetDay ? `Add Recipe to ${WP_DAY_LABELS[addTargetDay]}` : "Add Recipe to Tray"}</div>
-            <p style={{ fontSize: 11, color: th.txM, fontFamily: "'DM Sans',sans-serif", marginTop: 0, marginBottom: 14 }}>{addTargetDay ? "Choose a category, then select a recipe for this day." : "Recipes start in the tray. You can also click/tap a day on the calendar to add directly there."}</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 6 }}>Filter by category</label>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-                  {planCategoryOptions.map(opt => (
-                    <button key={opt.key} onClick={() => { setPickCategory(opt.key); setPickRecipeId(""); }} style={{
-                      padding:"5px 10px", borderRadius:14, cursor:"pointer",
-                      fontFamily:"'DM Sans',sans-serif", fontSize:10, fontWeight:700,
-                      background: pickCategory === opt.key ? th.acc : th.bgC,
-                      color: pickCategory === opt.key ? "#FFF" : th.tx2,
-                      border: `1.5px solid ${pickCategory === opt.key ? th.acc : th.bdS}`
-                    }}>{opt.label}</button>
-                  ))}
+      {/* Week */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+          <span style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx }}>Week</span>
+          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: th.txM, background: th.bgH, padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>
+            {scheduledCount} scheduled
+          </span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(7, 1fr)", gap: isMobile ? 10 : 8 }}>
+          {WP_DAYS.map(d => DayCard(d))}
+        </div>
+      </div>
+    </>
+  );
+
+  /* ── Section: Shopping list (cumulative across all recipes, checkable rows) ── */
+  const renderShoppingSection = () => {
+    if (totalSlots === 0) {
+      return (
+        <div style={{ textAlign: "center", padding: "44px 22px", background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 16 }}>
+          <div style={{ fontSize: 38, marginBottom: 8 }}>{"\uD83D\uDED2"}</div>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, color: th.tx, marginBottom: 4 }}>
+            Your shopping list is empty
+          </div>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic", color: th.txM }}>
+            Add recipes to your plan to see ingredients aggregated here.
+          </div>
+        </div>
+      );
+    }
+    return (
+      <>
+        {/* Progress card */}
+        <div style={{ background: th.bgC, border: `1px solid ${th.bdS}`, borderRadius: 16, padding: isMobile ? "16px" : "16px 18px", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 22 : 20, fontWeight: 700, color: th.tx, lineHeight: 1.1 }}>
+                {checkedCount} <span style={{ color: th.txM, fontWeight: 500 }}>/ {shoppingList.total}</span>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, color: th.txM, marginLeft: 8, textTransform: "uppercase", letterSpacing: 0.6 }}>collected</span>
+              </div>
+              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic", color: th.txM, marginTop: 4 }}>
+                aggregated from {totalSlots} recipe{totalSlots === 1 ? "" : "s"}
+                {totalMassG > 0 ? ` · ${fmtMass(totalMassG)} total` : ""}
+              </div>
+            </div>
+            {checkedCount > 0 && (
+              <button onClick={() => { if (window.confirm("Clear all checks?")) clearChecked(); }} style={{
+                padding: "8px 14px", borderRadius: 999,
+                border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0,
+              }}>Clear ✓</button>
+            )}
+          </div>
+          <div style={{ width: "100%", height: 6, background: th.bgH, borderRadius: 999, overflow: "hidden" }}>
+            <div style={{
+              width: `${progress * 100}%`, height: "100%",
+              background: progress === 1 ? th.ok : th.acc,
+              transition: "width 0.3s, background 0.3s",
+            }}/>
+          </div>
+          <button onClick={() => setHideChecked(v => !v)} style={{
+            width: "100%", marginTop: 12, padding: isMobile ? "12px 14px" : "10px 14px",
+            borderRadius: 10,
+            border: `1px solid ${hideChecked ? th.acc : th.bdS}`,
+            background: hideChecked ? `${th.acc}15` : th.bgH,
+            color: hideChecked ? th.acc : th.tx2,
+            fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          }}>
+            <span style={{
+              width: 16, height: 16, borderRadius: 4,
+              border: `1.5px solid ${hideChecked ? th.acc : th.bd}`,
+              background: hideChecked ? th.acc : "transparent",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {hideChecked && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+            </span>
+            Hide collected
+          </button>
+        </div>
+
+        {/* Categorised checkable list */}
+        {shoppingList.total === 0 ? (
+          <div style={{ textAlign: "center", padding: 30, color: th.txM, fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic" }}>
+            No ingredients to aggregate yet.
+          </div>
+        ) : (
+          shoppingList.sortedCats.map(cat => {
+            const items = shoppingList.byCategory[cat];
+            const visibleItems = hideChecked ? items.filter(it => !checkedItems.has(itemKey(it))) : items;
+            if (visibleItems.length === 0) return null;
+            const catChecked = items.filter(it => checkedItems.has(itemKey(it))).length;
+            const isCollapsed = collapsedCats.has(cat);
+            return (
+              <div key={cat} style={{ background: th.bgC, border: `1px solid ${th.bdS}`, borderRadius: 14, marginBottom: 10, overflow: "hidden" }}>
+                <button onClick={() => toggleCatCollapse(cat)} style={{
+                  width: "100%", padding: isMobile ? "14px 16px" : "12px 16px",
+                  border: "none", background: "transparent", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                    <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700, color: th.tx, textTransform: "uppercase", letterSpacing: 0.8 }}>{cat}</span>
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: th.txM, fontWeight: 500 }}>
+                      {catChecked}/{items.length}
+                    </span>
+                  </div>
+                  <span style={{
+                    color: th.txD,
+                    transform: isCollapsed ? "rotate(-90deg)" : "rotate(0)",
+                    transition: "transform 0.2s",
+                    display: "inline-flex",
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                  </span>
+                </button>
+                {!isCollapsed && (
+                  <div>
+                    {visibleItems.map((item, idx) => {
+                      const k = itemKey(item);
+                      const isChecked = checkedItems.has(k);
+                      return (
+                        <button key={k + idx} onClick={() => toggleChecked(k)} style={{
+                          display: "flex", alignItems: "center", gap: 12, width: "100%",
+                          padding: isMobile ? "12px 16px" : "11px 16px",
+                          background: isChecked ? th.bgH : "transparent",
+                          border: "none", borderTop: `1px solid ${th.div}50`,
+                          textAlign: "left", cursor: "pointer", color: th.tx,
+                          transition: "background 0.15s",
+                        }}>
+                          <span style={{
+                            width: 22, height: 22, borderRadius: "50%",
+                            border: `2px solid ${isChecked ? th.ok : th.bd}`,
+                            background: isChecked ? th.ok : "transparent",
+                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            transition: "background 0.15s, border-color 0.15s",
+                          }}>
+                            {isChecked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontFamily: "'Cormorant Garamond',serif",
+                              fontSize: isMobile ? 16 : 15, fontWeight: 500,
+                              color: isChecked ? th.txM : th.tx,
+                              textDecoration: isChecked ? "line-through" : "none",
+                              opacity: isChecked ? 0.7 : 1,
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            }}>{item.name}</div>
+                            {item.recipes && item.recipes.size > 0 && (
+                              <div style={{
+                                fontFamily: "'DM Sans',sans-serif", fontSize: 10,
+                                color: th.txD, marginTop: 2,
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              }}>
+                                {Array.from(item.recipes).join(" · ")}
+                              </div>
+                            )}
+                          </div>
+                          <span style={{
+                            fontFamily: "'JetBrains Mono',monospace",
+                            fontSize: isMobile ? 13 : 12,
+                            color: isChecked ? th.txD : th.tx2, fontWeight: 600,
+                            textDecoration: isChecked ? "line-through" : "none",
+                            background: isChecked ? "transparent" : th.bgH,
+                            padding: "4px 10px", borderRadius: 999, flexShrink: 0,
+                          }}>
+                            {item.totalGrams > 0 ? fmtMass(item.totalGrams) : (item.fallback ? "approx" : "—")}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </>
+    );
+  };
+
+  /* ── Section: Saved snapshots ── */
+  const renderSnapshotsSection = () => (
+    <>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 17 : 16, fontWeight: 700, color: th.tx }}>Saved plans</div>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 12, fontStyle: "italic", color: th.txM, marginTop: 2 }}>
+            {weekPlanSnapshots.length} snapshot{weekPlanSnapshots.length === 1 ? "" : "s"}
+          </div>
+        </div>
+        {totalSlots > 0 && (
+          <button onClick={() => setShowSnapForm(true)} style={{
+            padding: isMobile ? "11px 16px" : "10px 16px", borderRadius: 999,
+            background: th.acc, color: "#FFF", border: "none",
+            fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
+          }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>
+            Save current
+          </button>
+        )}
+      </div>
+      {weekPlanSnapshots.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px 22px", background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 16 }}>
+          <div style={{ fontSize: 32, marginBottom: 6 }}>{"\uD83D\uDCBE"}</div>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic", color: th.txM }}>
+            No snapshots yet — save your plan to come back to it later.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {weekPlanSnapshots.map(snap => (
+            <div key={snap.id} style={{ background: th.bgC, border: `1px solid ${th.bdS}`, borderRadius: 14, padding: isMobile ? "14px 16px" : "13px 16px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx, lineHeight: 1.3 }}>{snap.name}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: th.txM, marginTop: 3 }}>
+                    {snap.slots.length} recipe{snap.slots.length === 1 ? "" : "s"} · {fmtTime(snap.savedAt)}
+                  </div>
                 </div>
-                <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Recipe</label>
-                <select value={pickRecipeId} onChange={e => setPickRecipeId(e.target.value)} style={{ ...S.sel(), width: "100%", padding: "7px 10px", fontSize: 12 }}>
-                  <option value="">{filteredPublishedRecs.length ? "— Select a recipe —" : "— No recipes in this category —"}</option>
-                  {filteredPublishedRecs.map(r => <option key={r.id} value={r.id}>{r.name} ({r.category || "Mains"})</option>)}
-                </select>
+                <button onClick={() => { if (window.confirm("Delete this snapshot?")) wpDeleteSnapshot(snap.id); }}
+                  aria-label="Delete snapshot"
+                  style={{
+                    width: 32, height: 32, borderRadius: "50%",
+                    border: "none", background: "transparent", color: th.txM,
+                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                <button onClick={closeAddRecipeModal} style={{ ...S.btn("outline"), flex: 1 }}>Cancel</button>
-                <button onClick={handleAdd} style={{ ...S.btn("primary"), flex: 1 }} disabled={!pickRecipeId}>{addTargetDay ? `Add to ${WP_DAY_SHORT[addTargetDay]}` : "Add to Tray"}</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { if (window.confirm("Restore this snapshot? Current plan will be replaced.")) wpRestoreSnapshot(snap.id); }} style={{
+                  flex: 1, padding: "11px 12px", borderRadius: 10, border: "none",
+                  background: th.pri, color: th.txOn,
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}>Restore</button>
+                <button onClick={() => wpDuplicateSnapshot(snap.id)} style={{
+                  flex: 1, padding: "11px 12px", borderRadius: 10,
+                  border: `1px solid ${th.bdSt}`, background: th.bgH, color: th.tx,
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}>Duplicate</button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <div style={{
+      maxWidth: 1100, margin: "0 auto",
+      padding: isMobile ? "16px 14px 36px" : "26px 24px 40px",
+      color: th.tx,
+    }}>
+      {/* Header */}
+      <div style={{ marginBottom: isMobile ? 14 : 22 }}>
+        <h1 style={{
+          fontFamily: "'Playfair Display',serif",
+          fontSize: isMobile ? 28 : 32, fontWeight: 700, margin: 0,
+          lineHeight: 1.1, letterSpacing: -0.5, color: th.tx,
+        }}>Weekly Plan</h1>
+        <p style={{
+          fontFamily: "'Cormorant Garamond',serif",
+          fontSize: isMobile ? 14 : 15, fontStyle: "italic",
+          color: th.txM, margin: "4px 0 0",
+        }}>
+          {totalSlots === 0 ? "Compose your week, one recipe at a time." :
+            `${pool.length} in tray · ${scheduledCount} scheduled · ${weekPlanSnapshots.length} saved`}
+        </p>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+          <button onClick={() => openAddRecipeModal(null)} style={{
+            flex: isMobile ? 1 : "0 1 auto",
+            padding: isMobile ? "14px 18px" : "12px 20px",
+            borderRadius: 999, background: th.pri, color: th.txOn, border: "none",
+            fontFamily: "'DM Sans',sans-serif",
+            fontSize: isMobile ? 14 : 13, fontWeight: 700,
+            cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: "0 6px 16px rgba(42,36,32,0.18)",
+            transition: "transform 0.1s, box-shadow 0.2s",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            Add Recipe
+          </button>
+          {!isMobile && totalSlots > 0 && (
+            <button onClick={() => { if (window.confirm("Reset the active week plan?")) wpResetWeek(); }} style={{
+              padding: "12px 18px", borderRadius: 999,
+              background: "transparent", color: th.txM, border: `1px solid ${th.bdSt}`,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
+            }}>{"\u21BB"} Reset week</button>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile segmented tabs */}
+      {isMobile && (
+        <div style={{
+          display: "flex", gap: 0, marginBottom: 18,
+          background: th.bgC, border: `1px solid ${th.bdS}`, borderRadius: 999, padding: 4,
+        }}>
+          {[
+            { k: "plan", l: "Plan", c: scheduledCount + pool.length },
+            { k: "shopping", l: "Shopping", c: shoppingList.total },
+            { k: "saved", l: "Saved", c: weekPlanSnapshots.length },
+          ].map(tab => {
+            const active = mobileTab === tab.k;
+            return (
+              <button key={tab.k} onClick={() => setMobileTab(tab.k)} style={{
+                flex: 1, padding: "11px 8px", borderRadius: 999, border: "none",
+                background: active ? th.pri : "transparent",
+                color: active ? th.txOn : th.txM,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                transition: "background 0.2s, color 0.2s",
+              }}>
+                {tab.l}
+                {tab.c > 0 && <span style={{
+                  fontSize: 9, fontWeight: 700,
+                  background: active ? "rgba(255,255,255,0.18)" : th.bgH,
+                  color: active ? th.txOn : th.txM,
+                  padding: "1px 6px", borderRadius: 999, minWidth: 16, textAlign: "center",
+                }}>{tab.c}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Body */}
+      {isMobile ? (
+        <>
+          {mobileTab === "plan" && renderPlanSection()}
+          {mobileTab === "shopping" && renderShoppingSection()}
+          {mobileTab === "saved" && renderSnapshotsSection()}
+        </>
+      ) : (
+        <>
+          {renderPlanSection()}
+          {totalSlots > 0 && (
+            <div style={{ marginBottom: 28, marginTop: 8 }}>
+              <div style={{
+                fontFamily: "'Playfair Display',serif",
+                fontSize: 18, fontWeight: 700, color: th.tx, marginBottom: 12,
+                display: "flex", alignItems: "baseline", gap: 8,
+              }}>
+                <span>Shopping list</span>
+                <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic", color: th.txM, fontWeight: 400 }}>
+                  cumulative across {totalSlots} recipe{totalSlots === 1 ? "" : "s"}
+                </span>
+              </div>
+              {renderShoppingSection()}
+            </div>
+          )}
+          <div style={{ marginTop: 8 }}>
+            {renderSnapshotsSection()}
+          </div>
+        </>
+      )}
+
+      {/* Mobile-only footer reset on Plan tab */}
+      {isMobile && totalSlots > 0 && mobileTab === "plan" && (
+        <div style={{ marginTop: 22, textAlign: "center" }}>
+          <button onClick={() => { if (window.confirm("Reset the active week plan?")) wpResetWeek(); }} style={{
+            padding: "11px 18px", borderRadius: 999, background: "transparent", color: th.txM,
+            border: `1px solid ${th.bdSt}`, fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>{"\u21BB"} Reset week</button>
+        </div>
+      )}
+
+      {renderMoveSheet()}
+
+      {/* Add recipe modal — bottom-sheet on mobile, centered card on desktop */}
+      {showAdd && (
+        <div onClick={closeAddRecipeModal} style={{
+          position: "fixed", inset: 0, background: th.ov, zIndex: 1300,
+          display: "flex",
+          alignItems: isMobile ? "flex-end" : "center",
+          justifyContent: "center", backdropFilter: "blur(6px)",
+          padding: isMobile ? 0 : 16,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: th.bgC,
+            borderRadius: isMobile ? "18px 18px 0 0" : 16,
+            maxWidth: 520, width: "100%",
+            padding: isMobile ? "10px 18px 24px" : "22px 24px",
+            boxShadow: th.shO, color: th.tx,
+            maxHeight: isMobile ? "86vh" : "auto", overflowY: "auto",
+          }}>
+            {isMobile && <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>}
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 19 : 18, fontWeight: 700, marginBottom: 4 }}>
+              {addTargetDay ? `Add to ${WP_DAY_LABELS[addTargetDay]}` : "Add to Tray"}
+            </div>
+            <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic", color: th.txM, marginTop: 0, marginBottom: 14 }}>
+              {addTargetDay ? "Pick a recipe — you can move it later." : "Recipes start in the tray, then drag (or tap) them onto days."}
+            </p>
+            <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 8 }}>Filter</label>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
+              {planCategoryOptions.map(opt => (
+                <button key={opt.key} onClick={() => { setPickCategory(opt.key); setPickRecipeId(""); }} style={{
+                  padding:"7px 14px", borderRadius:999, cursor:"pointer",
+                  fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:600,
+                  background: pickCategory === opt.key ? th.pri : th.bgH,
+                  color: pickCategory === opt.key ? th.txOn : th.tx2,
+                  border: `1px solid ${pickCategory === opt.key ? th.pri : th.bdS}`,
+                }}>{opt.label}</button>
+              ))}
+            </div>
+            <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 6 }}>Recipe</label>
+            <div style={{ maxHeight: isMobile ? 320 : 280, overflowY: "auto", border: `1px solid ${th.bdS}`, borderRadius: 12, marginBottom: 14 }}>
+              {filteredPublishedRecs.length === 0 ? (
+                <div style={{ padding: 16, textAlign: "center", fontFamily: "'Cormorant Garamond',serif", fontStyle: "italic", color: th.txM }}>No recipes in this category.</div>
+              ) : (
+                filteredPublishedRecs.map((r, idx) => (
+                  <button key={r.id} onClick={() => setPickRecipeId(r.id)} style={{
+                    width: "100%", padding: isMobile ? "13px 14px" : "11px 14px",
+                    border: "none",
+                    background: pickRecipeId === r.id ? `${th.acc}15` : "transparent",
+                    borderTop: idx === 0 ? "none" : `1px solid ${th.div}30`,
+                    textAlign: "left", cursor: "pointer", color: th.tx,
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}>
+                    <span style={{
+                      width: 20, height: 20, borderRadius: "50%",
+                      border: `2px solid ${pickRecipeId === r.id ? th.acc : th.bd}`,
+                      background: pickRecipeId === r.id ? th.acc : "transparent",
+                      flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {pickRecipeId === r.id && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FFF" }}/>}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 600, lineHeight: 1.3 }}>{r.name}</div>
+                      <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: th.txM, marginTop: 2 }}>{r.category || "Mains"} · serves {r.servings || 4}</div>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={closeAddRecipeModal} style={{
+                flex: 1, padding: "13px 14px", borderRadius: 12,
+                border: `1px solid ${th.bdSt}`, background: th.bgH, color: th.tx,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}>Cancel</button>
+              <button onClick={handleAdd} disabled={!pickRecipeId} style={{
+                flex: 1, padding: "13px 14px", borderRadius: 12, border: "none",
+                background: pickRecipeId ? th.pri : th.bgH,
+                color: pickRecipeId ? th.txOn : th.txD,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700,
+                cursor: pickRecipeId ? "pointer" : "not-allowed",
+              }}>{addTargetDay ? `Add to ${WP_DAY_SHORT[addTargetDay]}` : "Add to Tray"}</button>
             </div>
           </div>
         </div>
@@ -1947,21 +2460,50 @@ function WeekPlanPhaseAPlaceholder({
 
       {/* Save snapshot modal */}
       {showSnapForm && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(42,36,32,0.55)", zIndex: 1300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)", padding: 16 }} onClick={() => setShowSnapForm(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: th.bgC, borderRadius: 16, maxWidth: 420, width: "100%", padding: "20px 22px", boxShadow: th.shO, color: th.tx }}>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Save Plan Snapshot</div>
-            <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 4 }}>Snapshot name</label>
+        <div onClick={() => setShowSnapForm(false)} style={{
+          position: "fixed", inset: 0, background: th.ov, zIndex: 1300,
+          display: "flex",
+          alignItems: isMobile ? "flex-end" : "center",
+          justifyContent: "center", backdropFilter: "blur(6px)",
+          padding: isMobile ? 0 : 16,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: th.bgC,
+            borderRadius: isMobile ? "18px 18px 0 0" : 16,
+            maxWidth: 440, width: "100%",
+            padding: isMobile ? "10px 18px 24px" : "22px 24px",
+            boxShadow: th.shO, color: th.tx,
+          }}>
+            {isMobile && <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>}
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 19 : 18, fontWeight: 700, marginBottom: 4 }}>Save plan snapshot</div>
+            <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic", color: th.txM, marginTop: 0, marginBottom: 14 }}>
+              A frozen copy you can restore later.
+            </p>
+            <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 6 }}>Name</label>
             <input
               autoFocus
               value={snapName}
               onChange={e => setSnapName(e.target.value)}
               placeholder={`Plan saved ${new Date().toLocaleDateString()}`}
-              style={{ ...S.inp(), fontSize: 12 }}
+              style={{
+                width: "100%", padding: "13px 14px", borderRadius: 12,
+                border: `1.5px solid ${th.bd}`, background: th.bgI,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 14, color: th.tx, outline: "none",
+                boxSizing: "border-box",
+              }}
               onKeyDown={e => { if (e.key === "Enter") handleSaveSnap(); }}
             />
-            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button onClick={() => setShowSnapForm(false)} style={{ ...S.btn("outline"), flex: 1 }}>Cancel</button>
-              <button onClick={handleSaveSnap} style={{ ...S.btn("primary"), flex: 1 }}>Save</button>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button onClick={() => setShowSnapForm(false)} style={{
+                flex: 1, padding: "13px", borderRadius: 12,
+                border: `1px solid ${th.bdSt}`, background: th.bgH, color: th.tx,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}>Cancel</button>
+              <button onClick={handleSaveSnap} style={{
+                flex: 1, padding: "13px", borderRadius: 12, border: "none",
+                background: th.pri, color: th.txOn,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer",
+              }}>Save</button>
             </div>
           </div>
         </div>
@@ -4380,8 +4922,9 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
             return <path key={`v-${i}`} d={`M ${x1} ${y1} L ${x2} ${y2}`} stroke={LANE_COL} strokeWidth="2" fill="none" markerEnd={`url(#arr-${prep.id})`}/>;
           })}
 
-          {/* Horizontal connectors between lanes (Visio-style elbow routing).
-              Exit source from left/right edge, turn 90° once or twice as needed, approach target on opposite edge. */}
+          {/* Horizontal connectors between lanes (Visio-style elbow routing
+              with obstacle avoidance: paths route around other step containers
+              instead of passing through them, mirroring the module-anchor logic). */}
           {connectors.horiz.map(({ from, to, side }, i) => {
             const a = layout[from], b = layout[to];
             if (!a || !b) return null;
@@ -4398,14 +4941,67 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
             const xA2 = side === "right" ? xA + OUT : xA - OUT;
             const xB2 = oppSide === "left" ? xB - OUT : xB + OUT;
 
+            /* Build obstacle list: every other step container in this prep,
+               padded for visual breathing room around each box. */
+            const PAD = 6;
+            const obstacles = Object.entries(layout)
+              .filter(([id]) => id !== from && id !== to)
+              .map(([, r]) => ({ l: r.left - PAD, r: r.left + r.width + PAD, t: r.top - PAD, b: r.top + r.height + PAD }));
+            const hSegHits = (y, x1, x2) => {
+              const xMin = Math.min(x1, x2), xMax = Math.max(x1, x2);
+              return obstacles.some(o => y >= o.t && y <= o.b && xMax >= o.l && xMin <= o.r);
+            };
+            const vSegHits = (x, y1, y2) => {
+              const yMin = Math.min(y1, y2), yMax = Math.max(y1, y2);
+              return obstacles.some(o => x >= o.l && x <= o.r && yMax >= o.t && yMin <= o.b);
+            };
+
+            const midX = (xA2 + xB2) / 2;
+            const sameRow = Math.abs(yA - yB) < 2;
+            /* Simple-path test: exit horizontals + vertical channel at midX. */
+            const simpleClear =
+              !hSegHits(yA, xA, midX) &&
+              !vSegHits(midX, yA, yB) &&
+              !hSegHits(yB, midX, xB);
+
             let d;
-            if (Math.abs(yA - yB) < 2) {
-              /* Same row — straight arrow with small exit segments */
-              d = `M ${xA} ${yA} L ${xA2} ${yA} L ${xB2} ${yB} L ${xB} ${yB}`;
+            if (simpleClear) {
+              if (sameRow) {
+                d = `M ${xA} ${yA} L ${xA2} ${yA} L ${xB2} ${yB} L ${xB} ${yB}`;
+              } else {
+                d = `M ${xA} ${yA} L ${xA2} ${yA} L ${midX} ${yA} L ${midX} ${yB} L ${xB2} ${yB} L ${xB} ${yB}`;
+              }
             } else {
-              /* Different rows — elbow: exit, go horizontally to midpoint between lanes, go vertically, then approach target */
-              const midX = (xA2 + xB2) / 2;
-              d = `M ${xA} ${yA} L ${xA2} ${yA} L ${midX} ${yA} L ${midX} ${yB} L ${xB2} ${yB} L ${xB} ${yB}`;
+              /* Search for a clear vertical channel between source and target —
+                 prefer X positions closest to the midpoint, but try every
+                 obstacle edge in the range as a fallback. */
+              const xMin = Math.min(xA2, xB2);
+              const xMax = Math.max(xA2, xB2);
+              const candidates = [midX];
+              obstacles.forEach(o => {
+                if (o.l - PAD > xMin && o.l - PAD < xMax) candidates.push(o.l - PAD);
+                if (o.r + PAD > xMin && o.r + PAD < xMax) candidates.push(o.r + PAD);
+              });
+              candidates.sort((c1, c2) => Math.abs(c1 - midX) - Math.abs(c2 - midX));
+              let bestX = null;
+              for (const cx of candidates) {
+                if (!hSegHits(yA, xA, cx) && !vSegHits(cx, yA, yB) && !hSegHits(yB, cx, xB)) {
+                  bestX = cx; break;
+                }
+              }
+              if (bestX != null) {
+                d = `M ${xA} ${yA} L ${xA2} ${yA} L ${bestX} ${yA} L ${bestX} ${yB} L ${xB2} ${yB} L ${xB} ${yB}`;
+              } else {
+                /* Last resort: route around top or bottom of all obstacles. */
+                const allTops = obstacles.length ? obstacles.map(o => o.t) : [Math.min(a.top, b.top)];
+                const allBots = obstacles.length ? obstacles.map(o => o.b) : [Math.max(a.top + a.height, b.top + b.height)];
+                const topClear = Math.min(a.top, b.top, ...allTops) - PAD * 3;
+                const botClear = Math.max(a.top + a.height, b.top + b.height, ...allBots) + PAD * 3;
+                const midY = (yA + yB) / 2;
+                const useTop = Math.abs(topClear - midY) <= Math.abs(botClear - midY);
+                const routeY = useTop ? topClear : botClear;
+                d = `M ${xA} ${yA} L ${xA2} ${yA} L ${xA2} ${routeY} L ${xB2} ${routeY} L ${xB2} ${yB} L ${xB} ${yB}`;
+              }
             }
             return <path key={`h-${i}`} d={d} stroke="#6BAF6E" strokeWidth="2" fill="none" markerEnd={`url(#arrH-${prep.id})`}/>;
           })}
@@ -5098,12 +5694,63 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
                     const OUT = 12;
                     const xA2 = side === "right" ? xA + OUT : xA - OUT;
                     const xB2 = oppSide === "left" ? xB - OUT : xB + OUT;
+
+                    /* Avoid routing through other step containers — same
+                       strategy used by the published Gantt view. */
+                    const PAD = 6;
+                    const obstacles = Object.entries(editorLayout)
+                      .filter(([id]) => id !== from && id !== to)
+                      .map(([, r]) => ({ l: r.left - PAD, r: r.left + r.width + PAD, t: r.top - PAD, b: r.top + r.height + PAD }));
+                    const hSegHits = (y, x1, x2) => {
+                      const xMin = Math.min(x1, x2), xMax = Math.max(x1, x2);
+                      return obstacles.some(o => y >= o.t && y <= o.b && xMax >= o.l && xMin <= o.r);
+                    };
+                    const vSegHits = (x, y1, y2) => {
+                      const yMin = Math.min(y1, y2), yMax = Math.max(y1, y2);
+                      return obstacles.some(o => x >= o.l && x <= o.r && yMax >= o.t && yMin <= o.b);
+                    };
+
+                    const midX = (xA2 + xB2) / 2;
+                    const sameRow = Math.abs(yA - yB) < 2;
+                    const simpleClear =
+                      !hSegHits(yA, xA, midX) &&
+                      !vSegHits(midX, yA, yB) &&
+                      !hSegHits(yB, midX, xB);
+
                     let d;
-                    if (Math.abs(yA - yB) < 2) {
-                      d = `M ${xA} ${yA} L ${xA2} ${yA} L ${xB2} ${yB} L ${xB} ${yB}`;
+                    if (simpleClear) {
+                      if (sameRow) {
+                        d = `M ${xA} ${yA} L ${xA2} ${yA} L ${xB2} ${yB} L ${xB} ${yB}`;
+                      } else {
+                        d = `M ${xA} ${yA} L ${xA2} ${yA} L ${midX} ${yA} L ${midX} ${yB} L ${xB2} ${yB} L ${xB} ${yB}`;
+                      }
                     } else {
-                      const midX = (xA2 + xB2) / 2;
-                      d = `M ${xA} ${yA} L ${xA2} ${yA} L ${midX} ${yA} L ${midX} ${yB} L ${xB2} ${yB} L ${xB} ${yB}`;
+                      const xMin = Math.min(xA2, xB2);
+                      const xMax = Math.max(xA2, xB2);
+                      const candidates = [midX];
+                      obstacles.forEach(o => {
+                        if (o.l - PAD > xMin && o.l - PAD < xMax) candidates.push(o.l - PAD);
+                        if (o.r + PAD > xMin && o.r + PAD < xMax) candidates.push(o.r + PAD);
+                      });
+                      candidates.sort((c1, c2) => Math.abs(c1 - midX) - Math.abs(c2 - midX));
+                      let bestX = null;
+                      for (const cx of candidates) {
+                        if (!hSegHits(yA, xA, cx) && !vSegHits(cx, yA, yB) && !hSegHits(yB, cx, xB)) {
+                          bestX = cx; break;
+                        }
+                      }
+                      if (bestX != null) {
+                        d = `M ${xA} ${yA} L ${xA2} ${yA} L ${bestX} ${yA} L ${bestX} ${yB} L ${xB2} ${yB} L ${xB} ${yB}`;
+                      } else {
+                        const allTops = obstacles.length ? obstacles.map(o => o.t) : [Math.min(a.top, b.top)];
+                        const allBots = obstacles.length ? obstacles.map(o => o.b) : [Math.max(a.top + a.height, b.top + b.height)];
+                        const topClear = Math.min(a.top, b.top, ...allTops) - PAD * 3;
+                        const botClear = Math.max(a.top + a.height, b.top + b.height, ...allBots) + PAD * 3;
+                        const midY = (yA + yB) / 2;
+                        const useTop = Math.abs(topClear - midY) <= Math.abs(botClear - midY);
+                        const routeY = useTop ? topClear : botClear;
+                        d = `M ${xA} ${yA} L ${xA2} ${yA} L ${xA2} ${routeY} L ${xB2} ${routeY} L ${xB2} ${yB} L ${xB} ${yB}`;
+                      }
                     }
                     return <path key={`eh-${i}`} d={d} stroke="#6BAF6E" strokeWidth="2" fill="none" markerEnd={`url(#arrHE-${prep.id})`}/>;
                   })}
