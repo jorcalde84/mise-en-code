@@ -405,24 +405,30 @@ const THEMES = {
   light: {
     bg:"#FDFAF5",bgS:"#F5F2ED",bgC:"#FFF",bgH:"#FAF7F2",bgI:"#FDFAF5",
     bd:"#E0D9CF",bdS:"#EDE8E0",bdSt:"#D5CEBC",div:"#E8E2D8",
-    tx:"#2A2420",tx2:"#6A6058",txM:"#8A7E72",txD:"#B0A898",txOn:"#FDFAF5",
+    tx:"#2A2420",tx2:"#6A6058",txM:"#7A6E62",txD:"#B0A898",txOn:"#FDFAF5",
     pri:"#2A2420",priH:"#3D352E",acc:"#8B5CF6",sec:"#C49A6C",
     ok:"#6BAF6E",warn:"#E8B84B",err:"#D45B5B",info:"#4A9EAF",
     mod:"#9B7EB8",proc:"#8B5CF6",
     hdrBg:"rgba(253,250,245,0.95)",
+    glass:"rgba(253,250,245,0.78)",accent2:"#E89E72",
     sh:"0 2px 10px rgba(42,36,32,0.04)",shM:"0 6px 24px rgba(42,36,32,0.10)",
+    shL:"0 12px 40px rgba(42,36,32,0.14)",
     shO:"0 20px 60px rgba(42,36,32,0.25)",ov:"rgba(42,36,32,0.55)",
+    focus:"0 0 0 3px rgba(139,92,246,0.28)",
   },
   dark: {
     bg:"#1A1714",bgS:"#221F1B",bgC:"#2A2622",bgH:"#332E29",bgI:"#221F1B",
     bd:"#3D3830",bdS:"#332E29",bdSt:"#4A443C",div:"#332E29",
-    tx:"#F0EBE3",tx2:"#C2B8A8",txM:"#8A7E72",txD:"#5A5048",txOn:"#1A1714",
+    tx:"#F0EBE3",tx2:"#C2B8A8",txM:"#988C7C",txD:"#5A5048",txOn:"#1A1714",
     pri:"#F0EBE3",priH:"#E0D8CC",acc:"#A78BFA",sec:"#D4A87A",
     ok:"#7BC47E",warn:"#F0C65A",err:"#E06B6B",info:"#5AB8CA",
     mod:"#B99ADE",proc:"#A78BFA",
     hdrBg:"rgba(26,23,20,0.92)",
+    glass:"rgba(26,23,20,0.70)",accent2:"#E8A584",
     sh:"0 2px 10px rgba(0,0,0,0.20)",shM:"0 6px 24px rgba(0,0,0,0.30)",
+    shL:"0 12px 40px rgba(0,0,0,0.42)",
     shO:"0 20px 60px rgba(0,0,0,0.50)",ov:"rgba(0,0,0,0.55)",
+    focus:"0 0 0 3px rgba(167,139,250,0.32)",
   }
 };
 const LS_THEME="mise_en_code_theme";
@@ -432,8 +438,8 @@ const TH=()=>THEMES[_ct]||THEMES.light;
 /* ═══ Styles (theme-aware) ═══ */
 const S = {
   app:()=>({fontFamily:"'Cormorant Garamond','Georgia',serif",minHeight:"100vh",background:TH().bg,color:TH().tx,transition:"background 0.3s,color 0.3s"}),
-  hdr:()=>({display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 20px",borderBottom:`1px solid ${TH().div}`,background:TH().hdrBg,backdropFilter:"blur(10px)",position:"sticky",top:0,zIndex:100,transition:"background 0.3s"}),
-  nb:a=>({padding:"5px 12px",borderRadius:20,border:"none",background:a?TH().pri:"transparent",color:a?TH().txOn:TH().txM,fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:4}),
+  hdr:()=>({display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 22px",borderBottom:`1px solid ${TH().div}`,background:TH().glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:100,transition:"background 0.3s"}),
+  nb:a=>({padding:"7px 13px",borderRadius:999,border:"none",background:a?TH().pri:"transparent",color:a?TH().txOn:TH().tx2,fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5,transition:"background 0.18s, color 0.18s"}),
   card:()=>({background:TH().bgC,borderRadius:14,border:`1px solid ${TH().bdS}`,overflow:"hidden",cursor:"pointer",transition:"all 0.25s",boxShadow:TH().sh}),
   tag:c=>({display:"inline-flex",alignItems:"center",gap:3,padding:"2px 8px",borderRadius:10,background:c+"16",color:c,fontSize:11,fontFamily:"'DM Sans',sans-serif",fontWeight:600,whiteSpace:"nowrap",border:`1px solid ${c}28`}),
   btn:(v="primary")=>{const t=TH();return{padding:v==="sm"?"4px 10px":"7px 14px",borderRadius:v==="sm"?6:10,border:v==="outline"?`1.5px solid ${t.pri}`:"none",background:v==="primary"?t.pri:v==="danger"?t.err:"transparent",color:v==="primary"||v==="danger"?t.txOn:t.tx,fontFamily:"'DM Sans',sans-serif",fontSize:v==="sm"?11:12,fontWeight:600,cursor:"pointer"};},
@@ -1224,14 +1230,17 @@ function App() {
   return (<div style={S.app()}>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
     <input ref={fileRef} type="file" accept=".json" style={{ display:"none" }} onChange={importData}/>
-    <div style={{...S.hdr(),flexWrap:"wrap",gap:isMobile?6:0,padding:isMobile?"8px 12px":"10px 24px"}}>
-      <span style={{ fontFamily:"'Playfair Display',serif",fontSize:isMobile?16:20,fontWeight:700,cursor:"pointer" }} onClick={()=>sVWithHistory("browse")}><span style={{ color:"#C49A6C" }}>&#9670;</span> Mise en Code</span>
-      <div style={{ display:"flex",gap:isMobile?3:5,alignItems:"center",flexWrap:"wrap" }}>
-        {!isMobile && <div style={{ display:"flex",borderRadius:16,overflow:"hidden",border:"1px solid #E0D9CF",marginRight:6 }}>
-          {Object.keys(LF).map(l => <button key={l} onClick={()=>sL(l)} style={{ padding:"3px 8px",border:"none",cursor:"pointer",background:lang===l?"#2A2420":"transparent",color:lang===l?"#FDFAF5":"#8A7E72",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:2 }}><span style={{ fontSize:13 }}>{LF[l]}</span><span style={{ fontSize:9 }}>{l.toUpperCase()}</span></button>)}
+    <div style={{...S.hdr(),flexWrap:"wrap",gap:isMobile?6:0,padding:isMobile?"10px 14px":"12px 24px"}}>
+      <span style={{ fontFamily:"'Playfair Display',serif",fontSize:isMobile?17:21,fontWeight:700,cursor:"pointer",letterSpacing:-0.2,color:TH().tx,display:"inline-flex",alignItems:"center",gap:6 }} onClick={()=>sVWithHistory("browse")}>
+        <span style={{ color:TH().sec,fontSize:isMobile?14:16,lineHeight:1 }}>&#9670;</span>
+        <span>Mise en Code</span>
+      </span>
+      <div style={{ display:"flex",gap:isMobile?4:6,alignItems:"center",flexWrap:"wrap" }}>
+        {!isMobile && <div style={{ display:"flex",borderRadius:999,overflow:"hidden",border:`1px solid ${TH().bdS}`,marginRight:4,background:TH().bgC }}>
+          {Object.keys(LF).map(l => <button key={l} onClick={()=>sL(l)} style={{ padding:"5px 10px",border:"none",cursor:"pointer",background:lang===l?TH().pri:"transparent",color:lang===l?TH().txOn:TH().txM,fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3,transition:"background 0.18s, color 0.18s" }}><span style={{ fontSize:13 }}>{LF[l]}</span><span style={{ fontSize:9,letterSpacing:0.4 }}>{l.toUpperCase()}</span></button>)}
         </div>}
         <button style={S.nb(vw==="browse")} onClick={()=>sVWithHistory("browse")}><Ic.Bk/>{!isMobile && t.recipes}</button>
-        <button style={{ ...S.nb(vw==="weekplan"), ...(navDragHover ? { background: "#C49A6C25", border: "1px dashed #C49A6C", color: "#C49A6C", fontWeight: 700 } : {}) }}
+        <button style={{ ...S.nb(vw==="weekplan"), ...(navDragHover ? { background: `${TH().sec}22`, border: `1px dashed ${TH().sec}`, color: TH().sec, fontWeight: 700 } : {}) }}
           onClick={()=>sVWithHistory("weekplan")}
           onDragOver={e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect = "copy"; }catch{} setNavDragHover(true); }}
           onDragLeave={()=>setNavDragHover(false)}
@@ -1250,35 +1259,39 @@ function App() {
           title="Weekly Meal Plan (drop a recipe card here to add it)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           {!isMobile && <span>Week Plan</span>}
-          {weekPlan.slots.length > 0 && <span style={{ background:"#C49A6C",color:"#FFF",borderRadius:8,fontSize:9,padding:"1px 6px",fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginLeft:2 }}>{weekPlan.slots.length}</span>}
+          {weekPlan.slots.length > 0 && <span style={{ background:TH().sec,color:"#FFF",borderRadius:999,fontSize:9,padding:"1px 7px",fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginLeft:2 }}>{weekPlan.slots.length}</span>}
         </button>
-        {!isMobile && <button style={S.nb(false)} onClick={()=>{cN();}}><Ic.P/>{t.newRecipe}</button>}
-        {!isMobile && <button onClick={()=>setShowIP(true)} style={{...S.nb(false),fontSize:11,background:`linear-gradient(135deg,${TH().acc}15,${TH().sec}15)`,border:`1px solid ${TH().acc}30`,color:TH().acc,fontWeight:600}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="M15 2h7v7"/></svg> Import Pro
+        {/* Primary CTA — admin only, prominently filled */}
+        {!isMobile && isAdmin && <button onClick={()=>{cN();}} style={{...S.nb(true),padding:"7px 14px",background:TH().pri,color:TH().txOn,boxShadow:TH().sh}}>
+          <Ic.P/>{t.newRecipe}
         </button>}
-        {!isMobile && <><div style={{ width:1,height:16,background:"#E0D9CF" }}/>
-        <button style={{...S.nb(false),fontSize:11}} onClick={exportAll} title="Export all recipes as JSON">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Export
-        </button>
-        <button style={{...S.nb(false),fontSize:11}} onClick={()=>fileRef.current?.click()} title="Import recipes from JSON">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Import
-        </button>
-        <div style={{ width:1,height:16,background:"#E0D9CF" }}/>
-        <button style={{...S.nb(false),fontSize:11,position:"relative"}} onClick={()=>setShowSettings(true)} title="Cloud sync settings">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          {syncUrl ? (syncStatus === "saving" ? "\u2B6E" : syncStatus === "saved" ? "\u2714" : syncStatus === "error" ? "\u26A0" : "\u2601") : "Sync"}
-          {syncUrl && <span style={{ position:"absolute",top:2,right:2,width:6,height:6,borderRadius:"50%",background:syncStatus==="error"?"#D45B5B":syncStatus==="saving"?"#E8B84B":"#6BAF6E" }}/>}
-        </button></>}
+        {/* Import Pro — pulled into a single accent chip */}
+        {!isMobile && <button onClick={()=>setShowIP(true)} style={{...S.nb(false),padding:"7px 12px",background:`linear-gradient(135deg,${TH().acc}15,${TH().sec}15)`,border:`1px solid ${TH().acc}30`,color:TH().acc,fontWeight:600}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="M15 2h7v7"/></svg>
+          <span>Import Pro</span>
+        </button>}
+        {/* Tools menu — Export / Import / Sync collapsed behind a kebab */}
+        {!isMobile && <>
+          <div style={{ width:1,height:18,background:TH().div,margin:"0 2px" }}/>
+          <button style={{...S.nb(false),padding:"7px 10px",position:"relative"}} onClick={()=>setShowSettings(true)} title="Cloud sync · Export · Import">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+            {syncUrl && <span style={{ position:"absolute",top:4,right:4,width:7,height:7,borderRadius:"50%",background:syncStatus==="error"?TH().err:syncStatus==="saving"?TH().warn:TH().ok,boxShadow:`0 0 0 2px ${TH().bg}` }}/>}
+          </button>
+          <button style={{...S.nb(false),padding:"7px 10px"}} onClick={exportAll} title="Export all recipes as JSON">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <button style={{...S.nb(false),padding:"7px 10px"}} onClick={()=>fileRef.current?.click()} title="Import recipes from JSON">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </button>
+        </>}
         {/* Theme toggle */}
-        <button onClick={toggleTheme} style={{...S.nb(false),fontSize:11,padding:"5px 12px",borderRadius:20,border:`1px solid ${TH().bd}`,background:theme==="dark"?TH().bgH:"transparent",gap:5,transition:"all 0.25s"}} title={theme==="light"?"Dark mode":"Light mode"}>
-          {theme==="light" ? <><span style={{fontSize:13}}>🌙</span><span>Dark</span></> : <><span style={{fontSize:13}}>☀️</span><span>Light</span></>}
+        <button onClick={toggleTheme} style={{...S.nb(false),padding:"7px 12px",borderRadius:999,border:`1px solid ${TH().bdS}`,background:TH().bgC,gap:5,transition:"all 0.22s"}} title={theme==="light"?"Switch to dark mode":"Switch to light mode"}>
+          {theme==="light" ? <><span style={{fontSize:13,lineHeight:1}}>🌙</span>{!isMobile && <span>Dark</span>}</> : <><span style={{fontSize:13,lineHeight:1}}>☀️</span>{!isMobile && <span>Light</span>}</>}
         </button>
         {/* Role badge + login/logout */}
-        <div style={{ width:1,height:16,background:"#E0D9CF" }}/>
-        <button onClick={()=>{if(isAdmin){setRole("guest");try{localStorage.setItem(LS_ROLE,"guest");}catch{}}else{setShowLogin(true);setLoginPw("");setLoginError(false);}}} style={{...S.nb(false),fontSize:10,padding:"4px 10px",position:"relative",gap:4}}>
-          <span style={{ width:7,height:7,borderRadius:"50%",background:isAdmin?"#6BAF6E":"#E8B84B",display:"inline-block",flexShrink:0 }}/>
+        {!isMobile && <div style={{ width:1,height:18,background:TH().div,margin:"0 2px" }}/>}
+        <button onClick={()=>{if(isAdmin){setRole("guest");try{localStorage.setItem(LS_ROLE,"guest");}catch{}}else{setShowLogin(true);setLoginPw("");setLoginError(false);}}} style={{...S.nb(false),fontSize:11,padding:"6px 12px",borderRadius:999,border:`1px solid ${TH().bdS}`,background:TH().bgC,gap:6}} title={isAdmin?"Sign out":"Sign in"}>
+          <span style={{ width:7,height:7,borderRadius:"50%",background:isAdmin?TH().ok:TH().warn,display:"inline-block",flexShrink:0,boxShadow:`0 0 0 2px ${TH().bgC}` }}/>
           <span>{isAdmin ? "Admin" : "Guest"}</span>
         </button>
       </div>
@@ -1482,7 +1495,7 @@ function App() {
       <div style={{ fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,color:"#2A2420" }}><span style={{ color:"#C49A6C" }}>&#9670;</span> Mise en Code</div>
       <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#B0A898" }}>{syncUrl ? "Loading from cloud..." : "Loading..."}</div>
     </div>}
-    {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={r=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(r);}} oC={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}cN();}} oD={delR} wpAddSlot={wpAddSlot} weekPlan={weekPlan} t={t} isAdmin={isAdmin} isMobile={isMobile}/>}
+    {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={r=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(r);}} oC={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}cN();}} oD={delR} wpAddSlot={wpAddSlot} weekPlan={weekPlan} t={t} isAdmin={isAdmin} isMobile={isMobile} lib={lib}/>}
     {!loading && vw==="weekplan" && <WeekPlanPhaseAPlaceholder
       weekPlan={weekPlan} weekPlanSnapshots={weekPlanSnapshots} parametricCards={parametricCards} recs={recs}
       wpAddSlot={wpAddSlot} wpRemoveSlot={wpRemoveSlot} wpSetServings={wpSetServings}
@@ -2620,50 +2633,45 @@ function WeekPlanPhaseAPlaceholder({
 }
 
 /* ═══ BROWSE ═══ */
-function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isMobile }) {
-  const [confirmDel, setConfirmDel] = useState(null); /* {id, name} | null */
+function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isMobile, lib }) {
+  const [confirmDel, setConfirmDel] = useState(null);
   const [activeCat, setActiveCat] = useState("all");
-  /* Toast notification for add-to-plan feedback */
   const [toast, setToast] = useState(null);
-  /* ── Mobile long-press state ── */
   const longPressRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null);
+  const [hoveredCardId, setHoveredCardId] = useState(null);
+  const th = TH();
+
+  /* Pre-compute the flavour profile for every recipe — desktop hover-bars
+     read directly from this map. Memoised so we only walk the recipe data
+     when the list or library actually changes. */
+  const flavoursByRecipe = useMemo(() => {
+    const m = {};
+    (rs || []).forEach(r => {
+      try { m[r.id] = computeFlavourProfile(r, lib); } catch { m[r.id] = null; }
+    });
+    return m;
+  }, [rs, lib]);
+  const _fc = { sweetness:"#E89EC0", richness:"#C49A6C", spiciness:"#D45B5B", acidity:"#E8B84B", umami:"#6B9FC4" };
 
   /* Filter by active category. Recipes without a category default to "Mains". */
   const catRs = activeCat === "all" ? rs : rs.filter(r => (r.category || "Mains") === activeCat);
-  const tabStyle = (active) => ({
-    padding:"8px 16px",
-    border:"none",
-    background:"transparent",
-    cursor:"pointer",
-    fontFamily:"'DM Sans',sans-serif",
-    fontSize:12,
-    fontWeight:600,
-    color:active?"#2A2420":"#8A7E72",
-    borderBottom:active?"2px solid #C49A6C":"2px solid transparent",
-    marginBottom:-1,
-    transition:"color 0.15s, border-color 0.15s",
-    whiteSpace:"nowrap"
-  });
   const countFor = cat => cat === "all" ? rs.length : rs.filter(r => (r.category || "Mains") === cat).length;
 
-  /* Mobile long-press handlers */
+  /* Mobile long-press → polished bottom-sheet style menu */
   const onTouchStart = (r, e) => {
     if (!isMobile) return;
     longPressRef.current = setTimeout(() => {
-      const touch = e.touches?.[0];
-      setContextMenu({ recipe: r, x: touch?.clientX || 0, y: touch?.clientY || 0 });
+      setContextMenu({ recipe: r });
       longPressRef.current = null;
     }, 500);
   };
   const onTouchEnd = () => {
     if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
   };
-  const onTouchMove = () => {
-    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
-  };
+  const onTouchMove = onTouchEnd;
 
-  /* Close context menu on outside click */
+  /* Close context menu / toast on outside click */
   useEffect(() => {
     if (!contextMenu) return;
     const close = () => setContextMenu(null);
@@ -2672,128 +2680,453 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
     return () => { document.removeEventListener("click", close); document.removeEventListener("touchstart", close); };
   }, [contextMenu]);
 
-  /* ── Add to plan: directly to tray, no modal ── */
+  /* Add to plan: directly to tray, no modal */
   const addToPlan = (recipe) => {
-    wpAddSlot(recipe);  /* day undefined → tray */
+    wpAddSlot(recipe);
     setToast({ msg: `${recipe.name} added to Weekly Plan tray`, time: Date.now() });
-    setTimeout(() => setToast(t => (t && Date.now() - t.time >= 2400) ? null : t), 2500);
+    setTimeout(() => setToast(t2 => (t2 && Date.now() - t2.time >= 2400) ? null : t2), 2500);
   };
 
-  /* ── HTML5 drag-and-drop: drag a recipe card across views ── */
+  /* HTML5 drag-and-drop: drag a recipe card across views */
   const onCardDragStart = (e, recipe) => {
     try {
       e.dataTransfer.effectAllowed = "copy";
       e.dataTransfer.setData("application/x-recipe-id", recipe.id);
       e.dataTransfer.setData("text/plain", recipe.name);
-      /* Set a custom drag image (a small chip with the recipe name) */
       const el = document.createElement("div");
       el.textContent = recipe.name;
-      el.style.cssText = "position:absolute;top:-1000px;left:-1000px;padding:6px 12px;background:#FDFAF5;border:1.5px solid #C49A6C;border-radius:8px;font-family:'Playfair Display',serif;font-size:12px;font-weight:600;color:#2A2420;box-shadow:0 4px 12px rgba(0,0,0,0.2);max-width:200px;";
+      el.style.cssText = `position:absolute;top:-1000px;left:-1000px;padding:8px 14px;background:${TH().bgC};border:1.5px solid ${TH().sec};border-radius:10px;font-family:'Playfair Display',serif;font-size:13px;font-weight:600;color:${TH().tx};box-shadow:0 6px 22px rgba(0,0,0,0.18);max-width:220px;`;
       document.body.appendChild(el);
-      e.dataTransfer.setDragImage(el, 10, 10);
+      e.dataTransfer.setDragImage(el, 14, 14);
       setTimeout(() => document.body.removeChild(el), 0);
     } catch {}
   };
 
-  return (<div style={{ maxWidth:960,margin:"0 auto",padding:"28px 24px" }}>
-    <h1 style={{ fontFamily:"'Playfair Display',serif",fontSize:32,fontWeight:700,margin:0 }}>{t.yourRecipes}</h1>
-    <p style={{ fontFamily:"'DM Sans',sans-serif",color:"#8A7E72",fontSize:13,margin:"6px 0 20px" }}>{t.subtitle}</p>
-    <div style={{ position:"relative",marginBottom:16,maxWidth:360 }}>
-      <div style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#B0A898" }}><Ic.S/></div>
-      <input style={{ ...S.inp(),paddingLeft:32 }} placeholder={t.search} value={sr} onChange={e=>sSr(e.target.value)}/>
-    </div>
-    {/* Category tab bar */}
-    <div style={{ display:"flex",gap:4,borderBottom:"1px solid #EDE8E0",marginBottom:20,overflowX:"auto" }}>
-      <button onClick={()=>setActiveCat("all")} style={tabStyle(activeCat==="all")}>{t.allCats||"All"} <span style={{ marginLeft:4,fontSize:10,color:"#B0A898" }}>{countFor("all")}</span></button>
-      <button onClick={()=>setActiveCat("Entrees")} style={tabStyle(activeCat==="Entrees")}>{t.catEntrees||"Entrees"} <span style={{ marginLeft:4,fontSize:10,color:"#B0A898" }}>{countFor("Entrees")}</span></button>
-      <button onClick={()=>setActiveCat("Mains")} style={tabStyle(activeCat==="Mains")}>{t.catMains||"Mains"} <span style={{ marginLeft:4,fontSize:10,color:"#B0A898" }}>{countFor("Mains")}</span></button>
-      <button onClick={()=>setActiveCat("Desserts")} style={tabStyle(activeCat==="Desserts")}>{t.catDesserts||"Desserts"} <span style={{ marginLeft:4,fontSize:10,color:"#B0A898" }}>{countFor("Desserts")}</span></button>
-      <button onClick={()=>setActiveCat("Drinks & Cocktails")} style={tabStyle(activeCat==="Drinks & Cocktails")}>{t.catDrinks||"Drinks & Cocktails"} <span style={{ marginLeft:4,fontSize:10,color:"#B0A898" }}>{countFor("Drinks & Cocktails")}</span></button>
-      <button onClick={()=>setActiveCat("Sides & Salads")} style={tabStyle(activeCat==="Sides & Salads")}>{t.catSides||"Sides & Salads"} <span style={{ marginLeft:4,fontSize:10,color:"#B0A898" }}>{countFor("Sides & Salads")}</span></button>
-    </div>
-    <div style={{ display:"grid",gridTemplateColumns:isMobile?"repeat(auto-fill,minmax(150px,1fr))":"repeat(auto-fill,minmax(260px,1fr))",gap:isMobile?10:16 }}>
-      {!isMobile && <div style={{ ...S.card(),display:"flex",alignItems:"center",justifyContent:"center",minHeight:180,border:"2px dashed #DDD5C8",background:"transparent",boxShadow:"none" }} onClick={oC}>
-        <div style={{ textAlign:"center",color:"#B0A898" }}><div style={{ fontSize:28,marginBottom:6 }}>+</div><div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600 }}>{t.newRecipe}</div></div>
-      </div>}
-      {catRs.map(r => <div key={r.id} style={S.card()}
-        draggable={!isMobile}
-        onDragStart={e=>onCardDragStart(e, r)}
-        onClick={()=>oO(r.id)}
-        onMouseEnter={e=>{if(!isMobile){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 24px rgba(42,36,32,0.10)";}}}
-        onMouseLeave={e=>{if(!isMobile){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}}
-        onTouchStart={e=>onTouchStart(r, e)}
-        onTouchEnd={onTouchEnd}
-        onTouchMove={onTouchMove}
-        onContextMenu={e=>{if(isMobile){e.preventDefault();setContextMenu({recipe:r,x:e.clientX||0,y:e.clientY||0});}}}
-      >
-        <div style={{ height:5,background:`linear-gradient(90deg,${Object.values(CC).slice(0,5).join(",")})` }}/>
-        <div style={{ padding:"14px 16px 16px" }}>
-          <div style={{ display:"flex",justifyContent:"space-between",marginBottom:6,alignItems:"flex-start" }}>
-            <h3 style={{ fontFamily:"'Playfair Display',serif",fontSize:17,fontWeight:600,margin:0,flex:1 }}>{r.name||"Untitled"}</h3>
-            <div style={{ display:"flex",gap:2 }}>
-              {isAdmin && !isMobile && <button style={{ ...S.btn("sm"),background:"transparent",color:"#B0A898",padding:3 }} onClick={e=>{e.stopPropagation();addToPlan(r);}} title="Add to Weekly Plan tray">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M12 14v4m-2-2h4"/></svg>
-              </button>}
-              {isAdmin && !isMobile && <button style={{ ...S.btn("sm"),background:"transparent",color:"#B0A898",padding:3 }} onClick={e=>{e.stopPropagation();oE(r);}} title={t.edit}><Ic.Ed/></button>}
-              {isAdmin && !isMobile && <button style={{ ...S.btn("sm"),background:"transparent",color:"#B0A898",padding:3 }} onClick={e=>{e.stopPropagation();setConfirmDel({id:r.id,name:r.name||"Untitled"});}} title={t.delete||"Delete"} onMouseEnter={e=>{e.currentTarget.style.color="#D45B5B";}} onMouseLeave={e=>{e.currentTarget.style.color="#B0A898";}}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-              </button>}
-            </div>
-          </div>
-          <p style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#8A7E72",margin:"0 0 10px",lineHeight:1.4 }}>{r.description||t.noDesc}</p>
-          <div style={{ display:"flex",gap:5,flexWrap:"wrap",marginBottom:10 }}>{r.tags?.map(tg=><span key={tg} style={S.tag("#8A7E72")}>{tg}</span>)}</div>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",gap:6 }}>
-            <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#B0A898" }}>{r.servings} {t.servingsUnit}</span>
-            <div style={{ display:"flex",gap:4 }}>
-              {(() => {
-                const cat = r.category || "Mains";
-                const catLabel = cat === "Entrees" ? t.catEntrees : cat === "Mains" ? t.catMains : cat === "Desserts" ? t.catDesserts : cat === "Drinks & Cocktails" ? t.catDrinks : cat === "Sides & Salads" ? t.catSides : cat;
-                const catColor = cat === "Entrees" ? "#7EAA7E" : cat === "Mains" ? "#C49A6C" : cat === "Desserts" ? "#E89EC0" : cat === "Drinks & Cocktails" ? "#6B9FC4" : cat === "Sides & Salads" ? "#8AAE6F" : "#6B9FC4";
-                return <span style={{ ...S.tag(catColor),fontSize:9,textTransform:"uppercase" }}>{catLabel}</span>;
-              })()}
-              <span style={{ ...S.tag(r.status==="published"?"#6BAF6E":"#E8B84B"),fontSize:9,textTransform:"uppercase" }}>{t[r.status]||r.status}</span>
-            </div>
-          </div>
+  /* Top-level stats — small, italic, editorial */
+  const totalCount = rs.length;
+  const publishedCount = rs.filter(r => r.status === "published").length;
+  const draftCount = totalCount - publishedCount;
+
+  /* Category palette — used for the dot prefix and the optional card stripe */
+  const catColor = (cat) => cat === "Entrees" ? "#7EAA7E"
+    : cat === "Mains" ? "#C49A6C"
+    : cat === "Desserts" ? "#E89EC0"
+    : cat === "Drinks & Cocktails" ? "#6B9FC4"
+    : cat === "Sides & Salads" ? "#8AAE6F"
+    : "#6B9FC4";
+
+  const catLabel = (cat) => cat === "Entrees" ? (t.catEntrees||"Entrees")
+    : cat === "Mains" ? (t.catMains||"Mains")
+    : cat === "Desserts" ? (t.catDesserts||"Desserts")
+    : cat === "Drinks & Cocktails" ? (t.catDrinks||"Drinks & Cocktails")
+    : cat === "Sides & Salads" ? (t.catSides||"Sides & Salads")
+    : cat;
+
+  const cats = ["all", "Entrees", "Mains", "Desserts", "Drinks & Cocktails", "Sides & Salads"];
+
+  /* Pill style for category filter — dot prefix + label, active = filled */
+  const pillStyle = (active, cat) => ({
+    display: "inline-flex", alignItems: "center", gap: 7,
+    padding: isMobile ? "8px 14px" : "8px 14px",
+    borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
+    background: active ? th.pri : th.bgC,
+    color: active ? th.txOn : th.tx2,
+    border: `1px solid ${active ? th.pri : th.bdS}`,
+    fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+    transition: "background 0.18s, color 0.18s, border-color 0.18s, transform 0.12s",
+  });
+
+  return (<div style={{ maxWidth: 1080, margin: "0 auto", padding: isMobile ? "20px 16px 32px" : "32px 28px 40px", color: th.tx }}>
+
+    {/* ── Hero ── */}
+    <div style={{ marginBottom: isMobile ? 18 : 26 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 32 : 42, fontWeight: 700, margin: 0, lineHeight: 1.05, letterSpacing: -0.6, color: th.tx }}>
+            {t.yourRecipes}
+          </h1>
+          <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: isMobile ? 15 : 17, fontStyle: "italic", color: th.txM, margin: "6px 0 0", lineHeight: 1.4 }}>
+            {t.subtitle}
+          </p>
+          {totalCount > 0 && <p style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, color: th.txD, margin: "10px 0 0", letterSpacing: 0.2 }}>
+            {totalCount} {totalCount === 1 ? "recipe" : "recipes"} · {publishedCount} published{draftCount > 0 ? ` · ${draftCount} ${draftCount===1?"draft":"drafts"}` : ""}
+          </p>}
         </div>
-      </div>)}
+        {isAdmin && !isMobile && <button onClick={oC} style={{
+          padding: "12px 22px", borderRadius: 999, background: th.pri, color: th.txOn, border: "none",
+          fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer",
+          display: "inline-flex", alignItems: "center", gap: 8,
+          boxShadow: "0 8px 20px rgba(42,36,32,0.18)", transition: "transform 0.12s, box-shadow 0.2s",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          {t.newRecipe}
+        </button>}
+      </div>
     </div>
 
-    {/* Mobile context menu (from long-press) */}
-    {contextMenu && isMobile && <div style={{ position:"fixed", inset:0, zIndex:1200 }} onClick={()=>setContextMenu(null)} onTouchStart={()=>setContextMenu(null)}>
-      <div onClick={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()} style={{
-        position:"fixed", left: Math.min(contextMenu.x, window.innerWidth - 200), top: Math.min(contextMenu.y, window.innerHeight - 130),
-        background:"#FDFAF5", borderRadius:12, boxShadow:"0 8px 32px rgba(0,0,0,0.25)", padding:"6px 0", minWidth:180, fontFamily:"'DM Sans',sans-serif", fontSize:13, zIndex:1300
+    {/* ── Search ── */}
+    <div style={{ position: "relative", marginBottom: 14, maxWidth: 520 }}>
+      <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: th.txD }}>
+        <Ic.S/>
+      </div>
+      <input
+        value={sr}
+        onChange={e => sSr(e.target.value)}
+        placeholder={t.search}
+        style={{
+          width: "100%", padding: "12px 38px 12px 38px", borderRadius: 999,
+          border: `1px solid ${th.bdS}`, background: th.bgC, color: th.tx,
+          fontFamily: "'DM Sans',sans-serif", fontSize: 13, outline: "none",
+          boxSizing: "border-box",
+          boxShadow: "0 1px 4px rgba(42,36,32,0.04)",
+          transition: "border-color 0.18s, box-shadow 0.18s",
+        }}
+        onFocus={e => { e.target.style.borderColor = th.acc; e.target.style.boxShadow = th.focus; }}
+        onBlur={e => { e.target.style.borderColor = th.bdS; e.target.style.boxShadow = "0 1px 4px rgba(42,36,32,0.04)"; }}
+      />
+      {sr && <button onClick={() => sSr("")} aria-label="Clear search" style={{
+        position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+        width: 28, height: 28, borderRadius: "50%", border: "none", background: th.bgH, color: th.txM,
+        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <div style={{ padding:"8px 14px", fontFamily:"'Playfair Display',serif", fontSize:13, fontWeight:600, borderBottom:"1px solid #EDE8E0", color:"#2A2420" }}>{contextMenu.recipe.name}</div>
-        <button onClick={()=>{oO(contextMenu.recipe.id);setContextMenu(null);}} style={{ display:"block", width:"100%", border:"none", background:"transparent", padding:"10px 14px", textAlign:"left", cursor:"pointer", fontSize:13, color:"#2A2420" }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>}
+    </div>
+
+    {/* ── Category pills ── */}
+    <div style={{ display: "flex", gap: 8, marginBottom: 22, overflowX: "auto", paddingBottom: 4, marginRight: -16, paddingRight: 16, WebkitOverflowScrolling: "touch" }}>
+      {cats.map(c => {
+        const active = activeCat === c;
+        const dot = c === "all" ? th.tx2 : catColor(c);
+        return <button key={c} onClick={() => setActiveCat(c)} style={pillStyle(active, c)}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0, opacity: active ? 1 : 0.85 }}/>
+          <span>{c === "all" ? (t.allCats || "All") : catLabel(c)}</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, opacity: 0.7, marginLeft: 2 }}>{countFor(c)}</span>
+        </button>;
+      })}
+    </div>
+
+    {/* ── Empty state when filter yields 0 ── */}
+    {catRs.length === 0 ? (
+      <div style={{ textAlign: "center", padding: "60px 24px", background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 18 }}>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 600, color: th.tx, marginBottom: 6 }}>
+          {sr ? "No recipes match your search" : (rs.length === 0 ? "No recipes yet" : "Nothing in this category")}
+        </div>
+        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 15, fontStyle: "italic", color: th.txM, marginBottom: sr || rs.length === 0 ? 16 : 0 }}>
+          {sr ? "Try a different search term, or clear the filter." : (rs.length === 0 ? "Compose your first recipe to get started." : "Try a different category.")}
+        </div>
+        {sr && <button onClick={() => sSr("")} style={{
+          padding: "10px 18px", borderRadius: 999, border: `1px solid ${th.bdSt}`, background: th.bgH, color: th.tx,
+          fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+        }}>Clear search</button>}
+        {!sr && rs.length === 0 && isAdmin && !isMobile && <button onClick={oC} style={{
+          padding: "12px 22px", borderRadius: 999, background: th.pri, color: th.txOn, border: "none",
+          fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer",
+          display: "inline-flex", alignItems: "center", gap: 8,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          {t.newRecipe}
+        </button>}
+      </div>
+    ) : (
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "repeat(auto-fill, minmax(160px, 1fr))" : "repeat(auto-fill, minmax(280px, 1fr))",
+        gap: isMobile ? 12 : 18,
+      }}>
+        {/* "+ New" tile — admin desktop only */}
+        {isAdmin && !isMobile && <button onClick={oC} style={{
+          all: "unset", boxSizing: "border-box",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          minHeight: 200, borderRadius: 14, border: `1.5px dashed ${th.bd}`,
+          background: `linear-gradient(135deg, ${th.bgC} 0%, ${th.bgH} 100%)`,
+          color: th.txM, cursor: "pointer", transition: "border-color 0.2s, background 0.2s, color 0.2s, transform 0.12s",
+        }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = th.acc; e.currentTarget.style.color = th.acc; e.currentTarget.style.transform = "translateY(-2px)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = th.bd; e.currentTarget.style.color = th.txM; e.currentTarget.style.transform = ""; }}
+        >
+          <div style={{ width: 44, height: 44, borderRadius: "50%", border: `1.5px dashed currentColor`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10, opacity: 0.7 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: 0.5 }}>{t.newRecipe}</div>
+        </button>}
+
+        {/* Recipe cards */}
+        {catRs.map(r => {
+          const cat = r.category || "Mains";
+          const cc = catColor(cat);
+          const isPub = r.status === "published";
+          const _hovered = hoveredCardId === r.id;
+          const _fp = flavoursByRecipe[r.id];
+          return (<div key={r.id}
+            draggable={!isMobile}
+            onDragStart={e => onCardDragStart(e, r)}
+            onClick={() => oO(r.id)}
+            onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = th.shL; e.currentTarget.style.borderColor = th.bdSt; setHoveredCardId(r.id); } }}
+            onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = th.sh; e.currentTarget.style.borderColor = th.bdS; setHoveredCardId(prev => prev === r.id ? null : prev); } }}
+            onTouchStart={e => onTouchStart(r, e)}
+            onTouchEnd={onTouchEnd}
+            onTouchMove={onTouchMove}
+            onContextMenu={e => { if (isMobile) { e.preventDefault(); setContextMenu({ recipe: r }); } }}
+            style={{
+              background: th.bgC, borderRadius: 14, border: `1px solid ${th.bdS}`,
+              cursor: "pointer", overflow: "visible",
+              boxShadow: th.sh,
+              transition: "transform 0.18s, box-shadow 0.18s, border-color 0.18s",
+              display: "flex", flexDirection: "column",
+              position: "relative",
+              zIndex: _hovered ? 10 : 1,
+            }}
+          >
+            {/* Top accent stripe — category color (rounded to match card) */}
+            <div style={{ height: 3, background: cc, borderRadius: "14px 14px 0 0" }}/>
+
+            <div style={{ padding: isMobile ? "13px 14px 14px" : "16px 18px 18px", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* Eyebrow row: category chip + status dot / hover-only flavour bars */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span style={{
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, letterSpacing: 1,
+                  textTransform: "uppercase", color: cc,
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: cc }}/>
+                  {catLabel(cat)}
+                </span>
+                {/* Right cluster — status dot crossfades with hover-only flavour mini-bars (desktop only) */}
+                <div style={{ position: "relative", height: 24, minWidth: 36, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+                  <span title={isPub ? "Published" : "Draft"} style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: isPub ? th.ok : th.warn,
+                    boxShadow: `0 0 0 2px ${th.bgC}, 0 0 0 3px ${(isPub ? th.ok : th.warn)}30`,
+                    flexShrink: 0,
+                    opacity: !isMobile && _hovered && _fp ? 0 : 1,
+                    transition: "opacity 0.18s",
+                  }}/>
+                  {!isMobile && _fp && <div title="Flavour profile (auto)" style={{
+                    position: "absolute", top: 0, right: 0,
+                    display: "flex", alignItems: "flex-end", gap: 3, height: 24,
+                    opacity: _hovered ? 1 : 0,
+                    transform: _hovered ? "translateY(0)" : "translateY(2px)",
+                    transition: "opacity 0.2s, transform 0.2s",
+                    pointerEvents: "none",
+                  }}>
+                    {["sweetness","richness","spiciness","acidity","umami"].map(k => {
+                      const v = Math.max(0, Math.min(100, _fp[k] || 0));
+                      return (<div key={k} style={{
+                        width: 4, height: 22, background: th.bgH, borderRadius: 2,
+                        position: "relative", overflow: "hidden",
+                        border: `1px solid ${th.bdS}`,
+                      }}>
+                        <div style={{
+                          position: "absolute", bottom: 0, left: 0, right: 0,
+                          height: `${v}%`, background: _fc[k], borderRadius: 1,
+                        }}/>
+                      </div>);
+                    })}
+                  </div>}
+                </div>
+              </div>
+
+              {/* Title */}
+              <h3 style={{
+                fontFamily: "'Playfair Display',serif",
+                fontSize: isMobile ? 17 : 19, fontWeight: 600, margin: 0, lineHeight: 1.25,
+                color: th.tx,
+                overflow: "hidden", textOverflow: "ellipsis",
+                display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              }}>{r.name || "Untitled"}</h3>
+
+              {/* Description — italic */}
+              {r.description && <p style={{
+                fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic",
+                color: th.txM, margin: 0, lineHeight: 1.4,
+                overflow: "hidden", textOverflow: "ellipsis",
+                display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              }}>{r.description}</p>}
+
+              {/* Tags */}
+              {r.tags && r.tags.length > 0 && <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 2 }}>
+                {r.tags.slice(0, 3).map(tg => (
+                  <span key={tg} style={{
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 500,
+                    color: th.tx2, background: th.bgH, border: `1px solid ${th.bdS}`,
+                    padding: "2px 8px", borderRadius: 999,
+                  }}>{tg}</span>
+                ))}
+                {r.tags.length > 3 && <span style={{
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 500, color: th.txD,
+                  padding: "2px 4px",
+                }}>+{r.tags.length - 3}</span>}
+              </div>}
+
+              {/* Footer: servings + admin actions */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto", paddingTop: 6, gap: 8 }}>
+                <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, color: th.txD, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  {r.servings} {t.servingsUnit}
+                </span>
+                {isAdmin && !isMobile && <div style={{ display: "flex", gap: 2 }}>
+                  <button onClick={e => { e.stopPropagation(); addToPlan(r); }} title="Add to Weekly Plan tray"
+                    style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "transparent", color: th.txD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = th.bgH; e.currentTarget.style.color = th.sec; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = th.txD; }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M12 14v4m-2-2h4"/></svg>
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); oE(r); }} title={t.edit}
+                    style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "transparent", color: th.txD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = th.bgH; e.currentTarget.style.color = th.acc; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = th.txD; }}
+                  >
+                    <Ic.Ed/>
+                  </button>
+                  <button onClick={e => { e.stopPropagation(); setConfirmDel({ id: r.id, name: r.name || "Untitled" }); }} title={t.delete||"Delete"}
+                    style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "transparent", color: th.txD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `${th.err}10`; e.currentTarget.style.color = th.err; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = th.txD; }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  </button>
+                </div>}
+              </div>
+            </div>
+
+            {/* Hover tooltip — appears below the card with a brief delay, fades smoothly.
+                Desktop only, only when there's a description. Pointer-events disabled so
+                it never blocks the card click or admin action buttons. */}
+            {!isMobile && r.description && <div style={{
+              position: "absolute",
+              top: "calc(100% + 10px)",
+              left: 0, right: 0,
+              background: th.bgC,
+              border: `1px solid ${th.bdS}`,
+              borderRadius: 12,
+              padding: "12px 16px",
+              boxShadow: th.shL,
+              opacity: _hovered ? 1 : 0,
+              transform: _hovered ? "translateY(0)" : "translateY(-6px)",
+              transition: _hovered
+                ? "opacity 0.22s ease 0.15s, transform 0.22s ease 0.15s"
+                : "opacity 0.12s ease, transform 0.12s ease",
+              pointerEvents: "none",
+              zIndex: 20,
+            }}>
+              {/* Small arrow pointing up to the card */}
+              <div style={{
+                position: "absolute", top: -6, left: 22,
+                width: 11, height: 11,
+                background: th.bgC,
+                borderTop: `1px solid ${th.bdS}`,
+                borderLeft: `1px solid ${th.bdS}`,
+                transform: "rotate(45deg)",
+              }}/>
+              {/* Eyebrow above the description */}
+              <div style={{
+                fontFamily: "'DM Sans',sans-serif",
+                fontSize: 9, fontWeight: 700, letterSpacing: 1.2,
+                textTransform: "uppercase", color: cc,
+                display: "inline-flex", alignItems: "center", gap: 5,
+                marginBottom: 6,
+              }}>
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: cc }}/>
+                Notes
+              </div>
+              <p style={{
+                fontFamily: "'Cormorant Garamond',serif",
+                fontSize: 14, fontStyle: "italic",
+                color: th.tx, margin: 0, lineHeight: 1.55,
+              }}>{r.description}</p>
+            </div>}
+          </div>);
+        })}
+      </div>
+    )}
+
+    {/* Mobile context bottom-sheet (long-press) */}
+    {contextMenu && isMobile && <div onClick={() => setContextMenu(null)} onTouchStart={() => setContextMenu(null)} style={{
+      position: "fixed", inset: 0, background: th.ov, zIndex: 1500,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+      backdropFilter: "blur(6px)",
+    }}>
+      <div onClick={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} style={{
+        background: th.bgC, width: "100%", maxWidth: 520,
+        borderTopLeftRadius: 18, borderTopRightRadius: 18,
+        padding: "10px 16px 24px",
+        boxShadow: th.shO,
+      }}>
+        <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 700, color: th.tx, marginBottom: 12 }}>{contextMenu.recipe.name}</div>
+        <button onClick={() => { oO(contextMenu.recipe.id); setContextMenu(null); }} style={{
+          display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 12px",
+          border: "none", background: "transparent", cursor: "pointer", color: th.tx,
+          fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, textAlign: "left",
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           View Recipe
         </button>
-        <button onClick={()=>{addToPlan(contextMenu.recipe);setContextMenu(null);}} style={{ display:"block", width:"100%", border:"none", background:"transparent", padding:"10px 14px", textAlign:"left", cursor:"pointer", fontSize:13, color:"#C49A6C" }}>
-          <span style={{ marginRight:6 }}>&#128197;</span>Add to Weekly Plan
+        <button onClick={() => { addToPlan(contextMenu.recipe); setContextMenu(null); }} style={{
+          display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 12px",
+          border: "none", background: "transparent", cursor: "pointer", color: th.sec,
+          fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, textAlign: "left",
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M12 14v4m-2-2h4"/></svg>
+          Add to Weekly Plan
         </button>
+        <button onClick={() => setContextMenu(null)} style={{
+          width: "100%", padding: "12px", marginTop: 6, borderRadius: 12,
+          border: "none", background: "transparent", color: th.txM,
+          fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
+        }}>Cancel</button>
       </div>
     </div>}
 
     {/* Toast notification */}
-    {toast && <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", background:"#2A2420", color:"#FDFAF5", padding:"10px 18px", borderRadius:24, fontSize:12, fontFamily:"'DM Sans',sans-serif", boxShadow:"0 6px 24px rgba(0,0,0,0.25)", zIndex:1500, display:"flex", alignItems:"center", gap:8 }}>
-      <span>&#10003;</span>{toast.msg}
+    {toast && <div style={{
+      position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+      background: th.pri, color: th.txOn, padding: "12px 20px", borderRadius: 999,
+      fontSize: 12, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+      boxShadow: "0 12px 36px rgba(0,0,0,0.30)", zIndex: 1500,
+      display: "flex", alignItems: "center", gap: 8,
+    }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      {toast.msg}
     </div>}
 
     {/* Delete confirmation modal */}
-    {confirmDel && <div style={{ position:"fixed",inset:0,background:"rgba(42,36,32,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,backdropFilter:"blur(2px)" }} onClick={()=>setConfirmDel(null)}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:"#FDFAF5",padding:"24px 28px",borderRadius:14,maxWidth:420,width:"90%",boxShadow:"0 20px 60px rgba(0,0,0,0.25)",fontFamily:"'DM Sans',sans-serif" }}>
-        <div style={{ display:"flex",gap:12,alignItems:"flex-start",marginBottom:16 }}>
-          <div style={{ width:40,height:40,borderRadius:"50%",background:"#D45B5B15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D45B5B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    {confirmDel && <div onClick={() => setConfirmDel(null)} style={{
+      position: "fixed", inset: 0, background: th.ov, zIndex: 1300,
+      display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center",
+      backdropFilter: "blur(6px)", padding: isMobile ? 0 : 16,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: th.bgC, borderRadius: isMobile ? "18px 18px 0 0" : 16,
+        maxWidth: 440, width: "100%",
+        padding: isMobile ? "10px 22px 24px" : "26px 28px",
+        boxShadow: th.shO, color: th.tx,
+      }}>
+        {isMobile && <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>}
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${th.err}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={th.err} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </div>
-          <div>
-            <h3 style={{ fontFamily:"'Playfair Display',serif",fontSize:18,margin:"0 0 6px",fontWeight:600 }}>{t.confirmDelete||"Delete recipe?"}</h3>
-            <p style={{ fontSize:13,color:"#6A6058",margin:0,lineHeight:1.5 }}>{(t.confirmDeleteBody||"This will permanently delete").replace("{name}","")} <b>"{confirmDel.name}"</b>. {t.cannotUndo||"This cannot be undone."}</p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 19, fontWeight: 700, margin: "0 0 6px", color: th.tx }}>{t.confirmDelete||"Delete recipe?"}</h3>
+            <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, color: th.tx2, margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
+              {(t.confirmDeleteBody||"This will permanently delete").replace("{name}","")} <b style={{ fontFamily: "'Playfair Display',serif", fontStyle: "normal", color: th.tx }}>"{confirmDel.name}"</b>. {t.cannotUndo||"This cannot be undone."}
+            </p>
           </div>
         </div>
-        <div style={{ display:"flex",gap:8,justifyContent:"flex-end" }}>
-          <button onClick={()=>setConfirmDel(null)} style={{ ...S.btn("outline"),fontSize:12,padding:"7px 16px" }}>{t.cancel}</button>
-          <button onClick={()=>{oD(confirmDel.id);setConfirmDel(null);}} style={{ ...S.btn("primary"),background:"#D45B5B",fontSize:12,padding:"7px 16px" }}>{t.delete||"Delete"}</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setConfirmDel(null)} style={{
+            flex: 1, padding: "12px 14px", borderRadius: 12,
+            border: `1px solid ${th.bdSt}`, background: th.bgH, color: th.tx,
+            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
+          }}>{t.cancel}</button>
+          <button onClick={() => { oD(confirmDel.id); setConfirmDel(null); }} style={{
+            flex: 1, padding: "12px 14px", borderRadius: 12, border: "none",
+            background: th.err, color: "#FFF",
+            fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer",
+          }}>{t.delete||"Delete"}</button>
         </div>
       </div>
     </div>}
@@ -4250,29 +4583,48 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
     if (viewMode === "card" && card) {
       const th = TH();
       const deg = String.fromCharCode(176);
+      const _mCC = rc.category === "Entrees" ? "#7EAA7E" : rc.category === "Mains" ? "#C49A6C" : rc.category === "Desserts" ? "#E89EC0" : rc.category === "Drinks & Cocktails" ? "#6B9FC4" : rc.category === "Sides & Salads" ? "#8AAE6F" : "#C49A6C";
+      const _mCL = rc.category === "Entrees" ? (t.catEntrees||"Entrees") : rc.category === "Mains" ? (t.catMains||"Mains") : rc.category === "Desserts" ? (t.catDesserts||"Desserts") : rc.category === "Drinks & Cocktails" ? (t.catDrinks||"Drinks & Cocktails") : rc.category === "Sides & Salads" ? (t.catSides||"Sides & Salads") : (rc.category||"Mains");
       return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:th.bg,fontFamily:"'DM Sans',sans-serif",color:th.tx}}>
-        {/* Header with back + toggle */}
-        <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <button onClick={oB} style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:th.txM,fontSize:12}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>Recipes
+        {/* Sticky glass header — back · segmented Card/Algorithm toggle */}
+        <div style={{padding:"10px 14px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+          <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <div style={{display:"flex",gap:0,borderRadius:6,overflow:"hidden",border:`1px solid ${th.bdS}`}}>
-            <button onClick={()=>setViewMode("card")} style={{padding:"4px 10px",fontSize:10,fontWeight:600,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:th.acc,color:"#FFF"}}>Card</button>
-            <button onClick={()=>setViewMode("algorithm")} style={{padding:"4px 10px",fontSize:10,fontWeight:600,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:th.bgC,color:th.tx2}}>Algorithm</button>
+          <div style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${th.bdS}`,background:th.bgC}}>
+            <button onClick={()=>setViewMode("card")} style={{padding:"7px 16px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:th.pri,color:th.txOn,borderRadius:999,letterSpacing:0.3}}>Card</button>
+            <button onClick={()=>setViewMode("algorithm")} style={{padding:"7px 16px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Algorithm</button>
           </div>
+          <div style={{width:36}}/>
         </div>
 
         {/* Card content */}
-        <div style={{flex:1,overflowY:"auto",padding:"14px 16px",WebkitOverflowScrolling:"touch"}}>
-          {/* Title + servings */}
-          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,margin:"0 0 3px"}}>{card.title}</h1>
-          <p style={{fontSize:11,color:TH().txD,margin:"0 0 12px"}}>{rc.tags?.join(", ")}</p>
+        <div style={{flex:1,overflowY:"auto",padding:"18px 18px 36px",WebkitOverflowScrolling:"touch"}}>
+          {/* Hero: eyebrow + title + italic tagline */}
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.6,color:_mCC,marginBottom:8}}>
+            <span style={{width:5,height:5,borderRadius:"50%",background:_mCC}}/>
+            {_mCL}
+          </div>
+          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:26,fontWeight:700,margin:"0 0 6px",lineHeight:1.1,letterSpacing:-0.4,color:th.tx}}>{card.title}</h1>
+          {rc.description && <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,fontStyle:"italic",color:th.tx2,margin:"0 0 10px",lineHeight:1.45}}>{rc.description}</p>}
+          {rc.tags && rc.tags.length > 0 && <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:16}}>
+            {rc.tags.slice(0,5).map(tg => <span key={tg} style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:500,color:th.tx2,background:th.bgH,border:`1px solid ${th.bdS}`,padding:"2px 9px",borderRadius:999}}>{tg}</span>)}
+          </div>}
 
-          {/* Yield stats */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:8,marginBottom:14,padding:"10px 0",borderTop:`1px solid ${th.div}`,borderBottom:`1px solid ${th.div}`}}>
-            <div style={{textAlign:"center"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:700}}>{card.yield?.value||"?"} g</div><div style={{fontSize:8,color:th.txM,textTransform:"uppercase",letterSpacing:0.8}}>Total yield</div></div>
-            <div style={{textAlign:"center"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:700}}>{card.yield?.servings||"?"}</div><div style={{fontSize:8,color:th.txM,textTransform:"uppercase",letterSpacing:0.8}}>Servings</div></div>
-            <div style={{textAlign:"center"}}><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:16,fontWeight:700}}>{card.ingredients?.length||0}</div><div style={{fontSize:8,color:th.txM,textTransform:"uppercase",letterSpacing:0.8}}>Ingredients</div></div>
+          {/* Yield stat strip — 3 cards */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:8,marginBottom:18}}>
+            <div style={{background:th.bgC,border:`1px solid ${th.bdS}`,borderRadius:12,padding:"12px 8px",textAlign:"center",boxShadow:th.sh}}>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:th.tx,lineHeight:1}}>{card.yield?.value||"?"}<span style={{fontSize:11,color:th.txM,fontWeight:500,marginLeft:2}}>g</span></div>
+              <div style={{fontSize:9,color:th.txM,textTransform:"uppercase",letterSpacing:1,marginTop:5,fontWeight:600}}>Yield</div>
+            </div>
+            <div style={{background:th.bgC,border:`1px solid ${th.bdS}`,borderRadius:12,padding:"12px 8px",textAlign:"center",boxShadow:th.sh}}>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:th.tx,lineHeight:1}}>{card.yield?.servings||"?"}</div>
+              <div style={{fontSize:9,color:th.txM,textTransform:"uppercase",letterSpacing:1,marginTop:5,fontWeight:600}}>Servings</div>
+            </div>
+            <div style={{background:th.bgC,border:`1px solid ${th.bdS}`,borderRadius:12,padding:"12px 8px",textAlign:"center",boxShadow:th.sh}}>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:th.tx,lineHeight:1}}>{card.ingredients?.length||0}</div>
+              <div style={{fontSize:9,color:th.txM,textTransform:"uppercase",letterSpacing:1,marginTop:5,fontWeight:600}}>Items</div>
+            </div>
           </div>
 
           {/* Scientific rationale */}
@@ -4386,25 +4738,38 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
         </div></div>);
     }
 
+    const _aCC = rc.category === "Entrees" ? "#7EAA7E" : rc.category === "Mains" ? "#C49A6C" : rc.category === "Desserts" ? "#E89EC0" : rc.category === "Drinks & Cocktails" ? "#6B9FC4" : rc.category === "Sides & Salads" ? "#8AAE6F" : "#C49A6C";
+    const _aCL = rc.category === "Entrees" ? (t.catEntrees||"Entrees") : rc.category === "Mains" ? (t.catMains||"Mains") : rc.category === "Desserts" ? (t.catDesserts||"Desserts") : rc.category === "Drinks & Cocktails" ? (t.catDrinks||"Drinks & Cocktails") : rc.category === "Sides & Salads" ? (t.catSides||"Sides & Salads") : (rc.category||"Mains");
     return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:TH().bg,fontFamily:"'DM Sans',sans-serif",color:TH().tx}}>
-      <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <button onClick={oB} style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:TH().txM,fontSize:12}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>Recipes
+      {/* Sticky glass header — back · segmented Card/Algorithm toggle */}
+      <div style={{padding:"10px 14px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:TH().glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+        <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${TH().bdS}`,background:TH().bgC,color:TH().tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        {card && <div style={{display:"flex",gap:0,borderRadius:6,overflow:"hidden",border:`1px solid ${TH().bdS}`}}>
-          <button onClick={()=>setViewMode("card")} style={{padding:"4px 10px",fontSize:10,fontWeight:600,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:TH().bgC,color:TH().tx2}}>Card</button>
-          <button onClick={()=>setViewMode("algorithm")} style={{padding:"4px 10px",fontSize:10,fontWeight:600,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:TH().acc,color:"#FFF"}}>Algorithm</button>
-        </div>}
-        <div style={{fontSize:9,color:TH().txD}}>view only</div>
+        {card ? <div style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${TH().bdS}`,background:TH().bgC}}>
+          <button onClick={()=>setViewMode("card")} style={{padding:"7px 16px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:TH().txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
+          <button onClick={()=>setViewMode("algorithm")} style={{padding:"7px 16px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:TH().pri,color:TH().txOn,borderRadius:999,letterSpacing:0.3}}>Algorithm</button>
+        </div> : <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:11,color:TH().txD,fontStyle:"italic"}}>view only</div>}
+        <div style={{width:36}}/>
       </div>
-      <div style={{padding:"12px 16px 8px"}}>
-        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,margin:"0 0 3px"}}>{rc.name}</h1>
-        <p style={{fontSize:11,color:TH().txD,margin:"0 0 8px"}}>{sv} {t.servingsUnit} · {rc.tags?.join(", ")}</p>
-        <div style={{display:"flex",alignItems:"flex-end",gap:5,marginBottom:4}}>
-          {["sweetness","richness","spiciness","acidity","umami"].map(k=>{const v=flavourProfile[k]||0;return<div key={k} style={{textAlign:"center"}}><div style={{height:24,width:7,background:TH().bdS,borderRadius:4,position:"relative",margin:"0 auto"}}><div style={{position:"absolute",bottom:0,left:0,right:0,height:`${v}%`,background:fc[k],borderRadius:4}}/></div><div style={{fontSize:7,color:TH().txD,marginTop:2}}>{k[0].toUpperCase()}</div></div>;})}
+      {/* Hero — eyebrow + title + flavour mini bars */}
+      <div style={{padding:"16px 18px 10px"}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.6,color:_aCC,marginBottom:6}}>
+          <span style={{width:5,height:5,borderRadius:"50%",background:_aCC}}/>
+          {_aCL}
+        </div>
+        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,margin:"0 0 4px",lineHeight:1.1,letterSpacing:-0.4,color:TH().tx}}>{rc.name}</h1>
+        <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:13,fontStyle:"italic",color:TH().txM,margin:"0 0 10px"}}>{sv} {t.servingsUnit}{rc.tags && rc.tags.length > 0 ? ` · ${rc.tags.slice(0,3).join(", ")}` : ""}</p>
+        <div style={{display:"flex",alignItems:"flex-end",gap:6,marginBottom:2}}>
+          {["sweetness","richness","spiciness","acidity","umami"].map(k=>{const v=flavourProfile[k]||0;return<div key={k} style={{textAlign:"center"}}>
+            <div style={{height:28,width:8,background:TH().bgH,borderRadius:4,position:"relative",margin:"0 auto",border:`1px solid ${TH().bdS}`}}>
+              <div style={{position:"absolute",bottom:0,left:0,right:0,height:`${v}%`,background:fc[k],borderRadius:3}}/>
+            </div>
+            <div style={{fontSize:8,color:TH().txM,marginTop:3,textTransform:"uppercase",letterSpacing:0.5,fontWeight:600}}>{k[0].toUpperCase()}</div>
+          </div>;})}
         </div>
       </div>
-      <div style={{height:1,background:TH().div,margin:"0 16px"}}/>
+      <div style={{height:1,background:TH().div,margin:"0 18px"}}/>
       <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
         {mTab==="timeline"&&<div style={{padding:"12px 16px"}}>
           {allLanes.map((lane,li)=><div key={li} style={{marginBottom:14}}>
@@ -4450,46 +4815,120 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
           <div style={{fontSize:11,color:TH().tx2,lineHeight:1.6}}>Engine v2.0 — scores computed from ingredients, processes, tool kinetics, cross-lane inheritance, and module propagation.</div>
         </div>}
       </div>
-      <div style={{display:"flex",borderTop:`1px solid ${TH().div}`,background:TH().bg,padding:"6px 0 4px",flexShrink:0}}>
-        <div onClick={()=>setMTab("timeline")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer"}}>
-          <span style={{fontSize:16}}>{mTab==="timeline"?"\uD83D\uDCCB":"\uD83D\uDCCB"}</span>
-          <span style={{fontSize:9,color:mTab==="timeline"?TH().sec:TH().txD,fontWeight:mTab==="timeline"?600:400}}>Timeline</span>
-        </div>
-        <div onClick={()=>setMTab("flavour")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer"}}>
-          <span style={{fontSize:16}}>⭐</span>
-          <span style={{fontSize:9,color:mTab==="flavour"?TH().sec:TH().txD,fontWeight:mTab==="flavour"?600:400}}>Flavour</span>
-        </div>
+      <div style={{display:"flex",borderTop:`1px solid ${TH().div}`,background:TH().glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",padding:"8px 6px 10px",flexShrink:0}}>
+        <button onClick={()=>setMTab("timeline")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",border:"none",background:"transparent",padding:"6px 0",fontFamily:"'DM Sans',sans-serif"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={mTab==="timeline"?TH().tx:TH().txD} strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+          <span style={{fontSize:10,color:mTab==="timeline"?TH().tx:TH().txD,fontWeight:mTab==="timeline"?700:500,letterSpacing:0.4}}>Timeline</span>
+        </button>
+        <button onClick={()=>setMTab("flavour")} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",border:"none",background:"transparent",padding:"6px 0",fontFamily:"'DM Sans',sans-serif"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={mTab==="flavour"?TH().tx:TH().txD} strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span style={{fontSize:10,color:mTab==="flavour"?TH().tx:TH().txD,fontWeight:mTab==="flavour"?700:500,letterSpacing:0.4}}>Flavour</span>
+        </button>
       </div>
     </div>);
   }
 
   /* ═══ DESKTOP VIEW ═══ */
-  return (<>
-    <div style={{ maxWidth:1400,margin:"0 auto",padding:"28px 24px" }}>
-    <button onClick={oB} style={{ ...S.btn("outline"),marginBottom:16,fontSize:12 }}>{t.back}</button>
-    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,gap:8 }}>
-      <h1 style={{ fontFamily:"'Playfair Display',serif",fontSize:30,fontWeight:700,margin:0 }}>{rc.name}</h1>
-      <div style={{ display:"flex",gap:6 }}>
-        {isAdmin && !isMobile && <button onClick={oE} style={{ ...S.btn("primary"),display:"flex",alignItems:"center",gap:5,fontSize:12 }}><Ic.Ed/>{t.edit}</button>}
-      </div>
-    </div>
-    <p style={{ fontFamily:"'DM Sans',sans-serif",color:TH().txM,fontSize:13,margin:"4px 0 20px",lineHeight:1.5 }}>{rc.description}</p>
+  /* Editorial helpers: category palette + a one-line auto-rationale derived
+     from the dominant flavour axes. Pure functions of recipe state. */
+  const _vwCatColor = (c) => c === "Entrees" ? "#7EAA7E" : c === "Mains" ? "#C49A6C" : c === "Desserts" ? "#E89EC0" : c === "Drinks & Cocktails" ? "#6B9FC4" : c === "Sides & Salads" ? "#8AAE6F" : "#6B9FC4";
+  const _vwCatLabel = (c) => c === "Entrees" ? (t.catEntrees||"Entrees") : c === "Mains" ? (t.catMains||"Mains") : c === "Desserts" ? (t.catDesserts||"Desserts") : c === "Drinks & Cocktails" ? (t.catDrinks||"Drinks & Cocktails") : c === "Sides & Salads" ? (t.catSides||"Sides & Salads") : c;
+  const _vwCat = rc.category || "Mains";
+  const _vwCC = _vwCatColor(_vwCat);
+  const _vwRationale = (() => {
+    const axes = [
+      { k: "sweetness", v: flavourProfile.sweetness||0, phrase: "sweetness" },
+      { k: "richness",  v: flavourProfile.richness||0,  phrase: "richness" },
+      { k: "spiciness", v: flavourProfile.spiciness||0, phrase: "heat" },
+      { k: "acidity",   v: flavourProfile.acidity||0,   phrase: "bright acidity" },
+      { k: "umami",     v: flavourProfile.umami||0,     phrase: "savoury umami" },
+    ].sort((a,b) => b.v - a.v);
+    if (axes[0].v < 25) return "A balanced, restrained profile.";
+    const top = axes[0], second = axes[1];
+    const verb = top.k === "sweetness" ? "Built on" : top.k === "richness" ? "Carried by" : top.k === "spiciness" ? "Lifted by" : top.k === "acidity" ? "Brightened by" : "Anchored in";
+    if (second && second.v >= top.v * 0.65 && second.v >= 35) return `${verb} ${top.phrase}, lifted by ${second.phrase}.`;
+    return `${verb} ${top.phrase}.`;
+  })();
 
-    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:28 }}>
-      <div style={{ background:TH().bgC,borderRadius:12,border:`1px solid ${TH().bdS}`,padding:"14px 18px" }}>
-        <div style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TH().txD,textTransform:"uppercase",letterSpacing:1,marginBottom:10 }}>{t.servings}</div>
-        <div style={{ display:"flex",alignItems:"center",gap:14 }}>
-          <button style={{ ...S.btn("outline"),padding:"3px 10px",fontSize:16 }} onClick={()=>sSv(Math.max(1,sv-1))}>&minus;</button>
-          <span style={{ fontFamily:"'Playfair Display',serif",fontSize:28,fontWeight:700,minWidth:36,textAlign:"center" }}>{sv}</span>
-          <button style={{ ...S.btn("outline"),padding:"3px 10px",fontSize:16 }} onClick={()=>sSv(sv+1)}>+</button>
+  return (<>
+    <div style={{ maxWidth:1180,margin:"0 auto",padding:"28px 24px 40px" }}>
+
+    {/* Top action bar — back + edit */}
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
+      <button onClick={oB} style={{
+        display:"inline-flex", alignItems:"center", gap:6,
+        padding:"9px 16px", borderRadius:999, border:`1px solid ${TH().bdS}`,
+        background:TH().bgC, color:TH().tx2, cursor:"pointer",
+        fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600,
+        transition:"background 0.18s, color 0.18s, border-color 0.18s"
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = TH().bdSt; e.currentTarget.style.color = TH().tx; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = TH().bdS; e.currentTarget.style.color = TH().tx2; }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
+        {t.back}
+      </button>
+      {isAdmin && !isMobile && <button onClick={oE} style={{
+        display:"inline-flex", alignItems:"center", gap:6,
+        padding:"10px 18px", borderRadius:999, border:"none",
+        background:TH().pri, color:TH().txOn, cursor:"pointer",
+        fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700,
+        boxShadow:"0 6px 16px rgba(42,36,32,0.18)",
+      }}>
+        <Ic.Ed/>{t.edit}
+      </button>}
+    </div>
+
+    {/* Hero — eyebrow + title + italic description */}
+    <div style={{ marginBottom:28, maxWidth:780 }}>
+      <div style={{
+        display:"inline-flex", alignItems:"center", gap:6,
+        fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700,
+        textTransform:"uppercase", letterSpacing:1.6, color:_vwCC, marginBottom:10,
+      }}>
+        <span style={{ width:6, height:6, borderRadius:"50%", background:_vwCC }}/>
+        {_vwCatLabel(_vwCat)}
+        {rc.tags && rc.tags.length > 0 && <span style={{ color:TH().txD, fontWeight:500, letterSpacing:0.6, marginLeft:6 }}>· {rc.tags.slice(0,3).join(" · ")}</span>}
+      </div>
+      <h1 style={{
+        fontFamily:"'Playfair Display',serif",
+        fontSize:44, fontWeight:700, margin:"0 0 10px",
+        lineHeight:1.05, letterSpacing:-0.8, color:TH().tx,
+      }}>{rc.name}</h1>
+      {rc.description && <p style={{
+        fontFamily:"'Cormorant Garamond',serif",
+        fontSize:18, fontStyle:"italic", color:TH().tx2,
+        margin:0, lineHeight:1.5,
+      }}>{rc.description}</p>}
+    </div>
+
+    {/* Stat strip — servings stepper + flavour card */}
+    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:18,marginBottom:32 }}>
+      {/* Servings stepper — integrated pill */}
+      <div style={{ background:TH().bgC,borderRadius:14,border:`1px solid ${TH().bdS}`,padding:"18px 22px",boxShadow:TH().sh }}>
+        <div style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TH().txM,textTransform:"uppercase",letterSpacing:1.2,marginBottom:14 }}>{t.servings}</div>
+        <div style={{ display:"flex",alignItems:"center",gap:16 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:4, background:TH().bgH, borderRadius:999, padding:5, border:`1px solid ${TH().bdS}` }}>
+            <button onClick={()=>sSv(Math.max(1,sv-1))} aria-label="Decrease servings"
+              style={{ width:34, height:34, borderRadius:"50%", border:"none", background:"transparent", color:TH().tx, cursor:"pointer", fontSize:18, lineHeight:1, padding:0, fontWeight:600 }}>−</button>
+            <span style={{ fontFamily:"'Playfair Display',serif", fontSize:30, fontWeight:700, minWidth:48, textAlign:"center", color:TH().tx, lineHeight:1 }}>{sv}</span>
+            <button onClick={()=>sSv(sv+1)} aria-label="Increase servings"
+              style={{ width:34, height:34, borderRadius:"50%", border:"none", background:"transparent", color:TH().tx, cursor:"pointer", fontSize:18, lineHeight:1, padding:0, fontWeight:600 }}>+</button>
+          </div>
+          <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:14, fontStyle:"italic", color:TH().txM }}>
+            {sv === 1 ? "serving" : "servings"}{sv !== base ? ` · scaled from ${base}` : ""}
+          </div>
         </div>
       </div>
-      <div style={{ background:TH().bgC,borderRadius:12,border:`1px solid ${TH().bdS}`,padding:"10px 14px 6px" }}>
+      {/* Flavour radar — with auto-rationale */}
+      <div style={{ background:TH().bgC,borderRadius:14,border:`1px solid ${TH().bdS}`,padding:"14px 18px 12px",boxShadow:TH().sh }}>
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2 }}>
-          <div style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TH().txD,textTransform:"uppercase",letterSpacing:1 }}>{t.flavour}</div>
-          <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:9,color:TH().txM,fontStyle:"italic" }}>auto</div>
+          <div style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TH().txM,textTransform:"uppercase",letterSpacing:1.2 }}>{t.flavour}</div>
+          <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:11,color:TH().txD,fontStyle:"italic" }}>auto · v2</div>
         </div>
         <FlavourRadar profile={flavourProfile} t={t} colors={fc}/>
+        <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:13,fontStyle:"italic",color:TH().tx2,textAlign:"center",lineHeight:1.4,marginTop:4 }}>
+          {_vwRationale}
+        </div>
       </div>
     </div>
 
@@ -4647,16 +5086,25 @@ function IngredientSummary({ recipe, lib, sv, base, allIngs, t, lang }) {
   });
   if (!buckets.length) return null;
 
-  return (<div style={{ background:TH().bgC,borderRadius:14,border:`1px solid ${TH().bdS}`,padding:"18px 22px",marginBottom:28,boxShadow:TH().sh }}>
-    <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:600,marginBottom:10,display:"flex",alignItems:"center",gap:6 }}>
-      <span style={{ color:"#C49A6C" }}>&#9670;</span>{t.ingredientSummary}
+  const totalItems = buckets.reduce((acc, b) => acc + b.items.length, 0);
+  return (<div style={{ background:TH().bgC,borderRadius:16,border:`1px solid ${TH().bdS}`,padding:"22px 26px",marginBottom:24,boxShadow:TH().sh }}>
+    <div style={{ display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:18,gap:12,flexWrap:"wrap" }}>
+      <div>
+        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:TH().tx,letterSpacing:-0.2 }}>
+          {t.ingredientSummary}
+        </div>
+        <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:13,fontStyle:"italic",color:TH().txM,marginTop:2 }}>
+          {totalItems} {totalItems === 1 ? "ingredient" : "ingredients"} across {buckets.length} {buckets.length === 1 ? "lane" : "lanes"}
+        </div>
+      </div>
     </div>
-    <div style={{ display:"grid",gridTemplateColumns:`repeat(auto-fit, minmax(240px, 1fr))`,gap:"16px 28px" }}>
+    <div style={{ display:"grid",gridTemplateColumns:`repeat(auto-fit, minmax(260px, 1fr))`,gap:"22px 30px" }}>
       {buckets.map((b, i) => (
         <div key={i}>
-          <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:6,paddingBottom:4,borderBottom:`2px solid ${b.isModule?PC:LANE_COL}` }}>
-            {b.isModule && <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:8,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:PC,background:PC+"15",padding:"1px 5px",borderRadius:3 }}><Ic.Mo/> {t.module}</span>}
-            <span style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TH().tx2,letterSpacing:0.3,textTransform:"uppercase" }}>{b.laneName}</span>
+          <div style={{ display:"flex",alignItems:"center",gap:7,marginBottom:8,paddingBottom:6,borderBottom:`1px solid ${TH().div}` }}>
+            <span style={{ width:8, height:8, borderRadius:"50%", background:b.isModule?PC:LANE_COL, flexShrink:0 }}/>
+            {b.isModule && <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:8,fontWeight:700,letterSpacing:1,textTransform:"uppercase",color:PC,background:PC+"14",padding:"1px 6px",borderRadius:4 }}><Ic.Mo/> {t.module}</span>}
+            <span style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TH().tx,letterSpacing:0.6,textTransform:"uppercase" }}>{b.laneName}</span>
           </div>
           <ul style={{ listStyle:"none",padding:0,margin:0 }}>
             {b.items.map(ing => {
@@ -4664,10 +5112,10 @@ function IngredientSummary({ recipe, lib, sv, base, allIngs, t, lang }) {
               const eg = eG(ing);
               const cat = flat.find(fi=>fi.id===ing.ingredientId)?.category || "";
               const col = CC[cat] || "#8A7E72";
-              return (<li key={ing.uid} style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:14,color:TH().tx,padding:"3px 0",display:"flex",alignItems:"baseline",gap:6 }}>
+              return (<li key={ing.uid} style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:TH().tx,padding:"5px 0",display:"flex",alignItems:"baseline",gap:8,borderBottom:`1px solid ${TH().div}40` }}>
                 <span style={{ width:6,height:6,borderRadius:"50%",background:col,display:"inline-block",flexShrink:0,transform:"translateY(-2px)" }}/>
-                <span style={{ fontWeight:500,flex:1 }}>{trN(ing.name,"ing",lang)}{eg && <span style={{ fontSize:11,color:TH().txD,marginLeft:4 }}>({ing.eggSize})</span>}</span>
-                <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:TH().tx2,fontVariantNumeric:"tabular-nums" }}>{fmtQ(res, displayUnit(ing, allIngs))}</span>
+                <span style={{ fontWeight:500,flex:1 }}>{trN(ing.name,"ing",lang)}{eg && <span style={{ fontSize:12,color:TH().txD,marginLeft:4,fontStyle:"italic" }}>({ing.eggSize})</span>}</span>
+                <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:TH().tx2,fontVariantNumeric:"tabular-nums",fontWeight:600 }}>{fmtQ(res, displayUnit(ing, allIngs))}</span>
               </li>);
             })}
           </ul>
@@ -4720,22 +5168,28 @@ function ToolsSummary({ recipe, tLib, t, lang }) {
     byCat[cat].push(tl);
   });
 
-  return (<div style={{ background:TH().bgC,borderRadius:14,border:`1px solid ${TH().bdS}`,padding:"18px 22px",marginBottom:28,boxShadow:TH().sh }}>
-    <div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:600,marginBottom:10,display:"flex",alignItems:"center",gap:6 }}>
-      <span style={{ color:TC }}><Ic.Wr/></span>{t.tools}
+  return (<div style={{ background:TH().bgC,borderRadius:16,border:`1px solid ${TH().bdS}`,padding:"22px 26px",marginBottom:24,boxShadow:TH().sh }}>
+    <div style={{ marginBottom:18 }}>
+      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:TH().tx,letterSpacing:-0.2 }}>
+        {t.tools}
+      </div>
+      <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:13,fontStyle:"italic",color:TH().txM,marginTop:2 }}>
+        {tools.length} {tools.length === 1 ? "tool" : "tools"} across {Object.keys(byCat).length} {Object.keys(byCat).length === 1 ? "category" : "categories"}
+      </div>
     </div>
-    <div style={{ display:"grid",gridTemplateColumns:`repeat(auto-fit, minmax(240px, 1fr))`,gap:"16px 28px" }}>
+    <div style={{ display:"grid",gridTemplateColumns:`repeat(auto-fit, minmax(260px, 1fr))`,gap:"22px 30px" }}>
       {Object.entries(byCat).map(([cat, items]) => (
         <div key={cat}>
-          <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:6,paddingBottom:4,borderBottom:`2px solid ${TC}` }}>
-            <span style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TH().tx2,letterSpacing:0.3,textTransform:"uppercase" }}>{trCat(cat, lang)}</span>
+          <div style={{ display:"flex",alignItems:"center",gap:7,marginBottom:8,paddingBottom:6,borderBottom:`1px solid ${TH().div}` }}>
+            <span style={{ width:8, height:8, borderRadius:"50%", background:TC, flexShrink:0 }}/>
+            <span style={{ fontFamily:"'DM Sans',sans-serif",fontWeight:700,fontSize:11,color:TH().tx,letterSpacing:0.6,textTransform:"uppercase" }}>{trCat(cat, lang)}</span>
           </div>
           <ul style={{ listStyle:"none",padding:0,margin:0 }}>
             {items.map(tl => (
-              <li key={tl.id} style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:14,color:TH().tx,padding:"3px 0",display:"flex",alignItems:"baseline",gap:6 }}>
-                <span style={{ fontSize:15,flexShrink:0,lineHeight:1 }}>{tl.meta?.ic || "\uD83D\uDD27"}</span>
+              <li key={tl.id} style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:TH().tx,padding:"5px 0",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${TH().div}40` }}>
+                <span style={{ fontSize:17,flexShrink:0,lineHeight:1,width:24,textAlign:"center" }}>{tl.meta?.ic || "\uD83D\uDD27"}</span>
                 <span style={{ fontWeight:500,flex:1 }}>{trN(tl.name, "tool", lang)}</span>
-                {tl.count > 1 && <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().txD,fontVariantNumeric:"tabular-nums" }}>&times;{tl.count}</span>}
+                {tl.count > 1 && <span style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:TH().txM,fontVariantNumeric:"tabular-nums",fontWeight:600,background:TH().bgH,padding:"2px 7px",borderRadius:999 }}>&times;{tl.count}</span>}
               </li>
             ))}
           </ul>
@@ -4866,17 +5320,22 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
   }, [layout, grid, rows, lanes]);
 
   return (<div style={{ marginBottom:48 }}>
-    {/* Header */}
-    <div style={{ display:"flex",justifyContent:"center",marginBottom:8 }}>
-      <div style={{ background:asModule?"#9B7EB812":"#2A242006",border:asModule?`1.5px solid #9B7EB840`:"1.5px solid #D5CEBC",borderRadius:10,padding:"10px 22px",textAlign:"center" }}>
-        {asModule && <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",padding:"2px 7px",borderRadius:4,color:"#9B7EB8",background:"#9B7EB815",display:"inline-block",marginBottom:3 }}><Ic.Mo/> {t.module}</div>}
-        {asModule && prep.fromRecipe && <div style={{ fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,color:"#9B7EB8",marginBottom:2 }}>{prep.fromRecipe}</div>}
-        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:asModule && prep.fromRecipe ? 13 : 18,fontWeight:600,color:asModule && prep.fromRecipe ? "#6A6058" : undefined }}>{prep.name}</div>
-        {prep.comment && <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#B0A898",marginTop:2,fontStyle:"italic" }}>{prep.comment}</div>}
+    {/* Header — theme-aware, more breath */}
+    <div style={{ display:"flex",justifyContent:"center",marginBottom:12 }}>
+      <div style={{
+        background: asModule ? `${PC}10` : TH().bgC,
+        border: asModule ? `1px solid ${PC}40` : `1px solid ${TH().bdS}`,
+        borderRadius: 12, padding: "12px 26px", textAlign: "center",
+        boxShadow: TH().sh,
+      }}>
+        {asModule && <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:700,letterSpacing:1.4,textTransform:"uppercase",padding:"2px 8px",borderRadius:999,color:PC,background:`${PC}18`,display:"inline-block",marginBottom:4 }}><Ic.Mo/> {t.module}</div>}
+        {asModule && prep.fromRecipe && <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:13,fontStyle:"italic",fontWeight:500,color:PC,marginBottom:2 }}>{prep.fromRecipe}</div>}
+        <div style={{ fontFamily:"'Playfair Display',serif",fontSize:asModule && prep.fromRecipe ? 14 : 19,fontWeight:600,color:asModule && prep.fromRecipe ? TH().tx2 : TH().tx,letterSpacing:-0.2 }}>{prep.name}</div>
+        {prep.comment && <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:13,color:TH().txM,marginTop:3,fontStyle:"italic" }}>{prep.comment}</div>}
         {asModule && anchor?.prepId && anchor?.stepId && (()=>{
           const tgtPrep = rc.preparations.find(p=>p.id===anchor.prepId);
           const tgtStep = tgtPrep ? flattenGrid(tgtPrep.grid).find(s=>s.id===anchor.stepId) : null;
-          return tgtStep ? <div style={{ display:"inline-flex",alignItems:"center",gap:5,fontFamily:"'DM Sans',sans-serif",fontSize:10,color:PC,marginTop:6,padding:"3px 8px",borderRadius:12,background:PC+"12",border:`1px solid ${PC}30` }}>
+          return tgtStep ? <div style={{ display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'DM Sans',sans-serif",fontSize:10,color:PC,marginTop:7,padding:"3px 10px",borderRadius:999,background:`${PC}12`,border:`1px solid ${PC}30` }}>
             <span style={{ fontSize:11 }}>&#8605;</span>
             <span style={{ opacity:0.75 }}>{t.moduleAnchor}</span>
             <b>{tgtPrep.name} &rarr; {tgtStep.title}</b>
@@ -4885,19 +5344,23 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
       </div>
     </div>
 
-    {/* Lane names — merged: main lanes + module lanes with a visual divider between groups */}
-    <div style={{ display:"flex",justifyContent:"center",marginBottom:10 }}>
+    {/* Lane names — refined: dot prefix + theme-aware label, subtle divider only at module boundary */}
+    <div style={{ display:"flex",justifyContent:"center",marginBottom:12 }}>
       <div style={{ display:"flex",gap:LANE_GAP,width:totalW,alignItems:"flex-end" }}>
         {Array.from({length:lanes}).map((_,li) => {
           const name = mergedModInfo.laneNames[li] || (li === 0 ? t.mainProc : `${t.lane||"Lane"} ${li+1}`);
           const isModLane = mergedModInfo.moduleLaneBoundaries.some(b => li >= b.startLane && li < b.startLane + b.count);
           const isModStart = mergedModInfo.moduleLaneBoundaries.some(b => b.startLane === li);
+          const dotColor = isModLane ? PC : LANE_COL;
           return (<div key={li} style={{ display:"flex",alignItems:"flex-end" }}>
-            {/* Purple divider before first module lane */}
-            {isModStart && <div style={{ width:3,height:28,background:PC+"50",borderRadius:2,marginRight:LANE_GAP/2 - 2,flexShrink:0 }}/>}
-            <div style={{ width:LANE_W,textAlign:"center",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,letterSpacing:0.4,color:isModLane?PC:"#5A5048",paddingBottom:6,borderBottom:`2px solid ${isModLane?PC+"50":LANE_COL+"60"}`,textTransform:"uppercase" }}>
-              {isModStart && <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:8,letterSpacing:1,color:PC,opacity:0.7,marginBottom:2 }}>{t.module}</div>}
-              {name}
+            {/* Subtle divider before first module lane */}
+            {isModStart && <div style={{ width:2,height:32,background:`${PC}40`,borderRadius:2,marginRight:LANE_GAP/2 - 1,flexShrink:0 }}/>}
+            <div style={{ width:LANE_W,textAlign:"center",paddingBottom:8,borderBottom:`1px solid ${isModLane?PC+"50":TH().div}` }}>
+              {isModStart && <div style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:8,letterSpacing:1.2,color:PC,opacity:0.85,marginBottom:3,fontWeight:700 }}>{t.module}</div>}
+              <div style={{ display:"inline-flex",alignItems:"center",gap:6 }}>
+                <span style={{ width:6,height:6,borderRadius:"50%",background:dotColor,flexShrink:0 }}/>
+                <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,letterSpacing:0.6,color:isModLane?PC:TH().tx,textTransform:"uppercase" }}>{name}</span>
+              </div>
             </div>
           </div>);
         })}
@@ -5052,8 +5515,8 @@ function StepNode({ step, rc, allIngs, flat, tLib, sv, base, t, lang }) {
   const meta = hasTool ? tMeta(step.tool.toolId, tLib) : null;
   const toolStr = hasTool ? fmtOpts(step.tool.opts, meta) : "";
   return (<Tip tx={step.instruction} ch={
-    <div style={{ background:hasTool?TC+"08":TH().bgC,border:hasTool?`1.5px solid ${TC}30`:`1.5px solid ${TH().bd}`,borderRadius:12,padding:"10px 14px",width:"100%",textAlign:"center",cursor:"default",boxShadow:TH().sh,transition:"all 0.2s",boxSizing:"border-box",flex:1,display:"flex",flexDirection:"column",justifyContent:"center" }}
-      onMouseEnter={e=>{e.currentTarget.style.boxShadow=TH().shM;}} onMouseLeave={e=>{e.currentTarget.style.boxShadow=TH().sh;}}>      <div style={{ marginBottom:4 }}>
+    <div style={{ background:hasTool?TC+"08":TH().bgC,border:hasTool?`1.5px solid ${TC}30`:`1px solid ${TH().bdS}`,borderRadius:12,padding:"11px 14px",width:"100%",textAlign:"center",cursor:"default",boxShadow:TH().sh,transition:"all 0.2s",boxSizing:"border-box",flex:1,display:"flex",flexDirection:"column",justifyContent:"center" }}
+      onMouseEnter={e=>{e.currentTarget.style.boxShadow=TH().shM; e.currentTarget.style.borderColor=hasTool?`${TC}55`:TH().bdSt;}} onMouseLeave={e=>{e.currentTarget.style.boxShadow=TH().sh; e.currentTarget.style.borderColor=hasTool?`${TC}30`:TH().bdS;}}>      <div style={{ marginBottom:4 }}>
         <span style={{ fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600 }}>{step.title || t.step}</span>
       </div>
       {step.processes?.length > 0 && <div style={{ display:"flex",justifyContent:"center",gap:3,flexWrap:"wrap",marginBottom:4,width:"100%",flexDirection:"column",alignItems:"center" }}>
