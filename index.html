@@ -4507,13 +4507,298 @@ function FlavourRadar({ profile, t, colors, compact }) {
   </div>);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODERNIST CUISINE VIEW
+   ─────────────────────────────────────────────────────────────────────────
+   Renders a parametric card in the printed-book style described in
+   Modernist_Cuisine/MC_Recipe_Specification.md (Part F) and modelled on
+   Modernist_Cuisine/recipe_card_mock.html. Reads exclusively from
+   parametricCard.mc (populated by tools/modernize.js v2-MC); if the card
+   lacks an mc block we fall back to a "no data" notice and the calling
+   component should suppress the toggle.
+
+   Layout:
+     • Burgundy type label with extending rule
+     • Sans-serif uppercase title + serif yield on the title baseline
+     • 4-column table (27/10/8/55) — ingredient, quantity, scaling, procedure
+     • Block separators (0.75 pt grey), header & table-end rules (2 pt black)
+     • Filled burgundy step circles with white numerals
+     • Italic "see page" cross-refs and "from above" markers
+     • Margin-style scientific-rationale paragraph
+     • Critical-temperatures + equipment side-by-side at the foot of the card
+   ═══════════════════════════════════════════════════════════════════════════ */
+const MC_PALETTE = {
+  burgundy:    "#6B1D1D",
+  bodyText:    "#1A1A1A",
+  ruleHeavy:   "#2A2A2A",
+  ruleLight:   "#888888",
+  marginText:  "#3A3A3A",
+  pageBg:      "#FFFFFF",
+};
+const MC_FONT_SANS = "'Inter', Helvetica, Arial, sans-serif";
+const MC_FONT_SERIF = "'Source Serif 4', 'Source Serif Pro', Georgia, serif";
+
+/* Scale a quantity-display string like "70 g" by the user's servings ratio. */
+function mcScaleQty(display, scale) {
+  if (!display || scale === 1) return display;
+  if (display === "as needed" || display === "to taste") return display;
+  const m = /^([0-9.]+)\s*(g|kg|ml|L)?\s*$/.exec(display);
+  if (!m) return display;
+  const v = parseFloat(m[1]) * scale;
+  const unit = m[2] || "g";
+  return `${v >= 100 ? Math.round(v) : v >= 10 ? v.toFixed(1) : v.toFixed(2)} ${unit}`;
+}
+
+/* Build a flat list of <tr> descriptors from the block model so we can
+   render header/separator/end rules cleanly without nested fragments. */
+function mcFlattenRows(blocks) {
+  const rows = [];
+  blocks.forEach((block, bi) => {
+    const isLastBlock = bi === blocks.length - 1;
+    if (block.sublabel) rows.push({ kind: "sublabel", text: block.sublabel, blockIdx: bi });
+    const rowCount = Math.max(block.ingredients.length, block.steps.length, 1);
+    for (let ri = 0; ri < rowCount; ri++) {
+      const isLastRow = ri === rowCount - 1;
+      let border = "none";
+      if (isLastRow && isLastBlock) border = `2px solid ${MC_PALETTE.ruleHeavy}`;
+      else if (isLastRow)            border = `0.75px solid ${MC_PALETTE.ruleLight}`;
+      rows.push({
+        kind: "data",
+        blockIdx: bi,
+        rowIdx: ri,
+        ingredient: block.ingredients[ri] || null,
+        step:       block.steps[ri]       || null,
+        border,
+      });
+    }
+  });
+  return rows;
+}
+
+function ModernistCardView({ card, rc, sv, base, t }) {
+  const mc = card && card.mc;
+  if (!mc || !Array.isArray(mc.blocks) || !mc.blocks.length) {
+    return <div style={{ padding:"40px 20px", textAlign:"center", color:"#888", fontFamily:MC_FONT_SERIF, fontStyle:"italic" }}>
+      No Modernist Cuisine data yet for this recipe. Re-run the offline transformer (<code>node tools/modernize.js</code>) to populate it.
+    </div>;
+  }
+  const scale = sv && base ? sv / base : 1;
+  const rows = mcFlattenRows(mc.blocks);
+  const yieldG = Math.round((mc.yield && mc.yield.value) ? mc.yield.value * scale : 0);
+  const yieldServ = mc.yield && mc.yield.servings ? Math.round(mc.yield.servings * scale) : sv;
+  const showType = mc.recipeType === "EXAMPLE";
+  const typeLabel = mc.recipeType === "PARAMETRIC" ? "PARAMETRIC RECIPE" : "EXAMPLE RECIPE";
+
+  const headerCellStyle = {
+    fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 700, textTransform: "uppercase",
+    letterSpacing: 1.5, textAlign: "left", padding: "5px 8px 4px",
+    borderBottom: `2px solid ${MC_PALETTE.ruleHeavy}`, color: MC_PALETTE.bodyText,
+  };
+  const cellBaseStyle = {
+    padding: "3px 8px", verticalAlign: "top",
+    fontSize: 11.5, lineHeight: 1.5, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText,
+  };
+
+  return (
+    <div style={{
+      background: MC_PALETTE.pageBg, color: MC_PALETTE.bodyText,
+      fontFamily: MC_FONT_SERIF, padding: "44px 56px 36px",
+      maxWidth: 1100, margin: "0 auto",
+      boxShadow: "0 6px 32px rgba(0,0,0,0.10)",
+      borderRadius: 4,
+      position: "relative",
+    }}>
+      {/* Optional type label with extending rule (spec §F.5) */}
+      {showType && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 600,
+          textTransform: "uppercase", letterSpacing: 3, color: MC_PALETTE.burgundy,
+          marginBottom: 8,
+        }}>
+          <span>{typeLabel}</span>
+          <div style={{ flex: 1, height: 1, background: MC_PALETTE.burgundy }}/>
+        </div>
+      )}
+
+      {/* Title row: title (burgundy uppercase) ←→ yield (serif body weight) */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <h1 style={{
+          fontFamily: MC_FONT_SANS, fontSize: 20, fontWeight: 700,
+          letterSpacing: 1, textTransform: "uppercase",
+          color: MC_PALETTE.burgundy, margin: 0,
+        }}>{card.title}</h1>
+        <span style={{ fontFamily: MC_FONT_SERIF, fontSize: 13, color: MC_PALETTE.bodyText, whiteSpace: "nowrap" }}>
+          Yields {yieldG ? `${yieldG} g` : `${yieldServ} portions`}
+        </span>
+      </div>
+
+      {/* Reference-ingredient + servings line — supplemental, MC-style margin */}
+      {mc.referenceIngredient && (
+        <div style={{ fontFamily: MC_FONT_SERIF, fontSize: 11, fontStyle: "italic", color: MC_PALETTE.marginText, marginBottom: 12 }}>
+          Reference: {mc.referenceIngredient.name} = 100%
+          {scale !== 1 && <span> · scaled to {sv} servings (×{scale.toFixed(2)})</span>}
+        </div>
+      )}
+
+      {/* Four-column parametric table */}
+      <table style={{
+        width: "100%", borderCollapse: "collapse", tableLayout: "fixed",
+        marginTop: 6, marginBottom: 18,
+      }}>
+        <colgroup>
+          <col style={{ width: "27%" }}/>
+          <col style={{ width: "10%" }}/>
+          <col style={{ width:  "8%" }}/>
+          <col style={{ width: "55%" }}/>
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={headerCellStyle}>Ingredient</th>
+            <th style={headerCellStyle}>Quantity</th>
+            <th style={headerCellStyle}>Scaling</th>
+            <th style={headerCellStyle}>Procedure</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, idx) => {
+            if (row.kind === "sublabel") {
+              return (
+                <tr key={`sub-${idx}`}>
+                  <td colSpan={4} style={{
+                    fontFamily: MC_FONT_SERIF, fontSize: 11.5, fontStyle: "italic",
+                    padding: "10px 8px 4px", color: MC_PALETTE.bodyText,
+                  }}>{row.text}</td>
+                </tr>
+              );
+            }
+            const { ingredient: ing, step, border } = row;
+            return (
+              <tr key={`d-${idx}`}>
+                <td style={{ ...cellBaseStyle, borderBottom: border }}>
+                  {ing ? (
+                    <>
+                      <span style={ing.isFromAbove ? { fontStyle: "italic" } : null}>
+                        {ing.name}{ing.isFromAbove ? ", from above" : ""}
+                      </span>
+                      {ing.prepNote && <>, {ing.prepNote}</>}
+                      {ing.isReference && <span title="100% reference" style={{ color: MC_PALETTE.burgundy, marginLeft: 4, fontSize: 8 }}>◆</span>}
+                      {ing.crossRef && (
+                        <div style={{ fontStyle: "italic", fontSize: 9.5, color: MC_PALETTE.bodyText, marginTop: 1 }}>
+                          see page {ing.crossRef}
+                        </div>
+                      )}
+                    </>
+                  ) : ""}
+                </td>
+                <td style={{ ...cellBaseStyle, borderBottom: border }}>
+                  {ing ? (ing.isFryingMedium ? "as needed" : mcScaleQty(ing.quantityDisplay, scale)) : ""}
+                </td>
+                <td style={{ ...cellBaseStyle, borderBottom: border, color: ing && ing.isReference ? MC_PALETTE.burgundy : MC_PALETTE.bodyText }}>
+                  {ing ? (ing.scalingDisplay || "") : ""}
+                </td>
+                <td style={{ ...cellBaseStyle, borderBottom: border }}>
+                  {step ? (
+                    <div style={{ display: "flex", alignItems: "flex-start" }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: 17, height: 17, borderRadius: "50%",
+                        background: MC_PALETTE.burgundy, color: "#FFFFFF",
+                        fontFamily: MC_FONT_SANS, fontSize: 9.5, fontWeight: 600,
+                        lineHeight: 1, marginRight: 6, flexShrink: 0, marginTop: 2,
+                      }}>{step.number}</span>
+                      <span style={{ flex: 1 }}>{step.instruction}</span>
+                    </div>
+                  ) : ""}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* Scaling footnotes (MC special-scaling notation, when applicable) */}
+      {(mc.scalingFootnotes || []).map((fn, i) => (
+        <div key={i} style={{ fontFamily: MC_FONT_SERIF, fontSize: 10, fontStyle: "italic", color: MC_PALETTE.bodyText, marginBottom: 6 }}>
+          {fn.marker || "*"} {fn.text}
+        </div>
+      ))}
+
+      {/* Scientific-rationale paragraph (margin-note style) */}
+      {mc.scientificRationale && (
+        <div style={{
+          fontFamily: MC_FONT_SERIF, fontSize: 11, fontStyle: "italic",
+          color: MC_PALETTE.marginText, lineHeight: 1.6,
+          marginTop: 24, paddingTop: 14, borderTop: `0.5px solid ${MC_PALETTE.ruleLight}`,
+        }}>
+          {mc.scientificRationale}
+        </div>
+      )}
+
+      {/* Critical temperatures + equipment side-by-side */}
+      {(mc.criticalTemperatures?.length || mc.equipment?.length) ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, marginTop: 22 }}>
+          {mc.criticalTemperatures?.length > 0 && (
+            <div>
+              <div style={{
+                fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 700,
+                textTransform: "uppercase", letterSpacing: 1.5,
+                color: MC_PALETTE.bodyText, marginBottom: 8,
+              }}>Critical Temperatures</div>
+              {mc.criticalTemperatures.map((ct, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 11, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText }}>
+                  <span>{ct.stage}</span>
+                  <span style={{ fontFamily: MC_FONT_SANS, color: MC_PALETTE.burgundy }}>{ct.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {mc.equipment?.length > 0 && (
+            <div>
+              <div style={{
+                fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 700,
+                textTransform: "uppercase", letterSpacing: 1.5,
+                color: MC_PALETTE.bodyText, marginBottom: 8,
+              }}>Equipment</div>
+              {mc.equipment.map((eq, i) => (
+                <div key={i} style={{ padding: "3px 0", fontSize: 11, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText }}>
+                  <b style={{ fontWeight: 600 }}>{eq.name}</b>
+                  {eq.criticalSpec && <span style={{ color: MC_PALETTE.marginText }}> — {eq.criticalSpec}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* Footer — dialect tag + spec version (subtle) */}
+      <div style={{
+        marginTop: 28, paddingTop: 12, borderTop: `2px solid ${MC_PALETTE.ruleHeavy}`,
+        display: "flex", justifyContent: "space-between",
+        fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 600,
+        textTransform: "uppercase", letterSpacing: 1.5, color: MC_PALETTE.bodyText,
+      }}>
+        <span style={{ fontFamily: MC_FONT_SERIF, fontSize: 10, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+          {mc.dialect && `language: ${mc.dialect}`}
+        </span>
+        <span>Modernist Cuisine View · {mc.specVersion || "MC-1.0"}</span>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ GANTT VIEW — auto-height arrows, named lanes, ingredient summary, module anchors ═══ */
 function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametricCards, recipeVersionHash }) {
   const [sv, sSv] = useState(rc.servings);
   const base = rc.servings;
   const isTablet = typeof window !== "undefined" && window.innerWidth >= 768 && window.innerWidth < 1024;
   const useCardDefault = isMobile || isTablet;
-  const [viewMode, setViewMode] = useState(useCardDefault ? "card" : "algorithm"); /* card | algorithm */
+  const [viewMode, setViewMode] = useState(useCardDefault ? "card" : "algorithm"); /* card | algorithm | modernist */
+  /* Desktop-only secondary view toggle: switch between the existing Algorithm
+     view and the Modernist Cuisine view. Only available when the loaded
+     parametric card has an `mc.blocks` structure (i.e., produced by
+     tools/modernize.js v2-MC). */
+  const [dtView, setDtView] = useState("algorithm"); /* algorithm | modernist */
   
   /* Look up parametric card for this recipe */
   const cardEntry = useMemo(() => {
@@ -4592,8 +4877,11 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${th.bdS}`,background:th.bgC}}>
-            <button onClick={()=>setViewMode("card")} style={{padding:"7px 16px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:th.pri,color:th.txOn,borderRadius:999,letterSpacing:0.3}}>Card</button>
-            <button onClick={()=>setViewMode("algorithm")} style={{padding:"7px 16px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Algorithm</button>
+            <button onClick={()=>setViewMode("card")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="card"?th.pri:"transparent",color:viewMode==="card"?th.txOn:th.txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
+            {card && card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0 && (
+              <button onClick={()=>setViewMode("modernist")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="modernist"?"#6B1D1D":"transparent",color:viewMode==="modernist"?"#FFFFFF":th.txM,borderRadius:999,letterSpacing:0.3}}>MC</button>
+            )}
+            <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="algorithm"?th.pri:"transparent",color:viewMode==="algorithm"?th.txOn:th.txM,borderRadius:999,letterSpacing:0.3}}>Algo</button>
           </div>
           <div style={{width:36}}/>
         </div>
@@ -4691,6 +4979,28 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
       </div>);
     }
 
+    /* ── Mobile Modernist Cuisine View — reuses the desktop component ── */
+    if (viewMode === "modernist" && card && card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0) {
+      const th = TH();
+      return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:th.bg}}>
+        {/* Sticky toggle bar — back + segmented Card/MC/Algorithm toggle */}
+        <div style={{padding:"10px 14px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+          <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${th.bdS}`,background:th.bgC}}>
+            <button onClick={()=>setViewMode("card")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
+            <button onClick={()=>setViewMode("modernist")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"#6B1D1D",color:"#FFFFFF",borderRadius:999,letterSpacing:0.3}}>MC</button>
+            <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Algo</button>
+          </div>
+          <div style={{width:36}}/>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"14px 10px 36px",WebkitOverflowScrolling:"touch"}}>
+          <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t}/>
+        </div>
+      </div>);
+    }
+
     /* ── Algorithm View (original mobile view) ── */
     const lnC = ["#4A9EAF","#C49A6C","#8B5CF6","#D45B5B","#6BAF6E","#E8B84B","#E89EC0","#7EAA7E"];
     const allLanes = []; let ci2 = 0;
@@ -4747,8 +5057,11 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         {card ? <div style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${TH().bdS}`,background:TH().bgC}}>
-          <button onClick={()=>setViewMode("card")} style={{padding:"7px 16px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:TH().txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
-          <button onClick={()=>setViewMode("algorithm")} style={{padding:"7px 16px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:TH().pri,color:TH().txOn,borderRadius:999,letterSpacing:0.3}}>Algorithm</button>
+          <button onClick={()=>setViewMode("card")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:TH().txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
+          {card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0 && (
+            <button onClick={()=>setViewMode("modernist")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:TH().txM,borderRadius:999,letterSpacing:0.3}}>MC</button>
+          )}
+          <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:TH().pri,color:TH().txOn,borderRadius:999,letterSpacing:0.3}}>Algo</button>
         </div> : <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:11,color:TH().txD,fontStyle:"italic"}}>view only</div>}
         <div style={{width:36}}/>
       </div>
@@ -4853,8 +5166,8 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
   return (<>
     <div style={{ maxWidth:1180,margin:"0 auto",padding:"28px 24px 40px" }}>
 
-    {/* Top action bar — back + edit */}
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
+    {/* Top action bar — back + view-toggle (Algorithm / Modernist) + edit */}
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18, gap:12 }}>
       <button onClick={oB} style={{
         display:"inline-flex", alignItems:"center", gap:6,
         padding:"9px 16px", borderRadius:999, border:`1px solid ${TH().bdS}`,
@@ -4867,6 +5180,30 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
         {t.back}
       </button>
+
+      {/* Algorithm ⟷ Modernist view toggle (only when card.mc exists) */}
+      {card && card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0 && (
+        <div role="tablist" aria-label="Recipe view mode" style={{
+          display:"flex", gap:0, borderRadius:999, padding:3,
+          border:`1px solid ${TH().bdS}`, background:TH().bgC,
+        }}>
+          <button role="tab" aria-selected={dtView==="algorithm"} onClick={()=>setDtView("algorithm")} style={{
+            padding:"7px 18px", fontSize:11.5, fontWeight:700, border:"none", cursor:"pointer",
+            fontFamily:"'DM Sans',sans-serif",
+            background: dtView==="algorithm" ? TH().pri : "transparent",
+            color: dtView==="algorithm" ? TH().txOn : TH().txM,
+            borderRadius:999, letterSpacing:0.3,
+          }}>Algorithm</button>
+          <button role="tab" aria-selected={dtView==="modernist"} onClick={()=>setDtView("modernist")} style={{
+            padding:"7px 18px", fontSize:11.5, fontWeight:700, border:"none", cursor:"pointer",
+            fontFamily:"'DM Sans',sans-serif",
+            background: dtView==="modernist" ? "#6B1D1D" : "transparent",
+            color: dtView==="modernist" ? "#FFFFFF" : TH().txM,
+            borderRadius:999, letterSpacing:0.3,
+          }}>Modernist Cuisine</button>
+        </div>
+      )}
+
       {isAdmin && !isMobile && <button onClick={oE} style={{
         display:"inline-flex", alignItems:"center", gap:6,
         padding:"10px 18px", borderRadius:999, border:"none",
@@ -4877,6 +5214,11 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
         <Ic.Ed/>{t.edit}
       </button>}
     </div>
+
+    {/* ─── MODERNIST CUISINE VIEW (alternative to Algorithm) ─── */}
+    {dtView === "modernist" && card && card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0 ? (
+      <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t}/>
+    ) : (<>
 
     {/* Hero — eyebrow + title + italic description */}
     <div style={{ marginBottom:28, maxWidth:780 }}>
@@ -5059,6 +5401,8 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
         })}
       </svg>}
     </div>
+    {/* ─── end of Algorithm-view content; the dtView conditional wraps everything from the Hero down to here ─── */}
+    </>)}
     </div>
   </>);
 }
