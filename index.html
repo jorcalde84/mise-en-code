@@ -839,7 +839,6 @@ function App() {
           setSyncStatus("loading");
           const cloud = await loadFromCloud(url);
           if (cloud && !cancelled) {
-            /* Merge: cloud wins per-id, but BOOT recipes not in cloud are appended */
             const cloudRecs = cloud.recipes || [];
             const cloudIds = new Set(cloudRecs.map(r => r.id));
             const merged = [...cloudRecs, ...SAMP.filter(r => !cloudIds.has(r.id))];
@@ -852,8 +851,7 @@ function App() {
             if (cloud.weekPlan && Array.isArray(cloud.weekPlan.slots)) setWeekPlan(cloud.weekPlan);
             if (Array.isArray(cloud.weekPlanSnapshots)) setWeekPlanSnapshots(cloud.weekPlanSnapshots);
             if (cloud.parametricCards && Array.isArray(cloud.parametricCards.cards)) setParametricCards(mergeSidecars(cloud.parametricCards, typeof BOOT_SIDECAR !== "undefined" ? BOOT_SIDECAR : buildEmptySidecar()));
-            saveToLocal({ ...cloud, recipes: merged }); /* cache merged locally */
-            /* If BOOT added new recipes, push merged data back to cloud */
+            saveToLocal({ ...cloud, recipes: merged });
             if (merged.length > cloudRecs.length) {
               saveToCloud({ ...cloud, recipes: merged }, url);
             }
@@ -1481,7 +1479,7 @@ function App() {
             if(!syncUrl){alert("Enter a URL first.");return;}
             setSyncStatus("loading");
             const data=await loadFromCloud(syncUrl);
-            if(data){const cR=data.recipes||[];const cIds=new Set(cR.map(r=>r.id));sR([...cR,...SAMP.filter(r=>!cIds.has(r.id))]);if(data.customIngredients)sCI(data.customIngredients);if(data.customTools)sCT(data.customTools);if(data.customProcesses)sCP(data.customProcesses);if(data.favourites)sFavs(new Set(data.favourites));if(data.weekPlan&&Array.isArray(data.weekPlan.slots))setWeekPlan(data.weekPlan);if(Array.isArray(data.weekPlanSnapshots))setWeekPlanSnapshots(data.weekPlanSnapshots);if(data.parametricCards&&Array.isArray(data.parametricCards.cards))setParametricCards(mergeSidecars(data.parametricCards,typeof BOOT_SIDECAR!=="undefined"?BOOT_SIDECAR:buildEmptySidecar()));saveToLocal(data);setSyncStatus("saved");setTimeout(()=>setSyncStatus("idle"),2000);alert("Loaded "+((data.recipes||[]).length)+" recipes from cloud (+"+(SAMP.filter(r=>!new Set((data.recipes||[]).map(x=>x.id)).has(r.id)).length)+" from built-in).");}
+            if(data){sR(data.recipes||SAMP);if(data.customIngredients)sCI(data.customIngredients);if(data.customTools)sCT(data.customTools);if(data.customProcesses)sCP(data.customProcesses);if(data.favourites)sFavs(new Set(data.favourites));if(data.weekPlan&&Array.isArray(data.weekPlan.slots))setWeekPlan(data.weekPlan);if(Array.isArray(data.weekPlanSnapshots))setWeekPlanSnapshots(data.weekPlanSnapshots);if(data.parametricCards&&Array.isArray(data.parametricCards.cards))setParametricCards(mergeSidecars(data.parametricCards,typeof BOOT_SIDECAR!=="undefined"?BOOT_SIDECAR:buildEmptySidecar()));saveToLocal(data);setSyncStatus("saved");setTimeout(()=>setSyncStatus("idle"),2000);alert("Loaded "+((data.recipes||[]).length)+" recipes from cloud.");}
             else{setSyncStatus("error");alert("Could not load from cloud. Check your URL and that the script is deployed.");}
           }} style={{ ...S.btn("outline"),fontSize:11,padding:"6px 14px" }}>Test &amp; Load from Cloud</button>
           <button onClick={async()=>{
@@ -1597,6 +1595,10 @@ function WeekPlanPhaseAPlaceholder({
   const [moveSheetSlot, setMoveSheetSlot] = useState(null);
   const [hideChecked, setHideChecked] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState(new Set());
+  const [collapsedDays, setCollapsedDays] = useState(() => { const t = (new Date().getDay() + 6) % 7; return new Set(WP_DAYS.filter((_, i) => i < t)); });
+  const [undoToast, setUndoToast] = useState(null);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const undoRemove = (slot) => { wpRemoveSlot(slot.uid); if (undoToast) clearTimeout(undoToast.timer); const timer = setTimeout(() => setUndoToast(null), 5000); setUndoToast({ slot, timer }); };
   const [checkedItems, setCheckedItems] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("mise_en_code_shopping_checked") || "[]")); }
     catch { return new Set(); }
@@ -1838,7 +1840,7 @@ function WeekPlanPhaseAPlaceholder({
             }} title={slot.name}>{slot.name}</div>
           </div>
           <button
-            onClick={e => { e.stopPropagation(); wpRemoveSlot(slot.uid); }}
+            onClick={e => { e.stopPropagation(); undoRemove(slot); }}
             onMouseDown={e => e.stopPropagation()}
             title="Remove" aria-label="Remove"
             style={{
@@ -1896,6 +1898,7 @@ function WeekPlanPhaseAPlaceholder({
       const dayIdx = (today.getDay() + 6) % 7; /* mon=0 */
       return WP_DAYS[dayIdx] === day;
     })();
+    const isCollapsed = isMobile && collapsedDays.has(day) && !isToday;
     return (
       <div key={day}
         onDragOver={!isMobile ? (e => onDragOver(e, day)) : undefined}
@@ -1903,7 +1906,7 @@ function WeekPlanPhaseAPlaceholder({
         onDrop={!isMobile ? (e => onDrop(e, day)) : undefined}
         style={{
           background: isHovered ? `${th.acc}10` : th.bgC,
-          border: `1px solid ${isHovered ? th.acc : (isToday ? th.sec : th.bdS)}`,
+          border: isToday ? `2px solid ${th.sec}` : `1px solid ${isHovered ? th.acc : th.bdS}`,
           borderRadius: 14,
           display: "flex",
           flexDirection: "column",
@@ -1912,11 +1915,12 @@ function WeekPlanPhaseAPlaceholder({
           transition: "background 0.15s, border-color 0.15s",
         }}
       >
-        <div style={{
+        <div onClick={isMobile ? (() => { const n = new Set(collapsedDays); if (n.has(day)) n.delete(day); else n.add(day); setCollapsedDays(n); }) : undefined} style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: isMobile ? "10px 14px" : "10px 12px",
-          background: isToday ? `${th.sec}12` : th.bgH,
-          borderBottom: `1px solid ${th.div}`,
+          background: isToday ? `${th.sec}20` : th.bgH,
+          borderBottom: isCollapsed ? "none" : `1px solid ${th.div}`,
+          cursor: isMobile ? "pointer" : "default",
         }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
             <span style={{
@@ -1926,7 +1930,7 @@ function WeekPlanPhaseAPlaceholder({
             }}>
               {isMobile ? WP_DAY_LABELS[day] : WP_DAY_SHORT[day]}
             </span>
-            {isToday && <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.sec, textTransform: "uppercase", letterSpacing: 0.8 }}>Today</span>}
+            {isToday && <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.sec, textTransform: "uppercase", letterSpacing: 0.8, background: `${th.sec}20`, padding: "2px 6px", borderRadius: 4 }}>Today</span>}
             {slots.length > 0 && (
               <span style={{
                 fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600,
@@ -1936,19 +1940,23 @@ function WeekPlanPhaseAPlaceholder({
                 {slots.length}
               </span>
             )}
+            {isMobile && <span style={{ fontSize: 10, color: th.txD }}>{isCollapsed ? "\u25B8" : "\u25BE"}</span>}
           </div>
-          <button
-            onClick={() => openAddRecipeModal(day)}
-            title={`Add to ${WP_DAY_LABELS[day]}`} aria-label={`Add to ${WP_DAY_LABELS[day]}`}
-            style={{
-              width: 32, height: 32, borderRadius: "50%",
-              border: `1px solid ${th.bdS}`, background: th.bgC, color: th.tx2,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
-              flexShrink: 0,
-            }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-          </button>
+          {!isCollapsed && (
+            <button
+              onClick={(e) => { e.stopPropagation(); openAddRecipeModal(day); }}
+              title={`Add to ${WP_DAY_LABELS[day]}`} aria-label={`Add to ${WP_DAY_LABELS[day]}`}
+              style={{
+                width: 32, height: 32, borderRadius: "50%",
+                border: `1px solid ${th.bdS}`, background: th.bgC, color: th.tx2,
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+                flexShrink: 0,
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          )}
         </div>
+        {!isCollapsed && (
         <div style={{ padding: isMobile ? "10px 12px 12px" : "10px", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
           {slots.length === 0 ? (
             <button onClick={() => openAddRecipeModal(day)} style={{
@@ -1965,6 +1973,7 @@ function WeekPlanPhaseAPlaceholder({
             slots.map(slot => <SlotChip key={slot.uid} slot={slot} location="day"/>)
           )}
         </div>
+        )}
       </div>
     );
   };
@@ -2060,6 +2069,8 @@ function WeekPlanPhaseAPlaceholder({
             paddingBottom: 6, marginRight: -14, paddingRight: 14,
             scrollSnapType: "x proximity",
             WebkitOverflowScrolling: "touch",
+            maskImage: pool.length > 2 ? "linear-gradient(to right, black 80%, transparent)" : "none",
+            WebkitMaskImage: pool.length > 2 ? "linear-gradient(to right, black 80%, transparent)" : "none",
           }}>
             {pool.map(slot => (
               <div key={slot.uid} style={{ scrollSnapAlign: "start" }}>
@@ -2072,11 +2083,17 @@ function WeekPlanPhaseAPlaceholder({
 
       {/* Week */}
       <div style={{ marginBottom: 18 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-          <span style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx }}>Week</span>
-          <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: th.txM, background: th.bgH, padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>
-            {scheduledCount} scheduled
-          </span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx }}>{weekOffset === 0 ? "This Week" : weekOffset === 1 ? "Next Week" : "Week +" + weekOffset}</span>
+            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: th.txM, background: th.bgH, padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>
+              {scheduledCount} scheduled
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button onClick={() => setWeekOffset(Math.max(0, weekOffset - 1))} disabled={weekOffset === 0} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid " + th.bdS, background: th.bgC, color: weekOffset === 0 ? th.txD : th.tx, cursor: weekOffset === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, opacity: weekOffset === 0 ? 0.4 : 1, fontSize: 14 }}>{"\u2039"}</button>
+            <button onClick={() => setWeekOffset(weekOffset + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid " + th.bdS, background: th.bgC, color: th.tx, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, fontSize: 14 }}>{"\u203A"}</button>
+          </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(7, 1fr)", gap: isMobile ? 10 : 8 }}>
           {WP_DAYS.map(d => DayCard(d))}
@@ -2120,8 +2137,13 @@ function WeekPlanPhaseAPlaceholder({
                 padding: "8px 14px", borderRadius: 999,
                 border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
                 fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0,
-              }}>Clear ✓</button>
+              }}>Clear {"\u2713"}</button>
             )}
+            <button onClick={() => { var lines = []; shoppingList.sortedCats.forEach(function(cat) { lines.push("\u2014 " + cat + " \u2014"); (shoppingList.byCategory[cat] || []).forEach(function(it) { var m = it.totalGrams > 0 ? (it.totalGrams >= 1000 ? (it.totalGrams/1000).toFixed(2) + " kg" : Math.round(it.totalGrams) + " g") : ""; lines.push((checkedItems.has(itemKey(it)) ? "\u2713 " : "\u25CB ") + it.name + (m ? " (" + m + ")" : "")); }); lines.push(""); }); var text = lines.join("\n"); if (typeof navigator !== "undefined" && navigator.share) { navigator.share({ title: "Shopping List", text: text }).catch(function(){}); } else if (typeof navigator !== "undefined" && navigator.clipboard) { navigator.clipboard.writeText(text).then(function() { alert("Copied!"); }); } else { alert(text); } }} style={{
+              padding: "8px 14px", borderRadius: 999,
+              border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0,
+            }}>{typeof navigator !== "undefined" && navigator.share ? "\uD83D\uDCE4 Share" : "\uD83D\uDCCB Copy"}</button>
           </div>
           <div style={{ width: "100%", height: 6, background: th.bgH, borderRadius: 999, overflow: "hidden" }}>
             <div style={{
@@ -2442,6 +2464,7 @@ function WeekPlanPhaseAPlaceholder({
       )}
 
       {renderMoveSheet()}
+      {undoToast && (<div style={{ position: "fixed", bottom: isMobile ? 80 : 24, left: "50%", transform: "translateX(-50%)", zIndex: 1600, background: "#1a1a2e", color: "#fff", padding: "12px 20px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 6px 24px rgba(0,0,0,0.3)", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500, maxWidth: "90vw" }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Removed</span><button onClick={() => { wpAddSlot({ id: undoToast.slot.recipeId, name: undoToast.slot.name, servings: undoToast.slot.servings, category: undoToast.slot.category }, undoToast.slot.day); clearTimeout(undoToast.timer); setUndoToast(null); }} style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#8B5CF6", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>Undo</button></div>)}
 
       {/* Add recipe modal — bottom-sheet on mobile, centered card on desktop */}
       {showAdd && (
@@ -2616,7 +2639,7 @@ function WeekPlanPhaseAPlaceholder({
               </div>
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: th.txM, marginBottom: 6, fontFamily: "'DM Sans',sans-serif" }}>{"\u2699"} Parametric Table (primary: {resolved.card.primaryIngredient})</div>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, fontFamily: "'DM Sans',sans-serif" }}>
+                <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, fontFamily: "'DM Sans',sans-serif", minWidth: 400 }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${th.div}` }}>
                       <th style={{ textAlign: "left", padding: "4px 6px", fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.txM, textTransform: "uppercase" }}>Ingredient</th>
@@ -2635,7 +2658,7 @@ function WeekPlanPhaseAPlaceholder({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: th.txM, marginBottom: 6, fontFamily: "'DM Sans',sans-serif" }}>{"\uD83D\uDCCB"} Procedure</div>
@@ -4632,47 +4655,14 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
       No Modernist Cuisine data yet for this recipe. Re-run the offline transformer (<code>node tools/modernize.js</code>) to populate it.
     </div>;
   }
-  /* Build live instruction map from Algorithm recipe steps */
-  const liveInstructions = useMemo(() => {
-    const map = {};
-    if (!rc || !rc.preparations) return map;
-    rc.preparations.forEach(p => {
-      (p.grid || []).forEach(row => {
-        (row || []).forEach(step => {
-          if (!step) return;
-          if (step.title) map[step.title] = step.instruction || "";
-          /* Also index by lowercase title for fuzzy matching */
-          if (step.title) map[step.title.toLowerCase()] = step.instruction || "";
-        });
-      });
-    });
-    /* Also build from top-level procedure refs if available */
-    if (card && card.procedure) {
-      card.procedure.forEach(proc => {
-        if (proc.ref && proc.title) {
-          map["__ref__" + proc.ref] = map[proc.title] || map[proc.title.toLowerCase()] || "";
-        }
-      });
-    }
-    return map;
-  }, [rc, card]);
   /* Amendment 4: strip Fahrenheit from temperature strings */
-  const stripF = (s) => {
-    if (!s) return s;
-    s = s.replace(/\s*\/\s*\d+\s*°\s*F/g, "");
-    s = s.replace(/\s*[,;]?\s*\d+\s*°\s*F/g, "");
-    return s;
-  };
-  /* Amendment 6: translate ingredient/tool/process names to current lang */
+  const stripF = (s) => { if (!s) return s; return s.replace(/\s*\/\s*\d+\s*\u00b0\s*F/g, "").replace(/\s*[,;]?\s*\d+\s*\u00b0\s*F/g, ""); };
+  /* Amendment 6: translate ingredient/tool/process names */
   const trIng = (name) => trN(name, "ing", lang || "en");
   const trTool = (name) => trN(name, "tool", lang || "en");
   const trProc = (name) => trN(name, "proc", lang || "en");
-  /* Amendment 6: MC view UI labels translation */
-  const mcL = {
-    en: { ingredient:"Ingredient", quantity:"Quantity", scaling:"Scaling", procedure:"Procedure", yields:"Yields", reference:"Reference", critTemp:"Critical Temperatures", equipment:"Equipment", portions:"portions" },
-    es: { ingredient:"Ingrediente", quantity:"Cantidad", scaling:"Escala", procedure:"Procedimiento", yields:"Rinde", reference:"Referencia", critTemp:"Temperaturas Cr\u00edticas", equipment:"Equipamiento", portions:"porciones" },
-    fr: { ingredient:"Ingr\u00e9dient", quantity:"Quantit\u00e9", scaling:"\u00c9chelle", procedure:"Proc\u00e9dure", yields:"Rendement", reference:"R\u00e9f\u00e9rence", critTemp:"Temp\u00e9ratures Critiques", equipment:"\u00c9quipement", portions:"portions" },
-  };
+  /* Amendment 6: MC view UI labels */
+  const mcL = { en:{ingredient:"Ingredient",quantity:"Quantity",scaling:"Scaling",procedure:"Procedure",yields:"Yields",reference:"Reference",critTemp:"Critical Temperatures",equipment:"Equipment",portions:"portions"}, es:{ingredient:"Ingrediente",quantity:"Cantidad",scaling:"Escala",procedure:"Procedimiento",yields:"Rinde",reference:"Referencia",critTemp:"Temperaturas Cr\u00edticas",equipment:"Equipamiento",portions:"porciones"}, fr:{ingredient:"Ingr\u00e9dient",quantity:"Quantit\u00e9",scaling:"\u00c9chelle",procedure:"Proc\u00e9dure",yields:"Rendement",reference:"R\u00e9f\u00e9rence",critTemp:"Temp\u00e9ratures Critiques",equipment:"\u00c9quipement",portions:"portions"} };
   const ml = mcL[lang] || mcL.en;
   const scale = sv && base ? sv / base : 1;
   const rows = mcFlattenRows(mc.blocks);
@@ -4799,27 +4789,7 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
                         fontFamily: MC_FONT_SANS, fontSize: 9.5, fontWeight: 600,
                         lineHeight: 1, marginRight: 6, flexShrink: 0, marginTop: 2,
                       }}>{step.number}</span>
-                      <div style={{ flex: 1 }}>
-                        <span>{stripF(step.instruction)}</span>
-                        {/* Amendment 5: Show live Algorithm instruction if it differs from MC card */}
-                        {(() => {
-                          if (!isAdmin) return null;
-                          const live = (step.sourceStepRef && liveInstructions["__ref__" + step.sourceStepRef])
-                            || (step.verb && liveInstructions[step.verb])
-                            || (step.verb && liveInstructions[step.verb.toLowerCase()])
-                            || null;
-                          if (!live || live === step.instruction) return null;
-                          return <div style={{ marginTop: 4, paddingLeft: 4, borderLeft: "2px solid #C49A6C", fontSize: 10, color: MC_PALETTE.marginText, fontStyle: "italic" }}>
-                            <span style={{ fontSize: 9, fontWeight: 600, color: "#C49A6C" }}>Live: </span>{stripF(live)}
-                          </div>;
-                        })()}
-                        {/* Amendment 5: Admin comments linked to procedure steps */}
-                        {isAdmin && step.comments && step.comments.length > 0 && (
-                          <div style={{ marginTop: 4, paddingLeft: 4, borderLeft: `2px solid ${MC_PALETTE.burgundy}`, fontSize: 10, color: MC_PALETTE.marginText, fontStyle: "italic" }}>
-                            {step.comments.map((cmt, ci) => <div key={ci} style={{ marginBottom: 2 }}>{cmt.text}</div>)}
-                          </div>
-                        )}
-                      </div>
+                      <span style={{ flex: 1 }}>{stripF(step.instruction)}</span>
                     </div>
                   ) : ""}
                 </td>
@@ -4856,7 +4826,7 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
                 fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 700,
                 textTransform: "uppercase", letterSpacing: 1.5,
                 color: MC_PALETTE.bodyText, marginBottom: 8,
-              }}>{ml.critTemp}</div>
+              }}>Critical Temperatures</div>
               {mc.criticalTemperatures.map((ct, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 11, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText }}>
                   <span>{trProc(ct.stage)}</span>
@@ -4871,7 +4841,7 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
                 fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 700,
                 textTransform: "uppercase", letterSpacing: 1.5,
                 color: MC_PALETTE.bodyText, marginBottom: 8,
-              }}>{ml.equipment}</div>
+              }}>Equipment</div>
               {mc.equipment.map((eq, i) => (
                 <div key={i} style={{ padding: "3px 0", fontSize: 11, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText }}>
                   <b style={{ fontWeight: 600 }}>{trTool(eq.name)}</b>
