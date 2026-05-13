@@ -4632,6 +4632,13 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
   const trIng = (name) => trN(name, "ing", lang || "en");
   const trTool = (name) => trN(name, "tool", lang || "en");
   const trProc = (name) => trN(name, "proc", lang || "en");
+  /* Amendment 6: MC view UI labels translation */
+  const mcL = {
+    en: { ingredient:"Ingredient", quantity:"Quantity", scaling:"Scaling", procedure:"Procedure", yields:"Yields", reference:"Reference", critTemp:"Critical Temperatures", equipment:"Equipment", portions:"portions" },
+    es: { ingredient:"Ingrediente", quantity:"Cantidad", scaling:"Escala", procedure:"Procedimiento", yields:"Rinde", reference:"Referencia", critTemp:"Temperaturas Cr\u00edticas", equipment:"Equipamiento", portions:"porciones" },
+    fr: { ingredient:"Ingr\u00e9dient", quantity:"Quantit\u00e9", scaling:"\u00c9chelle", procedure:"Proc\u00e9dure", yields:"Rendement", reference:"R\u00e9f\u00e9rence", critTemp:"Temp\u00e9ratures Critiques", equipment:"\u00c9quipement", portions:"portions" },
+  };
+  const ml = mcL[lang] || mcL.en;
   const scale = sv && base ? sv / base : 1;
   const rows = mcFlattenRows(mc.blocks);
   const yieldG = Math.round((mc.yield && mc.yield.value) ? mc.yield.value * scale : 0);
@@ -4679,14 +4686,14 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
           color: MC_PALETTE.burgundy, margin: 0,
         }}>{card.title}</h1>
         <span style={{ fontFamily: MC_FONT_SERIF, fontSize: 13, color: MC_PALETTE.bodyText, whiteSpace: "nowrap" }}>
-          Yields {yieldG ? `${yieldG} g` : `${yieldServ} portions`}
+          {ml.yields} {yieldG ? `${yieldG} g` : `${yieldServ} ${ml.portions}`}
         </span>
       </div>
 
       {/* Reference-ingredient + servings line — supplemental, MC-style margin */}
       {mc.referenceIngredient && (
         <div style={{ fontFamily: MC_FONT_SERIF, fontSize: 11, fontStyle: "italic", color: MC_PALETTE.marginText, marginBottom: 12 }}>
-          Reference: {mc.referenceIngredient.name} = 100%
+          {ml.reference}: {trIng(mc.referenceIngredient.name)} = 100%
           {scale !== 1 && <span> · scaled to {sv} servings (×{scale.toFixed(2)})</span>}
         </div>
       )}
@@ -4704,10 +4711,10 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
         </colgroup>
         <thead>
           <tr>
-            <th style={headerCellStyle}>Ingredient</th>
-            <th style={headerCellStyle}>Quantity</th>
-            <th style={headerCellStyle}>Scaling</th>
-            <th style={headerCellStyle}>Procedure</th>
+            <th style={headerCellStyle}>{ml.ingredient}</th>
+            <th style={headerCellStyle}>{ml.quantity}</th>
+            <th style={headerCellStyle}>{ml.scaling}</th>
+            <th style={headerCellStyle}>{ml.procedure}</th>
           </tr>
         </thead>
         <tbody>
@@ -4802,10 +4809,10 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
                 fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 700,
                 textTransform: "uppercase", letterSpacing: 1.5,
                 color: MC_PALETTE.bodyText, marginBottom: 8,
-              }}>Critical Temperatures</div>
+              }}>{ml.critTemp}</div>
               {mc.criticalTemperatures.map((ct, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 11, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText }}>
-                  <span>{ct.stage}</span>
+                  <span>{trProc(ct.stage)}</span>
                   <span style={{ fontFamily: MC_FONT_SANS, color: MC_PALETTE.burgundy }}>{stripF(ct.value)}</span>
                 </div>
               ))}
@@ -4817,7 +4824,7 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
                 fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 700,
                 textTransform: "uppercase", letterSpacing: 1.5,
                 color: MC_PALETTE.bodyText, marginBottom: 8,
-              }}>Equipment</div>
+              }}>{ml.equipment}</div>
               {mc.equipment.map((eq, i) => (
                 <div key={i} style={{ padding: "3px 0", fontSize: 11, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText }}>
                   <b style={{ fontWeight: 600 }}>{trTool(eq.name)}</b>
