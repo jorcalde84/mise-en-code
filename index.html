@@ -4614,19 +4614,30 @@ function mcFlattenRows(blocks) {
   return rows;
 }
 
-function ModernistCardView({ card, rc, sv, base, t }) {
+function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
   const mc = card && card.mc;
   if (!mc || !Array.isArray(mc.blocks) || !mc.blocks.length) {
     return <div style={{ padding:"40px 20px", textAlign:"center", color:"#888", fontFamily:MC_FONT_SERIF, fontStyle:"italic" }}>
       No Modernist Cuisine data yet for this recipe. Re-run the offline transformer (<code>node tools/modernize.js</code>) to populate it.
     </div>;
   }
+  /* Amendment 4: strip Fahrenheit from temperature strings */
+  const stripF = (s) => {
+    if (!s) return s;
+    s = s.replace(/\s*\/\s*\d+\s*°\s*F/g, "");
+    s = s.replace(/\s*[,;]?\s*\d+\s*°\s*F/g, "");
+    return s;
+  };
+  /* Amendment 6: translate ingredient/tool/process names to current lang */
+  const trIng = (name) => trN(name, "ing", lang || "en");
+  const trTool = (name) => trN(name, "tool", lang || "en");
+  const trProc = (name) => trN(name, "proc", lang || "en");
   const scale = sv && base ? sv / base : 1;
   const rows = mcFlattenRows(mc.blocks);
   const yieldG = Math.round((mc.yield && mc.yield.value) ? mc.yield.value * scale : 0);
   const yieldServ = mc.yield && mc.yield.servings ? Math.round(mc.yield.servings * scale) : sv;
-  const showType = mc.recipeType === "EXAMPLE";
-  const typeLabel = mc.recipeType === "PARAMETRIC" ? "PARAMETRIC RECIPE" : "EXAMPLE RECIPE";
+  const showType = false; /* Amendment 3: suppress recipe type label */
+  const typeLabel = "";
 
   const headerCellStyle = {
     fontFamily: MC_FONT_SANS, fontSize: 9, fontWeight: 700, textTransform: "uppercase",
@@ -4718,7 +4729,7 @@ function ModernistCardView({ card, rc, sv, base, t }) {
                   {ing ? (
                     <>
                       <span style={ing.isFromAbove ? { fontStyle: "italic" } : null}>
-                        {ing.name}{ing.isFromAbove ? ", from above" : ""}
+                        {trIng(ing.name)}{ing.isFromAbove ? ", from above" : ""}
                       </span>
                       {ing.prepNote && <>, {ing.prepNote}</>}
                       {ing.isReference && <span title="100% reference" style={{ color: MC_PALETTE.burgundy, marginLeft: 4, fontSize: 8 }}>◆</span>}
@@ -4746,7 +4757,15 @@ function ModernistCardView({ card, rc, sv, base, t }) {
                         fontFamily: MC_FONT_SANS, fontSize: 9.5, fontWeight: 600,
                         lineHeight: 1, marginRight: 6, flexShrink: 0, marginTop: 2,
                       }}>{step.number}</span>
-                      <span style={{ flex: 1 }}>{step.instruction}</span>
+                      <div style={{ flex: 1 }}>
+                        <span>{stripF(step.instruction)}</span>
+                        {/* Amendment 5: Admin comments linked to procedure steps */}
+                        {isAdmin && step.comments && step.comments.length > 0 && (
+                          <div style={{ marginTop: 4, paddingLeft: 4, borderLeft: `2px solid ${MC_PALETTE.burgundy}`, fontSize: 10, color: MC_PALETTE.marginText, fontStyle: "italic" }}>
+                            {step.comments.map((cmt, ci) => <div key={ci} style={{ marginBottom: 2 }}>{cmt.text}</div>)}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : ""}
                 </td>
@@ -4787,7 +4806,7 @@ function ModernistCardView({ card, rc, sv, base, t }) {
               {mc.criticalTemperatures.map((ct, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 11, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText }}>
                   <span>{ct.stage}</span>
-                  <span style={{ fontFamily: MC_FONT_SANS, color: MC_PALETTE.burgundy }}>{ct.value}</span>
+                  <span style={{ fontFamily: MC_FONT_SANS, color: MC_PALETTE.burgundy }}>{stripF(ct.value)}</span>
                 </div>
               ))}
             </div>
@@ -4801,8 +4820,8 @@ function ModernistCardView({ card, rc, sv, base, t }) {
               }}>Equipment</div>
               {mc.equipment.map((eq, i) => (
                 <div key={i} style={{ padding: "3px 0", fontSize: 11, fontFamily: MC_FONT_SERIF, color: MC_PALETTE.bodyText }}>
-                  <b style={{ fontWeight: 600 }}>{eq.name}</b>
-                  {eq.criticalSpec && <span style={{ color: MC_PALETTE.marginText }}> — {eq.criticalSpec}</span>}
+                  <b style={{ fontWeight: 600 }}>{trTool(eq.name)}</b>
+                  {eq.criticalSpec && <span style={{ color: MC_PALETTE.marginText }}> — {stripF(eq.criticalSpec)}</span>}
                 </div>
               ))}
             </div>
@@ -5035,7 +5054,7 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
           <div style={{width:36}}/>
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"14px 10px 36px",WebkitOverflowScrolling:"touch"}}>
-          <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t}/>
+          <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin}/>
         </div>
       </div>);
     }
@@ -5256,7 +5275,7 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
 
     {/* ─── MODERNIST CUISINE VIEW (alternative to Algorithm) ─── */}
     {dtView === "modernist" && card && card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0 ? (
-      <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t}/>
+      <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin}/>
     ) : (<>
 
     {/* Hero — eyebrow + title + italic description */}
