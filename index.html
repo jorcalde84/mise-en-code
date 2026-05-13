@@ -838,7 +838,11 @@ function App() {
           setSyncStatus("loading");
           const cloud = await loadFromCloud(url);
           if (cloud && !cancelled) {
-            sR(cloud.recipes || SAMP);
+            /* Merge: cloud wins per-id, but BOOT recipes not in cloud are appended */
+            const cloudRecs = cloud.recipes || [];
+            const cloudIds = new Set(cloudRecs.map(r => r.id));
+            const merged = [...cloudRecs, ...SAMP.filter(r => !cloudIds.has(r.id))];
+            sR(merged);
             if (cloud.customIngredients) sCI(cloud.customIngredients);
             if (cloud.customTools) sCT(cloud.customTools);
             if (cloud.customProcesses) sCP(cloud.customProcesses);
@@ -847,7 +851,11 @@ function App() {
             if (cloud.weekPlan && Array.isArray(cloud.weekPlan.slots)) setWeekPlan(cloud.weekPlan);
             if (Array.isArray(cloud.weekPlanSnapshots)) setWeekPlanSnapshots(cloud.weekPlanSnapshots);
             if (cloud.parametricCards && Array.isArray(cloud.parametricCards.cards)) setParametricCards(mergeSidecars(cloud.parametricCards, typeof BOOT_SIDECAR !== "undefined" ? BOOT_SIDECAR : buildEmptySidecar()));
-            saveToLocal(cloud); /* cache locally */
+            saveToLocal({ ...cloud, recipes: merged }); /* cache merged locally */
+            /* If BOOT added new recipes, push merged data back to cloud */
+            if (merged.length > cloudRecs.length) {
+              saveToCloud({ ...cloud, recipes: merged }, url);
+            }
             setSyncStatus("idle");
             setLoading(false);
             return;
@@ -856,7 +864,9 @@ function App() {
         /* Fallback to localStorage */
         const local = loadFromLocal();
         if (local && !cancelled) {
-          sR(local.recipes || SAMP);
+          const localRecs = local.recipes || [];
+          const localIds = new Set(localRecs.map(r => r.id));
+          sR([...localRecs, ...SAMP.filter(r => !localIds.has(r.id))]);
           if (local.customIngredients) sCI(local.customIngredients);
           if (local.customTools) sCT(local.customTools);
           if (local.customProcesses) sCP(local.customProcesses);
@@ -1470,7 +1480,7 @@ function App() {
             if(!syncUrl){alert("Enter a URL first.");return;}
             setSyncStatus("loading");
             const data=await loadFromCloud(syncUrl);
-            if(data){sR(data.recipes||SAMP);if(data.customIngredients)sCI(data.customIngredients);if(data.customTools)sCT(data.customTools);if(data.customProcesses)sCP(data.customProcesses);if(data.favourites)sFavs(new Set(data.favourites));if(data.weekPlan&&Array.isArray(data.weekPlan.slots))setWeekPlan(data.weekPlan);if(Array.isArray(data.weekPlanSnapshots))setWeekPlanSnapshots(data.weekPlanSnapshots);if(data.parametricCards&&Array.isArray(data.parametricCards.cards))setParametricCards(mergeSidecars(data.parametricCards,typeof BOOT_SIDECAR!=="undefined"?BOOT_SIDECAR:buildEmptySidecar()));saveToLocal(data);setSyncStatus("saved");setTimeout(()=>setSyncStatus("idle"),2000);alert("Loaded "+((data.recipes||[]).length)+" recipes from cloud.");}
+            if(data){const cR=data.recipes||[];const cIds=new Set(cR.map(r=>r.id));sR([...cR,...SAMP.filter(r=>!cIds.has(r.id))]);if(data.customIngredients)sCI(data.customIngredients);if(data.customTools)sCT(data.customTools);if(data.customProcesses)sCP(data.customProcesses);if(data.favourites)sFavs(new Set(data.favourites));if(data.weekPlan&&Array.isArray(data.weekPlan.slots))setWeekPlan(data.weekPlan);if(Array.isArray(data.weekPlanSnapshots))setWeekPlanSnapshots(data.weekPlanSnapshots);if(data.parametricCards&&Array.isArray(data.parametricCards.cards))setParametricCards(mergeSidecars(data.parametricCards,typeof BOOT_SIDECAR!=="undefined"?BOOT_SIDECAR:buildEmptySidecar()));saveToLocal(data);setSyncStatus("saved");setTimeout(()=>setSyncStatus("idle"),2000);alert("Loaded "+((data.recipes||[]).length)+" recipes from cloud (+"+(SAMP.filter(r=>!new Set((data.recipes||[]).map(x=>x.id)).has(r.id)).length)+" from built-in).");}
             else{setSyncStatus("error");alert("Could not load from cloud. Check your URL and that the script is deployed.");}
           }} style={{ ...S.btn("outline"),fontSize:11,padding:"6px 14px" }}>Test &amp; Load from Cloud</button>
           <button onClick={async()=>{
