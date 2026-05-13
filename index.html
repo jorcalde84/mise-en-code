@@ -698,6 +698,21 @@ const buildExportData = (recs, cI, cT, cP, favs, weekPlan, weekPlanSnapshots, pa
   parametricCards: parametricCards || buildEmptySidecar(),
 });
 
+/* Strip .mc blocks from parametricCards before cloud save.
+   mc data is baked into BOOT_SIDECAR and restored by mergeSidecars on load,
+   so there is no need to round-trip it through GAS (which has ~500 KB property limits). */
+const stripMcFromSidecar = (sidecar) => {
+  if (!sidecar || !Array.isArray(sidecar.cards)) return sidecar;
+  return {
+    ...sidecar,
+    cards: sidecar.cards.map(c => {
+      if (!c || !c.parametricCard || !c.parametricCard.mc) return c;
+      const { mc: _mc, ...pcRest } = c.parametricCard;
+      return { ...c, parametricCard: pcRest };
+    }),
+  };
+};
+
 const saveToLocal = (data) => {
   try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(e) { console.warn("localStorage save failed:", e); }
 };
@@ -713,13 +728,25 @@ const loadFromLocal = () => {
 const saveToCloud = async (data, url) => {
   if (!url) return { ok: false, error: "no_url" };
   try {
+    /* Strip mc blocks to keep payload well under GAS Properties Service limits */
+    const cloudData = data.parametricCards
+      ? { ...data, parametricCards: stripMcFromSidecar(data.parametricCards) }
+      : data;
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(cloudData),
       redirect: "follow",
     });
-    if (resp.ok || resp.redirected || resp.type === "opaque") return { ok: true };
+    /* GAS always returns HTTP 200 — detect server-side errors via response body */
+    if (resp.ok || resp.redirected) {
+      try {
+        const json = await resp.json();
+        if (json && json.error) return { ok: false, error: "gas: " + json.error };
+        return { ok: true };
+      } catch { return { ok: true }; } /* opaque / non-JSON treated as success */
+    }
+    if (resp.type === "opaque") return { ok: true };
     return { ok: false, error: "http_" + resp.status };
   } catch(e) { return { ok: false, error: e.message }; }
 };
@@ -730,6 +757,7 @@ const loadFromCloud = async (url) => {
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const data = await resp.json();
+    if (data && data.error) { console.warn("Cloud load — GAS error:", data.error); return null; }
     if (data && data.recipes) return data;
   } catch(e) { console.warn("Cloud load failed:", e); }
   return null;
