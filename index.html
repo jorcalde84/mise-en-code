@@ -625,6 +625,7 @@ const recipeVersionHash = (recipe) => {
       p: (recipe.preparations || []).map(p => ({
         g: (p.grid || []).map(row => (row || []).map(step => step ? {
           t: step.title,
+          d: step.instruction,
           i: (step.ingredients || []).map(i => ({ n: i.name || i.n, q: i.qty, u: i.unit })),
           tl: step.tool ? { n: step.tool.name || step.tool.n, o: step.tool.opts } : null,
           pr: step.process,
@@ -4631,6 +4632,30 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
       No Modernist Cuisine data yet for this recipe. Re-run the offline transformer (<code>node tools/modernize.js</code>) to populate it.
     </div>;
   }
+  /* Build live instruction map from Algorithm recipe steps */
+  const liveInstructions = useMemo(() => {
+    const map = {};
+    if (!rc || !rc.preparations) return map;
+    rc.preparations.forEach(p => {
+      (p.grid || []).forEach(row => {
+        (row || []).forEach(step => {
+          if (!step) return;
+          if (step.title) map[step.title] = step.instruction || "";
+          /* Also index by lowercase title for fuzzy matching */
+          if (step.title) map[step.title.toLowerCase()] = step.instruction || "";
+        });
+      });
+    });
+    /* Also build from top-level procedure refs if available */
+    if (card && card.procedure) {
+      card.procedure.forEach(proc => {
+        if (proc.ref && proc.title) {
+          map["__ref__" + proc.ref] = map[proc.title] || map[proc.title.toLowerCase()] || "";
+        }
+      });
+    }
+    return map;
+  }, [rc, card]);
   /* Amendment 4: strip Fahrenheit from temperature strings */
   const stripF = (s) => {
     if (!s) return s;
@@ -4776,6 +4801,18 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
                       }}>{step.number}</span>
                       <div style={{ flex: 1 }}>
                         <span>{stripF(step.instruction)}</span>
+                        {/* Amendment 5: Show live Algorithm instruction if it differs from MC card */}
+                        {(() => {
+                          if (!isAdmin) return null;
+                          const live = (step.sourceStepRef && liveInstructions["__ref__" + step.sourceStepRef])
+                            || (step.verb && liveInstructions[step.verb])
+                            || (step.verb && liveInstructions[step.verb.toLowerCase()])
+                            || null;
+                          if (!live || live === step.instruction) return null;
+                          return <div style={{ marginTop: 4, paddingLeft: 4, borderLeft: "2px solid #C49A6C", fontSize: 10, color: MC_PALETTE.marginText, fontStyle: "italic" }}>
+                            <span style={{ fontSize: 9, fontWeight: 600, color: "#C49A6C" }}>Live: </span>{stripF(live)}
+                          </div>;
+                        })()}
                         {/* Amendment 5: Admin comments linked to procedure steps */}
                         {isAdmin && step.comments && step.comments.length > 0 && (
                           <div style={{ marginTop: 4, paddingLeft: 4, borderLeft: `2px solid ${MC_PALETTE.burgundy}`, fontSize: 10, color: MC_PALETTE.marginText, fontStyle: "italic" }}>
