@@ -594,6 +594,200 @@ const WP_DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
 const WP_DAY_LABELS = { mon:"Monday", tue:"Tuesday", wed:"Wednesday", thu:"Thursday", fri:"Friday", sat:"Saturday", sun:"Sunday" };
 const WP_DAY_SHORT = { mon:"Mon", tue:"Tue", wed:"Wed", thu:"Thu", fri:"Fri", sat:"Sat", sun:"Sun" };
 const WP_MEALS = ["breakfast","lunch","dinner","snack"];
+const WP_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const WP_MONTH_LONG  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+/* ─── Date utilities for the Weekly Planner ───
+   The planner is date-anchored, not day-of-week-anchored. Slots carry an ISO
+   date key ("2026-05-18") so future weeks are real and past weeks survive.
+   All helpers respect the local timezone — week starts on Monday. */
+const wpDateKey = (d) => {
+  if (!(d instanceof Date)) d = new Date(d);
+  const yr = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const dy = String(d.getDate()).padStart(2, '0');
+  return `${yr}-${mo}-${dy}`;
+};
+const wpKeyToDate = (k) => { const [y,m,d] = String(k).split('-').map(Number); return new Date(y, m-1, d); };
+const wpWeekStart = (offset = 0) => {
+  const d = new Date(); d.setHours(0,0,0,0);
+  const dow = (d.getDay() + 6) % 7; /* 0 = Mon */
+  d.setDate(d.getDate() - dow + (offset * 7));
+  return d;
+};
+const wpWeekDates = (offset = 0) => {
+  const start = wpWeekStart(offset);
+  return Array.from({length:7}, (_,i) => {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    return wpDateKey(d);
+  });
+};
+const wpDayOfWeek = (key) => {
+  if (!key) return null;
+  const d = wpKeyToDate(key);
+  return WP_DAYS[(d.getDay() + 6) % 7];
+};
+const wpTodayKey = () => wpDateKey(new Date());
+const wpIsToday = (key) => key === wpTodayKey();
+const wpIsPast  = (key) => key && key < wpTodayKey();
+const wpFormatDayShort = (key) => {
+  if (!key) return "";
+  const d = wpKeyToDate(key);
+  const dow = WP_DAY_SHORT[wpDayOfWeek(key)] || "";
+  return `${dow} ${WP_MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
+};
+const wpFormatDayLong = (key) => {
+  if (!key) return "";
+  const d = wpKeyToDate(key);
+  const dow = WP_DAY_LABELS[wpDayOfWeek(key)] || "";
+  return `${dow}, ${WP_MONTH_LONG[d.getMonth()]} ${d.getDate()}`;
+};
+const wpFormatWeekRange = (offset = 0) => {
+  const dates = wpWeekDates(offset);
+  const a = wpKeyToDate(dates[0]);
+  const b = wpKeyToDate(dates[6]);
+  const sameMonth = a.getMonth() === b.getMonth();
+  const sameYear  = a.getFullYear() === b.getFullYear();
+  if (sameMonth) return `${WP_MONTH_SHORT[a.getMonth()]} ${a.getDate()}–${b.getDate()}`;
+  if (sameYear)  return `${WP_MONTH_SHORT[a.getMonth()]} ${a.getDate()} – ${WP_MONTH_SHORT[b.getMonth()]} ${b.getDate()}`;
+  return `${WP_MONTH_SHORT[a.getMonth()]} ${a.getDate()}, ${a.getFullYear()} – ${WP_MONTH_SHORT[b.getMonth()]} ${b.getDate()}, ${b.getFullYear()}`;
+};
+
+/* ─── Equipment & lead-time helpers (Track D) ─────────────────────────────
+   The planner surfaces two kinds of intelligence:
+   - Conflict warnings when two or more scheduled recipes on the same day need
+     the same single-resource appliance (one oven cavity, one sous-vide bath…).
+   - Lead-time hints on chips and per-day, summed from the procedure steps'
+     criticalTime values. We surface long preps so the cook isn't caught short. */
+const WP_CONFLICT_EQUIPMENT = new Set([
+  "Oven", "Sous Vide Machine", "Thermomix TM6", "Wok",
+  "Sandwich Press", "Rice Cooker", "KitchenAid Artisan",
+  "Blow Torch", "Stand Mixer",
+]);
+
+/* Parse a free-form duration ("90 min", "2 h", "4 hr 30 min", "2:30") into
+   total minutes. Returns null when unparseable. */
+function wpParseDurationToMin(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  /* "2:30" — hh:mm */
+  let m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  let total = 0; let matched = false;
+  /* "Xh" / "X hr" / "X hours" */
+  const h = s.match(/(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/i);
+  if (h) { total += parseFloat(h[1]) * 60; matched = true; }
+  /* "Y min" / "Y m" / "Y minutes" */
+  const mm = s.match(/(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)\b/i);
+  if (mm) { total += parseFloat(mm[1]); matched = true; }
+  /* Bare number → assume minutes */
+  if (!matched) {
+    const n = s.match(/^(\d+(?:\.\d+)?)$/);
+    if (n) total = parseFloat(n[1]);
+  }
+  return total > 0 ? total : null;
+}
+
+/* Estimate a recipe's total lead time in minutes from its parametric card.
+   Sums per-step criticalTime values (active + passive both count — the cook
+   needs to start that much in advance). Returns null when no times present. */
+function wpEstimateLeadTime(card) {
+  if (!card) return null;
+  let total = 0;
+  for (const step of (card.procedure || [])) {
+    const mins = wpParseDurationToMin(step.criticalTime);
+    if (mins) total += mins;
+  }
+  if (!total && Array.isArray(card.mc?.blocks)) {
+    for (const blk of card.mc.blocks) {
+      for (const st of (blk.steps || [])) {
+        const mins = wpParseDurationToMin(st.timeLabel);
+        if (mins) total += mins;
+      }
+    }
+  }
+  return total > 0 ? total : null;
+}
+
+function wpFormatDuration(mins) {
+  if (mins == null) return null;
+  if (mins < 60) return `${Math.round(mins)} min`;
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return m === 0 ? `${h} h` : `${h} h ${m}m`;
+}
+
+/* Generate an .ics calendar feed for the given slots. The user can import
+   this into any calendar app — slots become events scheduled to end at
+   18:00 local on their date, with start = end − lead time (defaulted to
+   60 min when the card has no times). Cooked/skipped slots are skipped. */
+function wpBuildIcs(slots, recipes, parametricCards, calendarName) {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Mise en Code//Weekly Planner//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${calendarName || "Mise en Code Weekly Plan"}`,
+  ];
+  const escape = (s) => String(s == null ? "" : s)
+    .replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,")
+    .replace(/\r?\n/g, "\\n");
+  const fmtDt = (key, h, m) => {
+    const d = wpKeyToDate(key);
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const dy = String(d.getDate()).padStart(2, "0");
+    return `${yr}${mo}${dy}T${String(h).padStart(2,"0")}${String(m).padStart(2,"0")}00`;
+  };
+  const stamp = (() => {
+    const d = new Date();
+    const z = (n) => String(n).padStart(2, "0");
+    return `${d.getUTCFullYear()}${z(d.getUTCMonth()+1)}${z(d.getUTCDate())}T${z(d.getUTCHours())}${z(d.getUTCMinutes())}${z(d.getUTCSeconds())}Z`;
+  })();
+  const cardById = {};
+  ((parametricCards && parametricCards.cards) || []).forEach(c => { cardById[c.recipeId] = c.parametricCard; });
+  let count = 0;
+  for (const slot of slots) {
+    if (!slot.date) continue;
+    if ((slot.status || "planned") !== "planned") continue;
+    const recipe = (recipes || []).find(r => r.id === slot.recipeId);
+    const card = cardById[slot.recipeId] || null;
+    const leadMin = wpEstimateLeadTime(card) || 60;
+    const serveH = 18, serveM = 0;
+    let startTotal = serveH * 60 + serveM - leadMin;
+    if (startTotal < 0) startTotal = 0;
+    const startH = Math.floor(startTotal / 60), startM = startTotal % 60;
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:${slot.uid}@mise-en-code`);
+    lines.push(`DTSTAMP:${stamp}`);
+    lines.push(`DTSTART:${fmtDt(slot.date, startH, startM)}`);
+    lines.push(`DTEND:${fmtDt(slot.date, serveH, serveM)}`);
+    lines.push(`SUMMARY:${escape(slot.name)} (×${slot.servings})`);
+    const descParts = [];
+    if (card && card.scientificRationale) descParts.push(card.scientificRationale);
+    if (leadMin) descParts.push(`Lead time: ${wpFormatDuration(leadMin)}`);
+    if (recipe && recipe.category) descParts.push(`Category: ${recipe.category}`);
+    if (descParts.length) lines.push(`DESCRIPTION:${escape(descParts.join("\n\n"))}`);
+    if (recipe && recipe.category) lines.push(`CATEGORIES:${escape(recipe.category)}`);
+    lines.push("END:VEVENT");
+    count++;
+  }
+  lines.push("END:VCALENDAR");
+  return { ics: lines.join("\r\n"), count };
+}
+
+/* Migrate a legacy slot ({day: "mon"}) to the date-anchored shape ({date:"2026-05-18"}).
+   Idempotent — slots that already carry a `date` field pass through unchanged. */
+const wpMigrateSlot = (slot) => {
+  if (!slot) return slot;
+  if (slot.date !== undefined) return slot;
+  if (!slot.day) return { ...slot, date: null, status: slot.status || "planned" };
+  const dates = wpWeekDates(0);
+  const idx = WP_DAYS.indexOf(slot.day);
+  return { ...slot, date: idx >= 0 ? dates[idx] : null, status: slot.status || "planned" };
+};
 const WP_MEAL_LABELS = { breakfast:"Breakfast", lunch:"Lunch", dinner:"Dinner", snack:"Snack" };
 
 const PARAMETRIC_SPEC_VERSION = "1.0";
@@ -1004,14 +1198,24 @@ function App() {
   };
 
   /* ─── Slot manipulation ─── */
-  /* Add a recipe to the plan. Default: goes to the unscheduled pool (day=null).
-     Pass day to add directly to a specific day. Meal is no longer used. */
-  const wpAddSlot = (recipe, day, meal) => {
+  /* Add a recipe to the plan. Default: tray (date=null). Pass an ISO date key
+     ("2026-05-18") to schedule it directly. Backward-compatible: a legacy day
+     key ("mon") still works — it maps to that day in the current week. */
+  const wpAddSlot = (recipe, dateOrDay) => {
     if (!recipe) return;
+    let date = null;
+    if (typeof dateOrDay === "string") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateOrDay)) {
+        date = dateOrDay;
+      } else {
+        const idx = WP_DAYS.indexOf(dateOrDay);
+        if (idx >= 0) date = wpWeekDates(0)[idx];
+      }
+    }
     const newSlot = {
       uid: uid(),
-      day: day || null,        /* null = in pool/tray, else mon-sun */
-      meal: meal || "any",     /* kept for backward compatibility, not used in UI */
+      date,
+      status: "planned",       /* planned | cooked | skipped */
       order: 0,
       recipeId: recipe.id,
       name: recipe.name,
@@ -1024,16 +1228,25 @@ function App() {
   const wpRemoveSlot = (slotUid) => {
     setWeekPlanAndPersist(plan => ({ ...plan, slots: plan.slots.filter(s => s.uid !== slotUid) }));
   };
-  /* Schedule a slot to a specific day (or null to send back to pool). */
-  const wpScheduleSlot = (slotUid, day) => {
+  /* Schedule a slot to a specific date (or null to send back to tray).
+     Accepts an ISO date key or null. Legacy day keys also accepted for backward compat. */
+  const wpScheduleSlot = (slotUid, dateOrDay) => {
+    let date = null;
+    if (typeof dateOrDay === "string") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateOrDay)) {
+        date = dateOrDay;
+      } else {
+        const idx = WP_DAYS.indexOf(dateOrDay);
+        if (idx >= 0) date = wpWeekDates(0)[idx];
+      }
+    }
     setWeekPlanAndPersist(plan => ({
       ...plan,
-      slots: plan.slots.map(s => s.uid === slotUid ? { ...s, day: day || null } : s),
+      slots: plan.slots.map(s => s.uid === slotUid ? { ...s, date, status: "planned" } : s),
     }));
   };
-  const wpMoveSlot = (slotUid, newDay) => wpScheduleSlot(slotUid, newDay);
-  /* Swap is no longer needed — multiple recipes per day are allowed. Kept as alias. */
-  const wpSwapSlots = (sourceUid, targetDay) => wpScheduleSlot(sourceUid, targetDay);
+  const wpMoveSlot  = (slotUid, target) => wpScheduleSlot(slotUid, target);
+  const wpSwapSlots = (sourceUid, target) => wpScheduleSlot(sourceUid, target);
   const wpSetServings = (slotUid, servings) => {
     const next = Math.max(1, Math.round(servings));
     setWeekPlanAndPersist(plan => ({
@@ -1041,8 +1254,38 @@ function App() {
       slots: plan.slots.map(s => s.uid === slotUid ? { ...s, servings: next } : s),
     }));
   };
-  const wpResetWeek = () => {
-    setWeekPlanAndPersist({ slots: [] });
+  /* Mark a slot as cooked / skipped — keeps it in history but removes it from
+     "planned" surfaces. cookedAt / skippedAt timestamps preserved for analytics. */
+  const wpMarkCooked = (slotUid) => {
+    setWeekPlanAndPersist(plan => ({
+      ...plan,
+      slots: plan.slots.map(s => s.uid === slotUid ? { ...s, status: "cooked", cookedAt: new Date().toISOString() } : s),
+    }));
+  };
+  const wpMarkSkipped = (slotUid) => {
+    setWeekPlanAndPersist(plan => ({
+      ...plan,
+      slots: plan.slots.map(s => s.uid === slotUid ? { ...s, status: "skipped", skippedAt: new Date().toISOString() } : s),
+    }));
+  };
+  /* Mark a slot as planned again — used to revert a cooked/skipped slot. */
+  const wpRevertStatus = (slotUid) => {
+    setWeekPlanAndPersist(plan => ({
+      ...plan,
+      slots: plan.slots.map(s => s.uid === slotUid ? { ...s, status: "planned", cookedAt: undefined, skippedAt: undefined } : s),
+    }));
+  };
+  /* Reset only the current visible week (not snapshots, not other weeks). */
+  const wpResetWeek = (dateKeys) => {
+    if (Array.isArray(dateKeys) && dateKeys.length > 0) {
+      const keep = new Set(dateKeys.map(k => k));
+      setWeekPlanAndPersist(plan => ({
+        ...plan,
+        slots: plan.slots.filter(s => !s.date || !keep.has(s.date)),
+      }));
+    } else {
+      setWeekPlanAndPersist({ slots: [] });
+    }
   };
 
   /* ─── Snapshots ─── */
@@ -1573,10 +1816,12 @@ function App() {
       <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#B0A898" }}>{syncUrl ? "Loading from cloud..." : "Loading..."}</div>
     </div>}
     {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={r=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(r);}} oC={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}cN();}} oD={delR} wpAddSlot={wpAddSlot} weekPlan={weekPlan} t={t} isAdmin={isAdmin} isMobile={isMobile} lib={lib}/>}
-    {!loading && vw==="weekplan" && <WeekPlanPhaseAPlaceholder
+    {!loading && vw==="weekplan" && <WeeklyPlannerView
       weekPlan={weekPlan} weekPlanSnapshots={weekPlanSnapshots} parametricCards={parametricCards} recs={recs}
       wpAddSlot={wpAddSlot} wpRemoveSlot={wpRemoveSlot} wpSetServings={wpSetServings}
       wpResetWeek={wpResetWeek} wpMoveSlot={wpMoveSlot} wpSwapSlots={wpSwapSlots} wpScheduleSlot={wpScheduleSlot}
+      wpMarkCooked={wpMarkCooked} wpMarkSkipped={wpMarkSkipped} wpRevertStatus={wpRevertStatus}
+      setWeekPlanAndPersist={setWeekPlanAndPersist}
       wpSaveSnapshot={wpSaveSnapshot} wpRestoreSnapshot={wpRestoreSnapshot}
       wpDeleteSnapshot={wpDeleteSnapshot} wpDuplicateSnapshot={wpDuplicateSnapshot}
       wpClearSidecar={wpClearSidecar} importSidecarFile={importSidecarFile}
@@ -1597,9 +1842,24 @@ function App() {
      • Save / restore / delete named snapshots
      • Preview full parametric card for any slot
 ═══════════════════════════════════════════════════════════════════════ */
-function WeekPlanPhaseAPlaceholder({
+/* Motion tokens — used across the Weekly Planner. The spring curve
+   overshoots slightly (1.56 control point > 1) for a satisfying lift on
+   chip tap and card hover; the ease is a fast-out, slow-in for general
+   transforms. Centralised so animations feel coherent. */
+const WP_SPRING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
+const WP_EASE   = "cubic-bezier(0.2, 0.9, 0.3, 1)";
+const WP_EASE_FAST = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+/* Radius scale — coherent border-radius design tokens. Use these instead
+   of arbitrary numbers so the planner reads as one visual system. */
+const WP_R = { xs: 6, sm: 10, md: 14, lg: 18, pill: 999 };
+/* Spacing tokens — multiples of 4 (8pt grid relaxed to 4 for fine work). */
+const WP_S = { x1: 4, x2: 8, x3: 12, x4: 16, x5: 20, x6: 24, x8: 32 };
+
+function WeeklyPlannerView({
   weekPlan, weekPlanSnapshots, parametricCards, recs,
   wpAddSlot, wpRemoveSlot, wpSetServings, wpResetWeek, wpMoveSlot, wpSwapSlots,
+  wpMarkCooked, wpMarkSkipped, wpRevertStatus, setWeekPlanAndPersist,
   wpSaveSnapshot, wpRestoreSnapshot, wpDeleteSnapshot, wpDuplicateSnapshot,
   wpClearSidecar, importSidecarFile, exportCardsOnly, recipeVersionHash, wpScheduleSlot,
   isMobile, theme,
@@ -1607,26 +1867,144 @@ function WeekPlanPhaseAPlaceholder({
   const [showAdd, setShowAdd] = useState(false);
   const [pickRecipeId, setPickRecipeId] = useState("");
   const [pickCategory, setPickCategory] = useState("all");
-  const [addTargetDay, setAddTargetDay] = useState(null);
+  const [addTargetDate, setAddTargetDate] = useState(null);
   const [snapName, setSnapName] = useState("");
   const [showSnapForm, setShowSnapForm] = useState(false);
   const [previewCardSlot, setPreviewCardSlot] = useState(null);
   const [draggingUid, setDraggingUid] = useState(null);
-  const [hoverTarget, setHoverTarget] = useState(null); /* "pool" | day key | null */
+  const [hoverTarget, setHoverTarget] = useState(null); /* "pool" | ISO date key | null */
+  const [weekOffset, setWeekOffset] = useState(0);
 
-  /* ── Mobile-first redesign state ──
-     mobileTab: segmented control on phones (Plan / Shopping / Saved).
-     moveSheetSlot: bottom action sheet when tapping a chip on mobile (replaces drag).
-     hideChecked: shopping-list filter — hide collected items.
-     collapsedCats: per-category collapse state in the shopping list.
-     checkedItems: persistent checkbox state for shopping items, keyed by lowercased name. */
+  /* The week currently being viewed — derived from weekOffset.
+     This is the single source of truth for which dates are "in view". */
+  const visibleWeekDates = useMemo(() => wpWeekDates(weekOffset), [weekOffset]);
+  const todayKey = wpTodayKey();
+  const isViewingThisWeek = weekOffset === 0;
+
+  /* ── Slot migration ──
+     One-shot on mount: convert legacy `day` slots to date-anchored. Idempotent
+     (slots already carrying `date` pass through). Persists once so cloud and
+     other devices receive the migrated shape. */
+  useEffect(() => {
+    const slots = (weekPlan && weekPlan.slots) || [];
+    const needsMigration = slots.some(s => s && s.date === undefined && s.day !== undefined);
+    if (!needsMigration) return;
+    setWeekPlanAndPersist(plan => ({ ...plan, slots: (plan.slots || []).map(wpMigrateSlot) }));
+    /* run only once per mount — migration is idempotent */
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, []);
+
+  /* ── Keyboard shortcuts ──
+     Power-user navigation. Skipped when the user is typing in any input
+     or contenteditable, and gated when a modal is open (only Esc fires).
+     Bindings:
+       ← / →   prev / next week
+       T       jump to this week
+       N       new recipe (open Add modal)
+       S       save snapshot (when totalSlots > 0)
+       R       reset week (with confirm — undoable via cloud history)
+       Esc     close any open modal / clear selection
+       ⌘Z      undo last delete (if the 5s toast is still visible)
+       ?       (no-op for now — could surface a shortcuts help sheet later) */
+  useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target;
+      const inField = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || (typeof t.isContentEditable === "boolean" && t.isContentEditable));
+      const cmd = e.metaKey || e.ctrlKey;
+      const k = (e.key || "").toLowerCase();
+
+      /* Esc — always handled, even when typing. Closes the topmost surface. */
+      if (e.key === "Escape") {
+        if (previewCardSlot)         { setPreviewCardSlot(null);       e.preventDefault(); return; }
+        if (moveSheetSlot)           { setMoveSheetSlot(null);         e.preventDefault(); return; }
+        if (showSnapForm)            { setShowSnapForm(false);         e.preventDefault(); return; }
+        if (showAdd)                 { closeAddRecipeModal();          e.preventDefault(); return; }
+        if (selectedUids.size > 0)   { clearSelection();               e.preventDefault(); return; }
+        return;
+      }
+
+      if (inField) return;
+      /* Modal-open guard for the rest */
+      if (showAdd || showSnapForm || previewCardSlot || moveSheetSlot) return;
+
+      if (cmd && k === "z" && undoToast) {
+        e.preventDefault();
+        wpAddSlot(
+          { id: undoToast.slot.recipeId, name: undoToast.slot.name, servings: undoToast.slot.servings, category: undoToast.slot.category },
+          slotDate(undoToast.slot)
+        );
+        clearTimeout(undoToast.timer);
+        setUndoToast(null);
+        return;
+      }
+      if (cmd) return; /* don't intercept other ⌘/Ctrl combos */
+
+      if (e.key === "ArrowLeft")  { e.preventDefault(); setWeekOffset(o => o - 1); return; }
+      if (e.key === "ArrowRight") { e.preventDefault(); setWeekOffset(o => o + 1); return; }
+      if (k === "t") { e.preventDefault(); setWeekOffset(0); return; }
+      if (k === "n") { e.preventDefault(); openAddRecipeModal(null); return; }
+      if (k === "s" && totalSlots > 0) { e.preventDefault(); setShowSnapForm(true); return; }
+      if (k === "r" && totalSlots > 0) {
+        e.preventDefault();
+        if (window.confirm("Reset the active week plan?")) wpResetWeek();
+        return;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showAdd, showSnapForm, previewCardSlot, moveSheetSlot, undoToast, selectedUids, totalSlots]);
+
+  /* ── Mobile-first state ──
+     mobileTab: segmented control (Plan / Shopping / Saved).
+     moveSheetSlot: bottom action sheet on chip tap.
+     hideChecked / collapsedCats: shopping-list controls.
+     collapsedDates: per-date collapse state on mobile (keyed by ISO date). */
   const [mobileTab, setMobileTab] = useState("plan");
   const [moveSheetSlot, setMoveSheetSlot] = useState(null);
+  /* Bottom-sheet drag-to-dismiss state — `y` is current translateY,
+     `animating` toggles spring transition during release snap-back. */
+  const [sheetDrag, setSheetDrag] = useState({ y: 0, animating: false });
+  const sheetDragRef = useRef({ y0: 0, t0: 0, active: false, dy: 0 });
+  /* Reset sheet-drag state whenever the sheet target changes */
+  useEffect(() => { setSheetDrag({ y: 0, animating: false }); }, [moveSheetSlot]);
+  /* Desktop multi-select — shift+click on chips toggles them into a Set.
+     A floating toolbar appears with bulk Cooked / Skip / Remove actions.
+     Esc or Clear button exits selection mode. Mobile uses the bottom sheet. */
+  const [selectedUids, setSelectedUids] = useState(() => new Set());
+  const clearSelection = () => setSelectedUids(new Set());
+  const toggleSelect = (uid) => setSelectedUids(prev => {
+    const n = new Set(prev);
+    if (n.has(uid)) n.delete(uid); else n.add(uid);
+    return n;
+  });
+  const [previewExpanded, setPreviewExpanded] = useState(false);
+  useEffect(() => { setPreviewExpanded(false); }, [previewCardSlot]);
   const [hideChecked, setHideChecked] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState(new Set());
-  const [collapsedDays, setCollapsedDays] = useState(() => { const t = (new Date().getDay() + 6) % 7; return new Set(WP_DAYS.filter((_, i) => i < t)); });
+  /* Auto-collapse only past days that have NO planned items — past days
+     with unfinished slots stay expanded so they're immediately visible
+     (the past-rollover banner is then a summary, not the only entry point).
+     User can still toggle any day manually. Re-seeds on week change. */
+  const [collapsedDates, setCollapsedDates] = useState(() => new Set());
+  useEffect(() => {
+    if (!isViewingThisWeek) { setCollapsedDates(new Set()); return; }
+    const slots = (weekPlan && weekPlan.slots) || [];
+    const plannedByDate = {};
+    slots.forEach(s => {
+      const d = s.date !== undefined ? s.date : (s.day && WP_DAYS.indexOf(s.day) >= 0 ? wpWeekDates(0)[WP_DAYS.indexOf(s.day)] : null);
+      if (!d) return;
+      if ((s.status || "planned") !== "planned") return;
+      plannedByDate[d] = (plannedByDate[d] || 0) + 1;
+    });
+    const next = new Set();
+    visibleWeekDates.forEach(k => {
+      if (wpIsPast(k) && !plannedByDate[k]) next.add(k);
+    });
+    setCollapsedDates(next);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [weekOffset]);
+
   const [undoToast, setUndoToast] = useState(null);
-  const [weekOffset, setWeekOffset] = useState(0);
   const undoRemove = (slot) => { wpRemoveSlot(slot.uid); if (undoToast) clearTimeout(undoToast.timer); const timer = setTimeout(() => setUndoToast(null), 5000); setUndoToast({ slot, timer }); };
   const [checkedItems, setCheckedItems] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("mise_en_code_shopping_checked") || "[]")); }
@@ -1662,8 +2040,8 @@ function WeekPlanPhaseAPlaceholder({
     ? publishedRecs
     : publishedRecs.filter(r => (r.category || "Mains") === pickCategory);
 
-  const openAddRecipeModal = (day = null) => {
-    setAddTargetDay(day);
+  const openAddRecipeModal = (dateKey = null) => {
+    setAddTargetDate(dateKey);
     setPickCategory("all");
     setPickRecipeId("");
     setShowAdd(true);
@@ -1671,7 +2049,7 @@ function WeekPlanPhaseAPlaceholder({
 
   const closeAddRecipeModal = () => {
     setShowAdd(false);
-    setAddTargetDay(null);
+    setAddTargetDate(null);
     setPickRecipeId("");
   };
 
@@ -1695,16 +2073,85 @@ function WeekPlanPhaseAPlaceholder({
 
   const fmtTime = (iso) => { try { return new Date(iso).toLocaleString(); } catch { return iso; } };
 
-  /* Split slots into pool (day=null) and per-day buckets */
-  const pool = (weekPlan.slots || []).filter(s => !s.day);
-  const slotsByDay = {};
-  WP_DAYS.forEach(d => { slotsByDay[d] = []; });
-  (weekPlan.slots || []).forEach(s => { if (s.day && slotsByDay[s.day]) slotsByDay[s.day].push(s); });
+  /* Read a slot's date — defensive against not-yet-migrated legacy slots.
+     Treats {day: "mon"} as this-week's Monday until the migration effect runs. */
+  const slotDate = (s) => {
+    if (!s) return null;
+    if (s.date !== undefined) return s.date;
+    if (s.day) {
+      const idx = WP_DAYS.indexOf(s.day);
+      if (idx >= 0) return wpWeekDates(0)[idx];
+    }
+    return null;
+  };
+  const slotStatus = (s) => (s && s.status) || "planned";
+
+  /* Split slots:
+       pool          — unscheduled (date == null), all weeks
+       slotsByDate   — keyed by ISO date, only contains planned (not cooked/skipped)
+       pastUnfinished — planned slots whose date is before today (rollover candidates) */
+  const allSlots = weekPlan.slots || [];
+  const pool = allSlots.filter(s => slotDate(s) == null && slotStatus(s) === "planned");
+  const slotsByDate = {};
+  visibleWeekDates.forEach(k => { slotsByDate[k] = []; });
+  allSlots.forEach(s => {
+    const d = slotDate(s); if (!d) return;
+    if (slotsByDate[d] && slotStatus(s) === "planned") slotsByDate[d].push(s);
+  });
+  /* Past unfinished — surfaced as a rollover banner when viewing this week */
+  const pastUnfinished = isViewingThisWeek
+    ? allSlots.filter(s => {
+        const d = slotDate(s);
+        return d && d < todayKey && slotStatus(s) === "planned";
+      })
+    : [];
+
+  /* Stable id → parametricCard lookup for the visible week so we don't
+     re-scan parametricCards.cards on every chip render. */
+  const cardById = useMemo(() => {
+    const m = {};
+    ((parametricCards && parametricCards.cards) || []).forEach(c => { m[c.recipeId] = c.parametricCard; });
+    return m;
+  }, [parametricCards]);
+
+  /* Hover-reveal state for desktop compact-mode chips — single global
+     hoveredChipUid means only the chip whose hover-flag changed re-renders. */
+  const [hoveredChipUid, setHoveredChipUid] = useState(null);
+
+  /* Per-day load — for each visible date, sum the estimated lead time of
+     scheduled slots and tally which appliances are needed. Conflicts surface
+     when a single-resource appliance (oven, sous-vide bath, etc.) is needed
+     by 2+ recipes that day. */
+  const dayLoads = useMemo(() => {
+    const out = {};
+    visibleWeekDates.forEach(k => { out[k] = { totalMin: 0, equipment: {}, conflicts: [], slotCount: 0 }; });
+    (weekPlan.slots || []).forEach(s => {
+      const d = s.date !== undefined ? s.date : (s.day && WP_DAYS.indexOf(s.day) >= 0 ? wpWeekDates(0)[WP_DAYS.indexOf(s.day)] : null);
+      if (!d || !out[d]) return;
+      if ((s.status || "planned") !== "planned") return;
+      const card = cardById[s.recipeId];
+      const lead = wpEstimateLeadTime(card);
+      if (lead) out[d].totalMin += lead;
+      out[d].slotCount += 1;
+      ((card && card.equipment) || []).forEach(e => {
+        if (!e || !e.name) return;
+        out[d].equipment[e.name] = (out[d].equipment[e.name] || 0) + 1;
+      });
+    });
+    Object.keys(out).forEach(k => {
+      Object.entries(out[k].equipment).forEach(([name, count]) => {
+        if (count > 1 && WP_CONFLICT_EQUIPMENT.has(name)) {
+          out[k].conflicts.push({ name, count });
+        }
+      });
+    });
+    return out;
+  }, [weekPlan.slots, cardById, visibleWeekDates]);
 
   const handleAdd = () => {
     const recipe = recs.find(r => r.id === pickRecipeId);
     if (!recipe) { alert("Select a recipe first."); return; }
-    wpAddSlot(recipe, addTargetDay || undefined);  /* day undefined → goes to pool */
+    wpAddSlot(recipe, addTargetDate || undefined);  /* undefined → tray (date=null) */
     closeAddRecipeModal();
   };
   const handleSaveSnap = () => {
@@ -1802,15 +2249,44 @@ function WeekPlanPhaseAPlaceholder({
       byCategory[cat].push(item);
     });
     Object.values(byCategory).forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name)));
-    /* Sort categories alphabetically with Proteins/Vegetables/Dairy at top */
-    const catPriority = { "Proteins": 1, "Vegetables": 2, "Dairy & Eggs": 3, "Bakery": 4, "Pasta": 5, "Liquids": 6, "Fats": 7, "Seasonings": 8, "Fruits": 9, "Other": 10 };
+    /* Category priority — uses the canonical category strings produced by
+       the ingredient library (long forms like "Meats & Proteins"), matching
+       what guessCategory() in modernist-canon.js emits and what the app's
+       customIngredients buckets are keyed by. Shorter aliases are kept for
+       backward compat with older sidecars. */
+    const catPriority = {
+      "Meats & Proteins":    1, "Proteins":      1,
+      "Vegetables":          2,
+      "Dairy & Eggs":        3,
+      "Fruits":              4,
+      "Bakery":              5,
+      "Pasta":               6,
+      "Flours & Cereals":    7, "Grains":        7,
+      "Broths & Liquids":    8, "Liquids":       8,
+      "Oils & Fats":         9, "Fats":          9,
+      "Herbs & Spices":     10, "Seasonings":   10,
+      "Condiments":         11,
+      "Sugars & Sweeteners":12, "Sugars":       12,
+      "Nuts & Seeds":       13,
+      "Cheese":             14,
+      "Deli":               15,
+      "Other":              99,
+    };
     const sortedCats = Object.keys(byCategory).sort((a, b) => (catPriority[a] || 99) - (catPriority[b] || 99) || a.localeCompare(b));
     return { byCategory, sortedCats, total: aggregate.size };
   }, [weekPlan.slots, recs, parametricCards]);
 
   /* ══ Render — mobile-first redesign ══ */
-  const totalSlots = (weekPlan.slots || []).length;
-  const scheduledCount = (weekPlan.slots || []).filter(s => s.day).length;
+  /* totalSlots — count of all planned slots across every week (tray + scheduled),
+     excluding cooked/skipped. Drives empty-state and "X recipes" copy.
+     scheduledThisWeek — planned slots whose date is in the visible week. */
+  const totalSlots = (weekPlan.slots || []).filter(s => slotStatus(s) === "planned").length;
+  const scheduledThisWeek = (weekPlan.slots || []).filter(s => {
+    const d = slotDate(s);
+    return d && slotStatus(s) === "planned" && visibleWeekDates.indexOf(d) >= 0;
+  }).length;
+  /* keep `scheduledCount` as an alias for places that read "scheduled in view" */
+  const scheduledCount = scheduledThisWeek;
 
   /* Shopping list helpers + derived stats */
   const itemKey = (it) => (it.name || "").toLowerCase().trim();
@@ -1823,61 +2299,245 @@ function WeekPlanPhaseAPlaceholder({
   /* Tap-target sizing — Apple HIG ≥44pt on phones, smaller on desktop. */
   const TAP = isMobile ? 44 : 32;
 
-  /* Recipe chip — used in tray and in days. Larger and tap-friendly on mobile. */
+  /* ── Swipe-to-action state ──
+     One chip swipes at a time. activeSwipe.x is the current translateX
+     offset; a ref tracks the gesture start without triggering re-renders.
+     Mobile only, day-located chips only (the tray scrolls horizontally). */
+  const [activeSwipe, setActiveSwipe] = useState(null);
+  const swipeStartRef = useRef({ x:0, y:0, t:0, lock:null, uid:null });
+  const skipNextClickRef = useRef(false);
+  const SWIPE_THRESHOLD = 80;   /* px */
+  const SWIPE_MAX = 140;        /* px after which resistance kicks in */
+  const SWIPE_VELOCITY = 0.55;  /* px/ms — flick threshold */
+
+  const handleSwipeStart = (slot, location, e) => {
+    if (!isMobile || location !== "day") return;
+    if (e.touches && e.touches.length > 1) return;
+    const t = e.touches ? e.touches[0] : e;
+    swipeStartRef.current = { x:t.clientX, y:t.clientY, t:Date.now(), lock:null, uid:slot.uid };
+  };
+  const handleSwipeMove = (slot, e) => {
+    if (!isMobile) return;
+    const ref = swipeStartRef.current;
+    if (!ref || ref.uid !== slot.uid) return;
+    const t = e.touches ? e.touches[0] : e;
+    const dx = t.clientX - ref.x;
+    const dy = t.clientY - ref.y;
+    if (!ref.lock) {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        /* Lock direction — favour horizontal slightly (×1.2) so light
+           vertical drift while swiping horizontally doesn't cancel. */
+        ref.lock = Math.abs(dx) > Math.abs(dy) * 1.2 ? "h" : "v";
+      }
+    }
+    if (ref.lock === "h") {
+      if (e.cancelable) e.preventDefault();
+      let x = dx;
+      /* Resistance past max — feels rubbery instead of unlimited */
+      if (Math.abs(x) > SWIPE_MAX) {
+        const sign = x > 0 ? 1 : -1;
+        x = sign * (SWIPE_MAX + (Math.abs(x) - SWIPE_MAX) * 0.3);
+      }
+      setActiveSwipe({ uid: slot.uid, x });
+    }
+  };
+  const handleSwipeEnd = (slot) => {
+    if (!isMobile) return;
+    const ref = swipeStartRef.current;
+    if (!ref || ref.uid !== slot.uid) { setActiveSwipe(null); return; }
+    if (ref.lock === "h") {
+      const x = (activeSwipe && activeSwipe.uid === slot.uid) ? activeSwipe.x : 0;
+      const dt = Date.now() - ref.t;
+      const velocity = dt > 0 ? x / dt : 0;
+      const triggerLeft  = x < -SWIPE_THRESHOLD || velocity < -SWIPE_VELOCITY;
+      const triggerRight = x >  SWIPE_THRESHOLD || velocity >  SWIPE_VELOCITY;
+      if (triggerLeft || triggerRight) {
+        skipNextClickRef.current = true;
+        setTimeout(() => { skipNextClickRef.current = false; }, 350);
+      }
+      setActiveSwipe(null);
+      if (triggerLeft)       undoRemove(slot);
+      else if (triggerRight) wpMarkCooked(slot.uid);
+    } else {
+      setActiveSwipe(null);
+    }
+    swipeStartRef.current = { x:0, y:0, t:0, lock:null, uid:null };
+  };
+
+  /* Recipe chip — used in tray and in days. Larger and tap-friendly on mobile.
+     Mobile-day chips wrap in a swipe surface that reveals "Remove" (swipe left)
+     and "✓ Cooked" (swipe right) actions. */
   const SlotChip = ({ slot, location }) => {
     const resolved = resolveCard(slot.recipeId);
     const meta = statusMeta[resolved.status];
     const isDragging = draggingUid === slot.uid;
+    const canSwipe = isMobile && location === "day";
+    const swipeX = (activeSwipe && activeSwipe.uid === slot.uid) ? activeSwipe.x : 0;
+    const isSwiping = canSwipe && swipeX !== 0;
+    const revealOpacity = Math.min(1, Math.abs(swipeX) / SWIPE_THRESHOLD);
+    const isSelected = selectedUids.has(slot.uid);
+    const inSelectMode = selectedUids.size > 0;
+    /* Lead-time hint — show as a small badge in the chip when ≥ 90 min so the
+       cook sees long-prep recipes at a glance without opening the card. */
+    const chipCard = cardById[slot.recipeId] || null;
+    const chipLeadMin = wpEstimateLeadTime(chipCard);
+    const showLeadBadge = chipLeadMin != null && chipLeadMin >= 90;
+    /* Compact mode — on desktop, the 7-col week grid makes day cells too
+       narrow for the full chip layout (drag handle + dot + name + × +
+       servings + badges). Compact chips show name-prominent, with controls
+       hover-revealed and status signalled by border colour. */
+    const isCompactDayDesktop = !isMobile && location === "day";
+    const isHovered = hoveredChipUid === slot.uid;
+    const statusBorder = (() => {
+      if (!isCompactDayDesktop) return null;
+      if (resolved.status === "available") return `${meta.color}55`;
+      if (resolved.status === "stale")     return `${meta.color}80`;
+      if (resolved.status === "no-recipe") return `${meta.color}80`;
+      return th.bdS;
+    })();
     const onChipClick = (e) => {
       e.stopPropagation();
-      if (isMobile) setMoveSheetSlot(slot);
+      if (skipNextClickRef.current) { skipNextClickRef.current = false; return; }
+      /* Desktop multi-select: shift+click toggles selection; once any chip
+         is selected, plain click also toggles (so users don't keep shift
+         held while picking several). */
+      if (!isMobile && (e.shiftKey || inSelectMode)) {
+        toggleSelect(slot.uid);
+        return;
+      }
+      if (isMobile) { setMoveSheetSlot(slot); return; }
+      /* Desktop compact day chip — plain click opens the preview when
+         a card is available (controls are accessed there). */
+      if (isCompactDayDesktop && resolved.card) {
+        setPreviewCardSlot(slot);
+      }
     };
     return (
+      <div style={{
+        position: "relative",
+        flexShrink: 0,
+        minWidth: location === "pool" ? (isMobile ? 200 : 160) : 0,
+        width: location === "day" ? "100%" : "auto",
+        borderRadius: WP_R.md,
+        overflow: canSwipe ? "hidden" : "visible",
+      }}>
+        {/* Swipe-left reveal — Remove */}
+        {canSwipe && (
+          <div aria-hidden style={{
+            position: "absolute", inset: 0, borderRadius: 12,
+            background: th.err || "#D45B5B",
+            display: "flex", alignItems: "center", justifyContent: "flex-end",
+            padding: "0 18px",
+            opacity: swipeX < 0 ? revealOpacity : 0,
+            color: "#FFF", fontFamily: "'DM Sans',sans-serif",
+            fontSize: 12, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
+            pointerEvents: "none",
+            transition: isSwiping ? "none" : `opacity 0.18s ${WP_EASE_FAST}`,
+          }}>Remove</div>
+        )}
+        {/* Swipe-right reveal — Cooked */}
+        {canSwipe && (
+          <div aria-hidden style={{
+            position: "absolute", inset: 0, borderRadius: 12,
+            background: th.ok || "#6BAF6E",
+            display: "flex", alignItems: "center", justifyContent: "flex-start",
+            padding: "0 18px",
+            opacity: swipeX > 0 ? revealOpacity : 0,
+            color: "#FFF", fontFamily: "'DM Sans',sans-serif",
+            fontSize: 12, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase",
+            pointerEvents: "none",
+            transition: isSwiping ? "none" : `opacity 0.18s ${WP_EASE_FAST}`,
+          }}>{"✓"} Cooked</div>
+        )}
       <div
-        onClick={isMobile ? onChipClick : undefined}
-        draggable={true}
+        onClick={onChipClick}
+        onMouseEnter={isCompactDayDesktop ? () => setHoveredChipUid(slot.uid) : undefined}
+        onMouseLeave={isCompactDayDesktop ? () => setHoveredChipUid(u => u === slot.uid ? null : u) : undefined}
+        draggable={!isMobile && !inSelectMode}
         onDragStart={(e) => onDragStart(e, slot.uid)}
         onDragEnd={onDragEnd}
+        onTouchStart={canSwipe ? (e => handleSwipeStart(slot, location, e)) : undefined}
+        onTouchMove={canSwipe ? (e => handleSwipeMove(slot, e)) : undefined}
+        onTouchEnd={canSwipe ? (() => handleSwipeEnd(slot)) : undefined}
+        onTouchCancel={canSwipe ? (() => handleSwipeEnd(slot)) : undefined}
         style={{
-          background: th.bgC,
-          border: `1px solid ${isDragging ? th.acc : th.bdS}`,
-          borderRadius: 12,
-          padding: isMobile ? "12px 14px" : "10px 12px",
+          position: "relative",
+          background: isSelected ? `${th.acc}10` : (isCompactDayDesktop && isHovered ? th.bgH : th.bgC),
+          border: `1px solid ${isSelected ? th.acc : isDragging ? th.acc : (isCompactDayDesktop ? statusBorder : th.bdS)}`,
+          boxShadow: isSelected
+            ? `0 0 0 2px ${th.acc}30, 0 1px 4px rgba(42,36,32,0.05)`
+            : (isDragging ? "none" : (isCompactDayDesktop && isHovered ? "0 4px 12px rgba(42,36,32,0.10)" : "0 1px 4px rgba(42,36,32,0.05)")),
+          borderRadius: WP_R.md,
+          padding: isMobile ? "12px 14px" : (isCompactDayDesktop ? "9px 11px" : "10px 12px"),
           display: "flex",
           flexDirection: "column",
-          gap: 8,
-          cursor: "grab",
+          gap: isCompactDayDesktop ? 4 : 8,
+          cursor: inSelectMode && !isMobile ? "pointer" : (isCompactDayDesktop ? "pointer" : "grab"),
           userSelect: "none",
           opacity: isDragging ? 0.4 : 1,
-          boxShadow: isDragging ? "none" : "0 1px 4px rgba(42,36,32,0.05)",
-          transition: "opacity 0.15s, box-shadow 0.15s, border-color 0.15s",
-          minWidth: location === "pool" ? (isMobile ? 200 : 160) : 0,
-          flexShrink: 0,
+          transform: isSwiping ? `translate3d(${swipeX}px,0,0)` : "translate3d(0,0,0)",
+          transition: isSwiping
+            ? "none"
+            : `transform 0.32s ${WP_SPRING}, opacity 0.18s ${WP_EASE_FAST}, box-shadow 0.18s ${WP_EASE_FAST}, border-color 0.18s ${WP_EASE_FAST}`,
+          touchAction: canSwipe ? "pan-y" : "auto",
         }}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-          <span style={{ color: th.txD, fontSize: 14, cursor: "grab", marginTop: 4, flexShrink: 0, lineHeight: 1 }}>{"\u2630"}</span>
-          <span title={meta.label} style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, marginTop: 7, flexShrink: 0 }}/>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: isCompactDayDesktop ? 0 : 8 }}>
+          {!isCompactDayDesktop && (
+            <span style={{ color: th.txD, fontSize: 14, cursor: "grab", marginTop: 4, flexShrink: 0, lineHeight: 1 }}>{"\u2630"}</span>
+          )}
+          {!isCompactDayDesktop && (
+            <span title={meta.label} style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, marginTop: 7, flexShrink: 0 }}/>
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
               fontFamily: "'Playfair Display',serif",
-              fontSize: isMobile ? 14 : 13, fontWeight: 600, lineHeight: 1.3,
+              fontSize: isMobile ? 14 : (isCompactDayDesktop ? 12.5 : 13),
+              fontWeight: 600,
+              lineHeight: isCompactDayDesktop ? 1.35 : 1.3,
               color: th.tx,
               overflow: "hidden", textOverflow: "ellipsis",
-              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical"
+              display: "-webkit-box",
+              WebkitLineClamp: isCompactDayDesktop ? 3 : 2,
+              WebkitBoxOrient: "vertical",
+              paddingRight: isCompactDayDesktop ? 22 : 0, /* reserve space for hover-revealed \u00D7 so layout doesn't shift */
             }} title={slot.name}>{slot.name}</div>
+            {/* Lead-time icon \u2014 compact mode shows it as a tiny pill below the name when hover-revealed */}
+            {isCompactDayDesktop && showLeadBadge && (
+              <div style={{
+                marginTop: 5, display: "inline-flex", alignItems: "center", gap: 3,
+                fontFamily: "'JetBrains Mono',monospace", fontSize: 9, fontWeight: 600,
+                color: chipLeadMin >= 240 ? (th.warn || "#A0772E") : th.txD,
+                opacity: 0.85,
+              }} title={`Lead ${wpFormatDuration(chipLeadMin)}`}>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                {wpFormatDuration(chipLeadMin)}
+              </div>
+            )}
           </div>
           <button
             onClick={e => { e.stopPropagation(); undoRemove(slot); }}
             title="Remove" aria-label="Remove"
             style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: "transparent", border: "none", cursor: "pointer",
-              color: th.txD, fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0,
+              width: isCompactDayDesktop ? 20 : 28,
+              height: isCompactDayDesktop ? 20 : 28,
+              borderRadius: "50%",
+              background: isCompactDayDesktop ? th.bgC : "transparent",
+              border: isCompactDayDesktop ? `1px solid ${th.bdS}` : "none",
+              cursor: "pointer",
+              color: th.txD, fontSize: isCompactDayDesktop ? 14 : 18,
+              lineHeight: 1, padding: 0, flexShrink: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
+              position: isCompactDayDesktop ? "absolute" : "static",
+              top: isCompactDayDesktop ? 6 : undefined,
+              right: isCompactDayDesktop ? 6 : undefined,
+              opacity: isCompactDayDesktop ? (isHovered ? 1 : 0) : 1,
+              pointerEvents: isCompactDayDesktop && !isHovered ? "none" : "auto",
+              transition: `opacity 0.18s ${WP_EASE_FAST}`,
             }}
           >{"\u00D7"}</button>
         </div>
+        {!isCompactDayDesktop && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 2, background: th.bgH, borderRadius: 999, padding: 2, border: `1px solid ${th.div}` }}>
             <button
@@ -1892,6 +2552,19 @@ function WeekPlanPhaseAPlaceholder({
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 600, color: th.txD, textTransform: "uppercase", letterSpacing: 0.6 }}>servings</span>
+            {showLeadBadge && (
+              <span title={`Estimated lead time — ${wpFormatDuration(chipLeadMin)}`} style={{
+                fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, fontWeight: 600,
+                color: chipLeadMin >= 240 ? (th.warn || "#A0772E") : th.txM,
+                background: chipLeadMin >= 240 ? `${th.warn || "#E8B84B"}14` : th.bgH,
+                border: `1px solid ${chipLeadMin >= 240 ? `${th.warn || "#E8B84B"}50` : th.bdS}`,
+                padding: "2px 6px", borderRadius: 999, letterSpacing: 0.2,
+                display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0,
+              }}>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                {wpFormatDuration(chipLeadMin)}
+              </span>
+            )}
             {(resolved.status === "available" || resolved.status === "stale") && resolved.card && (
               <button
                 onClick={e => { e.stopPropagation(); setPreviewCardSlot(slot); }}
@@ -1907,6 +2580,8 @@ function WeekPlanPhaseAPlaceholder({
             )}
           </div>
         </div>
+        )}
+      </div>
       </div>
     );
   };
@@ -1914,20 +2589,25 @@ function WeekPlanPhaseAPlaceholder({
   /* Day card — full-width on mobile, 7-col grid tile on desktop. Header strip shows
      day name + count + an inline "+" button. Empty state is an elegant ghost button
      instead of small italic text. */
-  const DayCard = (day) => {
-    const slots = slotsByDay[day] || [];
-    const isHovered = hoverTarget === day;
-    const isToday = (() => {
-      const today = new Date();
-      const dayIdx = (today.getDay() + 6) % 7; /* mon=0 */
-      return WP_DAYS[dayIdx] === day;
-    })();
-    const isCollapsed = isMobile && collapsedDays.has(day) && !isToday;
+  const DayCard = (dateKey) => {
+    const slots = slotsByDate[dateKey] || [];
+    const isHovered = hoverTarget === dateKey;
+    const isToday   = wpIsToday(dateKey);
+    const isPast    = wpIsPast(dateKey);
+    const dayKey    = wpDayOfWeek(dateKey);
+    const dObj      = wpKeyToDate(dateKey);
+    const dayLabelLong  = WP_DAY_LABELS[dayKey];
+    const dayLabelShort = WP_DAY_SHORT[dayKey];
+    const dateText  = `${WP_MONTH_SHORT[dObj.getMonth()]} ${dObj.getDate()}`;
+    const load = dayLoads[dateKey] || { totalMin: 0, conflicts: [], slotCount: 0 };
+    const hasConflict = load.conflicts.length > 0;
+    const isLongDay = load.totalMin >= 240;   /* ≥4h cumulative — surface a hint */
+    const isCollapsed = isMobile && collapsedDates.has(dateKey) && !isToday;
     return (
-      <div key={day}
-        onDragOver={(e => onDragOver(e, day))}
-        onDragLeave={(e => onDragLeave(e, day))}
-        onDrop={(e => onDrop(e, day))}
+      <div key={dateKey}
+        onDragOver={(e => onDragOver(e, dateKey))}
+        onDragLeave={(e => onDragLeave(e, dateKey))}
+        onDrop={(e => onDrop(e, dateKey))}
         style={{
           background: isHovered ? `${th.acc}18` : th.bgC,
           border: isToday ? `2px solid ${th.sec}` : `1px solid ${isHovered ? th.acc : th.bdS}`,
@@ -1936,24 +2616,30 @@ function WeekPlanPhaseAPlaceholder({
           flexDirection: "column",
           minHeight: isMobile ? 0 : 220,
           overflow: "hidden",
-          transition: "background 0.15s, border-color 0.15s",
+          opacity: isPast && !isToday ? 0.78 : 1,
+          transition: "background 0.15s, border-color 0.15s, opacity 0.15s",
         }}
       >
-        <div onClick={isMobile ? (() => { const n = new Set(collapsedDays); if (n.has(day)) n.delete(day); else n.add(day); setCollapsedDays(n); }) : undefined} style={{
+        <div onClick={isMobile ? (() => { const n = new Set(collapsedDates); if (n.has(dateKey)) n.delete(dateKey); else n.add(dateKey); setCollapsedDates(n); }) : undefined} style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: isMobile ? "10px 14px" : "10px 12px",
           background: isToday ? `${th.sec}20` : th.bgH,
           borderBottom: isCollapsed ? "none" : `1px solid ${th.div}`,
           cursor: isMobile ? "pointer" : "default",
         }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
             <span style={{
               fontFamily: "'Playfair Display',serif",
               fontSize: isMobile ? 14 : 12, fontWeight: 700,
               color: isToday ? th.sec : th.tx, letterSpacing: 0.3,
             }}>
-              {isMobile ? WP_DAY_LABELS[day] : WP_DAY_SHORT[day]}
+              {isMobile ? dayLabelLong : dayLabelShort}
             </span>
+            <span style={{
+              fontFamily: "'JetBrains Mono',monospace",
+              fontSize: isMobile ? 11 : 10, fontWeight: 500,
+              color: isToday ? th.sec : th.txD, letterSpacing: 0.2,
+            }}>{dateText}</span>
             {isToday && <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, color: th.sec, textTransform: "uppercase", letterSpacing: 0.8, background: `${th.sec}20`, padding: "2px 6px", borderRadius: 4 }}>Today</span>}
             {slots.length > 0 && (
               <span style={{
@@ -1964,12 +2650,35 @@ function WeekPlanPhaseAPlaceholder({
                 {slots.length}
               </span>
             )}
+            {hasConflict && (
+              <span title={load.conflicts.map(c => `${c.count}\u00D7 ${c.name}`).join(" \u00B7 ")} style={{
+                fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700,
+                color: th.err || "#D45B5B", background: `${th.err || "#D45B5B"}12`,
+                border: `1px solid ${th.err || "#D45B5B"}40`,
+                padding: "1px 7px", borderRadius: 999, letterSpacing: 0.3,
+                display: "inline-flex", alignItems: "center", gap: 3,
+              }}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                {load.conflicts[0].name}{load.conflicts.length > 1 ? ` +${load.conflicts.length - 1}` : ""}
+              </span>
+            )}
+            {isLongDay && (
+              <span title={`Cumulative prep: ${wpFormatDuration(load.totalMin)}`} style={{
+                fontFamily: "'JetBrains Mono',monospace", fontSize: 10, fontWeight: 600,
+                color: th.warn || "#A0772E",
+                background: `${th.warn || "#E8B84B"}14`,
+                border: `1px solid ${th.warn || "#E8B84B"}50`,
+                padding: "1px 7px", borderRadius: 999, letterSpacing: 0.2,
+              }}>
+                \u23F1 {wpFormatDuration(load.totalMin)}
+              </span>
+            )}
             {isMobile && <span style={{ fontSize: 10, color: th.txD }}>{isCollapsed ? "\u25B8" : "\u25BE"}</span>}
           </div>
           {!isCollapsed && (
             <button
-              onClick={(e) => { e.stopPropagation(); openAddRecipeModal(day); }}
-              title={`Add to ${WP_DAY_LABELS[day]}`} aria-label={`Add to ${WP_DAY_LABELS[day]}`}
+              onClick={(e) => { e.stopPropagation(); openAddRecipeModal(dateKey); }}
+              title={`Add to ${dayLabelLong}`} aria-label={`Add to ${dayLabelLong}`}
               style={{
                 width: 32, height: 32, borderRadius: "50%",
                 border: `1px solid ${th.bdS}`, background: th.bgC, color: th.tx2,
@@ -1983,7 +2692,7 @@ function WeekPlanPhaseAPlaceholder({
         {!isCollapsed && (
         <div style={{ padding: isMobile ? "10px 12px 12px" : "10px", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
           {slots.length === 0 ? (
-            <button onClick={() => openAddRecipeModal(day)} style={{
+            <button onClick={() => openAddRecipeModal(dateKey)} style={{
               padding: isMobile ? "16px" : "12px",
               border: `1.5px dashed ${th.bd}`, borderRadius: 10, background: "transparent",
               color: th.txM, fontFamily: "'Cormorant Garamond',serif",
@@ -2012,8 +2721,40 @@ function WeekPlanPhaseAPlaceholder({
   });
   const renderMoveSheet = () => {
     if (!moveSheetSlot) return null;
-    const close = () => setMoveSheetSlot(null);
+    const close = () => { setSheetDrag({ y:0, animating:false }); setMoveSheetSlot(null); };
     const moveTo = (target) => { wpScheduleSlot(moveSheetSlot.uid, target); close(); };
+    const currentDate = slotDate(moveSheetSlot);
+    const isCooked  = slotStatus(moveSheetSlot) === "cooked";
+    const isSkipped = slotStatus(moveSheetSlot) === "skipped";
+    /* Velocity-aware drag-down dismissal — capture touch on the handle area
+       (top of sheet) and translateY the sheet. Release with >120px drag OR
+       fast flick downward closes; otherwise springs back. */
+    const onSheetTouchStart = (e) => {
+      const t = e.touches ? e.touches[0] : e;
+      sheetDragRef.current = { y0: t.clientY, t0: Date.now(), active: true, dy: 0 };
+      setSheetDrag(prev => ({ ...prev, animating: false }));
+    };
+    const onSheetTouchMove = (e) => {
+      const ref = sheetDragRef.current;
+      if (!ref || !ref.active) return;
+      const t = e.touches ? e.touches[0] : e;
+      let dy = t.clientY - ref.y0;
+      if (dy < 0) dy = dy * 0.25; /* resist upward drag */
+      ref.dy = dy;
+      setSheetDrag({ y: dy, animating: false });
+    };
+    const onSheetTouchEnd = () => {
+      const ref = sheetDragRef.current;
+      if (!ref || !ref.active) return;
+      const dt = Math.max(1, Date.now() - ref.t0);
+      const velocity = ref.dy / dt;   /* px/ms */
+      ref.active = false;
+      if (ref.dy > 120 || velocity > 0.6) {
+        close();
+      } else {
+        setSheetDrag({ y: 0, animating: true });
+      }
+    };
     return (
       <div onClick={close} style={{
         position: "fixed", inset: 0, background: th.ov, zIndex: 1500,
@@ -2025,18 +2766,72 @@ function WeekPlanPhaseAPlaceholder({
           borderTopLeftRadius: 18, borderTopRightRadius: 18,
           padding: "10px 16px 24px", maxHeight: "82vh", overflowY: "auto",
           boxShadow: th.shO,
+          transform: `translate3d(0, ${sheetDrag.y || 0}px, 0)`,
+          transition: sheetDrag.animating ? `transform 0.32s ${WP_SPRING}` : "none",
+          willChange: "transform",
         }}>
-          <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>
+          <div
+            onTouchStart={onSheetTouchStart}
+            onTouchMove={onSheetTouchMove}
+            onTouchEnd={onSheetTouchEnd}
+            onTouchCancel={onSheetTouchEnd}
+            style={{
+              /* Wider hit area — the visible handle is 44×4, the touch zone is the full sheet width × 28 tall */
+              padding: "10px 0 6px", margin: "-10px 0 8px", cursor: "grab", touchAction: "none",
+            }}>
+            <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "0 auto" }}/>
+          </div>
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 700, color: th.tx, marginBottom: 2 }}>{moveSheetSlot.name}</div>
-          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 12, fontStyle: "italic", color: th.txM, marginBottom: 14 }}>Move to…</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 12 }}>
-            <button onClick={() => moveTo(null)} style={sheetBtn(moveSheetSlot.day === null)}>Tray</button>
-            {WP_DAYS.map(d => (
-              <button key={d} onClick={() => moveTo(d)} style={sheetBtn(moveSheetSlot.day === d)}>
-                {WP_DAY_LABELS[d]}
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 12, fontStyle: "italic", color: th.txM, marginBottom: 14 }}>
+            {currentDate ? `Scheduled for ${wpFormatDayShort(currentDate)}` : "In the tray"}
+          </div>
+
+          {/* Cook actions — for past or today slots */}
+          {currentDate && !isCooked && !isSkipped && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+              <button onClick={() => { wpMarkCooked(moveSheetSlot.uid); close(); }} style={{
+                padding: "12px", borderRadius: 12, border: `1px solid ${th.ok}40`,
+                background: `${th.ok}10`, color: th.ok,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer",
+              }}>✓ Mark cooked</button>
+              <button onClick={() => { wpMarkSkipped(moveSheetSlot.uid); close(); }} style={{
+                padding: "12px", borderRadius: 12, border: `1px solid ${th.bdS}`,
+                background: th.bgH, color: th.txM,
+                fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}>Skip</button>
+            </div>
+          )}
+          {(isCooked || isSkipped) && (
+            <button onClick={() => { wpRevertStatus(moveSheetSlot.uid); close(); }} style={{
+              width: "100%", padding: "12px", borderRadius: 12,
+              border: `1px solid ${th.bdS}`, background: th.bgH, color: th.tx,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+              marginBottom: 12,
+            }}>↶ Mark as planned again</button>
+          )}
+
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Move to…</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 8 }}>
+            <button onClick={() => moveTo(null)} style={sheetBtn(currentDate === null)}>Tray</button>
+            {visibleWeekDates.map(k => (
+              <button key={k} onClick={() => moveTo(k)} style={sheetBtn(currentDate === k)}>
+                {wpFormatDayShort(k)}{wpIsToday(k) ? " · Today" : ""}
               </button>
             ))}
           </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+            <button onClick={() => moveTo(wpWeekDates(weekOffset - 1)[6])} style={{
+              flex: 1, padding: "10px", borderRadius: 10,
+              border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
+            }}>← Last week (Sun)</button>
+            <button onClick={() => moveTo(wpWeekDates(weekOffset + 1)[0])} style={{
+              flex: 1, padding: "10px", borderRadius: 10,
+              border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
+            }}>Next week (Mon) →</button>
+          </div>
+
           <button onClick={() => { wpRemoveSlot(moveSheetSlot.uid); close(); }} style={{
             width: "100%", padding: "13px", borderRadius: 12,
             border: `1px solid ${th.err}40`, background: `${th.err}10`, color: th.err,
@@ -2052,9 +2847,82 @@ function WeekPlanPhaseAPlaceholder({
     );
   };
 
-  /* ── Section: Plan (Tray + Week calendar) ── */
+  /* ── Past-rollover banner — only shown on the current week when there are
+        planned slots whose date is before today. Each slot can be marked
+        cooked, skipped, or moved forward to today in a single tap. */
+  const renderPastRolloverBanner = () => {
+    if (!isViewingThisWeek || pastUnfinished.length === 0) return null;
+    const bulkMoveToToday = () => {
+      pastUnfinished.forEach(s => wpScheduleSlot(s.uid, todayKey));
+    };
+    const bulkMarkSkipped = () => {
+      pastUnfinished.forEach(s => wpMarkSkipped(s.uid));
+    };
+    return (
+      <div style={{
+        background: `${th.warn || "#E8B84B"}12`,
+        border: `1px solid ${th.warn || "#E8B84B"}40`,
+        borderRadius: 14, padding: isMobile ? "14px" : "14px 16px",
+        marginBottom: 14,
+      }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: pastUnfinished.length ? 10 : 0 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 14 : 13, fontWeight: 700, color: th.tx, lineHeight: 1.3 }}>
+              {pastUnfinished.length} unfinished from before today
+            </div>
+            <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 12, fontStyle: "italic", color: th.txM, marginTop: 2 }}>
+              Tap each chip to mark cooked, skip, or move forward.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            <button onClick={bulkMoveToToday} style={{
+              padding: "8px 12px", borderRadius: 999,
+              border: `1px solid ${th.bdS}`, background: th.bgC, color: th.tx2,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
+            }}>Move all to today</button>
+            <button onClick={() => { if (window.confirm(`Mark all ${pastUnfinished.length} as skipped?`)) bulkMarkSkipped(); }} style={{
+              padding: "8px 12px", borderRadius: 999,
+              border: `1px solid ${th.bdS}`, background: "transparent", color: th.txM,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
+            }}>Skip all</button>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {pastUnfinished.map(slot => (
+            <div key={slot.uid} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 10px", borderRadius: 10,
+              background: th.bgC, border: `1px solid ${th.bdS}`,
+            }}>
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: th.txD, fontWeight: 500, minWidth: 60 }}>
+                {wpFormatDayShort(slotDate(slot))}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, fontFamily: "'Playfair Display',serif", fontSize: 13, fontWeight: 600, color: th.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {slot.name}
+              </span>
+              <button onClick={() => wpMarkCooked(slot.uid)} title="Cooked"
+                style={{ padding: "6px 10px", borderRadius: 999, border: `1px solid ${th.ok}40`, background: `${th.ok}10`, color: th.ok, fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                ✓ Cooked
+              </button>
+              <button onClick={() => wpScheduleSlot(slot.uid, todayKey)} title="Move to today"
+                style={{ padding: "6px 10px", borderRadius: 999, border: `1px solid ${th.bdS}`, background: th.bgH, color: th.tx2, fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                Today
+              </button>
+              <button onClick={() => wpMarkSkipped(slot.uid)} title="Skip"
+                style={{ padding: "6px 10px", borderRadius: 999, border: "none", background: "transparent", color: th.txD, fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                Skip
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  /* ── Section: Plan (Past-rollover + Tray + Week calendar) ── */
   const renderPlanSection = () => (
     <>
+      {renderPastRolloverBanner()}
       {/* Tray */}
       <div
         onDragOver={(e => onDragOver(e, "pool"))}
@@ -2108,19 +2976,55 @@ function WeekPlanPhaseAPlaceholder({
       {/* Week */}
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx }}>{weekOffset === 0 ? "This Week" : weekOffset === 1 ? "Next Week" : "Week +" + weekOffset}</span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx }}>
+              {weekOffset === 0 ? "This Week" : weekOffset === 1 ? "Next Week" : weekOffset === -1 ? "Last Week" : weekOffset > 0 ? `In ${weekOffset} weeks` : `${-weekOffset} weeks ago`}
+            </span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: th.txD, fontWeight: 500 }}>{wpFormatWeekRange(weekOffset)}</span>
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: th.txM, background: th.bgH, padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>
-              {scheduledCount} scheduled
+              {scheduledThisWeek} scheduled
             </span>
           </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={() => setWeekOffset(Math.max(0, weekOffset - 1))} disabled={weekOffset === 0} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid " + th.bdS, background: th.bgC, color: weekOffset === 0 ? th.txD : th.tx, cursor: weekOffset === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, opacity: weekOffset === 0 ? 0.4 : 1, fontSize: 14 }}>{"\u2039"}</button>
-            <button onClick={() => setWeekOffset(weekOffset + 1)} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid " + th.bdS, background: th.bgC, color: th.tx, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, fontSize: 14 }}>{"\u203A"}</button>
+          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            <button onClick={() => {
+              const { ics, count } = wpBuildIcs(
+                (weekPlan.slots || []).filter(s => visibleWeekDates.indexOf(slotDate(s)) >= 0),
+                recs, parametricCards,
+                `Mise en Code \u2014 ${wpFormatWeekRange(weekOffset)}`
+              );
+              if (count === 0) { alert("No scheduled recipes to export for this week."); return; }
+              try {
+                const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `mise-en-code-week-${visibleWeekDates[0]}.ics`;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              } catch (e) { alert("Export failed: " + (e && e.message || e)); }
+            }}
+              title="Export this week as .ics calendar feed"
+              aria-label="Export to calendar"
+              style={{ height: 30, borderRadius: 999, border: "1px solid " + th.bdS, background: th.bgC, color: th.tx2, cursor: "pointer", padding: "0 12px", fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              .ics
+            </button>
+            <span style={{ width: 8 }}/>
+            <button onClick={() => setWeekOffset(weekOffset - 1)}
+              title="Previous week (\u2190)" aria-label="Previous week"
+              style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid " + th.bdS, background: th.bgC, color: th.tx, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, fontSize: 14 }}>{"\u2039"}</button>
+            {weekOffset !== 0 && (
+              <button onClick={() => setWeekOffset(0)}
+                title="Jump to this week (T)" aria-label="Jump to this week"
+                style={{ height: 30, borderRadius: 999, border: "1px solid " + th.bdS, background: th.bgC, color: th.tx2, cursor: "pointer", padding: "0 12px", fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600 }}>Today</button>
+            )}
+            <button onClick={() => setWeekOffset(weekOffset + 1)}
+              title="Next week (\u2192)" aria-label="Next week"
+              style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid " + th.bdS, background: th.bgC, color: th.tx, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, fontSize: 14 }}>{"\u203A"}</button>
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(7, 1fr)", gap: isMobile ? 10 : 8 }}>
-          {WP_DAYS.map(d => DayCard(d))}
+          {visibleWeekDates.map(k => DayCard(k))}
         </div>
       </div>
     </>
@@ -2130,13 +3034,16 @@ function WeekPlanPhaseAPlaceholder({
   const renderShoppingSection = () => {
     if (totalSlots === 0) {
       return (
-        <div style={{ textAlign: "center", padding: "44px 22px", background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 16 }}>
-          <div style={{ fontSize: 38, marginBottom: 8 }}>{"\uD83D\uDED2"}</div>
-          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 600, color: th.tx, marginBottom: 4 }}>
-            Your shopping list is empty
+        <div style={{ textAlign: "center", padding: isMobile ? "60px 24px" : "72px 24px", background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 18 }}>
+          <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke={th.txD} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ margin: "0 auto 16px", display: "block", opacity: 0.55 }}>
+            <path d="M3 6h18l-1.6 11.2a2 2 0 0 1-2 1.8H6.6a2 2 0 0 1-2-1.8L3 6z"/>
+            <path d="M8 6V4a4 4 0 0 1 8 0v2"/>
+          </svg>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 20 : 22, fontWeight: 700, color: th.tx, lineHeight: 1.2, letterSpacing: -0.3 }}>
+            Nothing to gather yet
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic", color: th.txM }}>
-            Add recipes to your plan to see ingredients aggregated here.
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 15, fontStyle: "italic", color: th.txM, marginTop: 8, maxWidth: 320, margin: "8px auto 0", lineHeight: 1.5 }}>
+            Plan a few recipes, and your ingredients will gather here \u2014 scaled, deduplicated, and grouped by aisle.
           </div>
         </div>
       );
@@ -2319,10 +3226,13 @@ function WeekPlanPhaseAPlaceholder({
         )}
       </div>
       {weekPlanSnapshots.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "40px 22px", background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 16 }}>
-          <div style={{ fontSize: 32, marginBottom: 6 }}>{"\uD83D\uDCBE"}</div>
-          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic", color: th.txM }}>
-            No snapshots yet — save your plan to come back to it later.
+        <div style={{ textAlign: "center", padding: isMobile ? "52px 24px" : "60px 24px", background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 18 }}>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={th.txD} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ margin: "0 auto 14px", display: "block", opacity: 0.55 }}>
+            <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
+          </svg>
+          <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 18 : 20, fontWeight: 700, color: th.tx, lineHeight: 1.2, letterSpacing: -0.3, marginBottom: 8 }}>No saved plans yet</div>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic", color: th.txM, maxWidth: 320, margin: "0 auto", lineHeight: 1.5 }}>
+            Snapshot a week you'd like to come back to — favourite menus, holidays, your go-to rotation.
           </div>
         </div>
       ) : (
@@ -2488,7 +3398,67 @@ function WeekPlanPhaseAPlaceholder({
       )}
 
       {renderMoveSheet()}
-      {undoToast && (<div style={{ position: "fixed", bottom: isMobile ? 80 : 24, left: "50%", transform: "translateX(-50%)", zIndex: 1600, background: "#1a1a2e", color: "#fff", padding: "12px 20px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 6px 24px rgba(0,0,0,0.3)", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500, maxWidth: "90vw" }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Removed</span><button onClick={() => { wpAddSlot({ id: undoToast.slot.recipeId, name: undoToast.slot.name, servings: undoToast.slot.servings, category: undoToast.slot.category }, undoToast.slot.day); clearTimeout(undoToast.timer); setUndoToast(null); }} style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#8B5CF6", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>Undo</button></div>)}
+
+      {/* ── Multi-select toolbar (desktop only) ─────────────────────────
+         Floats at the bottom-center of the viewport when one or more
+         chips are shift-clicked. Bulk actions: Mark cooked, Skip, Remove
+         (all undoable via per-action toasts), and Clear. */}
+      {!isMobile && selectedUids.size > 0 && (() => {
+        const sel = (weekPlan.slots || []).filter(s => selectedUids.has(s.uid));
+        const bulkCooked = () => { sel.forEach(s => wpMarkCooked(s.uid)); clearSelection(); };
+        const bulkSkip   = () => { sel.forEach(s => wpMarkSkipped(s.uid)); clearSelection(); };
+        const bulkRemove = () => {
+          if (!window.confirm(`Remove ${sel.length} recipe${sel.length === 1 ? "" : "s"} from the plan?`)) return;
+          sel.forEach(s => wpRemoveSlot(s.uid));
+          clearSelection();
+        };
+        return (
+          <div role="toolbar" aria-label={`${selectedUids.size} selected — bulk actions`} style={{
+            position: "fixed", left: "50%", bottom: 24, zIndex: 1450,
+            transform: "translateX(-50%)",
+            background: th.bgC, border: `1px solid ${th.bdS}`,
+            borderRadius: WP_R.pill, padding: "8px 8px 8px 18px",
+            boxShadow: "0 12px 40px rgba(20,15,10,0.18), 0 2px 8px rgba(20,15,10,0.08)",
+            display: "flex", alignItems: "center", gap: 10,
+            fontFamily: "'DM Sans',sans-serif", color: th.tx,
+            animation: `wpSlideUp 0.28s ${WP_SPRING}`,
+          }}>
+            <style>{`@keyframes wpSlideUp { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }`}</style>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0.3 }}>
+              {selectedUids.size} <span style={{ color: th.txM, fontWeight: 500 }}>selected</span>
+            </span>
+            <span style={{ width: 1, height: 18, background: th.div }}/>
+            <button onClick={bulkCooked} title="Mark cooked" style={{
+              padding: "8px 14px", borderRadius: WP_R.pill, border: `1px solid ${th.ok}40`,
+              background: `${th.ok}10`, color: th.ok, fontFamily: "inherit",
+              fontSize: 12, fontWeight: 700, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 6,
+              transition: `background 0.18s ${WP_EASE_FAST}`,
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Cooked
+            </button>
+            <button onClick={bulkSkip} title="Skip" style={{
+              padding: "8px 14px", borderRadius: WP_R.pill, border: `1px solid ${th.bdS}`,
+              background: th.bgH, color: th.txM, fontFamily: "inherit",
+              fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}>Skip</button>
+            <button onClick={bulkRemove} title="Remove" style={{
+              padding: "8px 14px", borderRadius: WP_R.pill, border: `1px solid ${th.err}40`,
+              background: `${th.err}10`, color: th.err, fontFamily: "inherit",
+              fontSize: 12, fontWeight: 700, cursor: "pointer",
+            }}>Remove</button>
+            <span style={{ width: 1, height: 18, background: th.div }}/>
+            <button onClick={clearSelection} title="Clear selection (Esc)" aria-label="Clear selection" style={{
+              width: 32, height: 32, borderRadius: WP_R.pill,
+              border: "none", background: "transparent", color: th.txM,
+              cursor: "pointer", fontSize: 18, lineHeight: 1,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}>{"×"}</button>
+          </div>
+        );
+      })()}
+      {undoToast && (<div style={{ position: "fixed", bottom: isMobile ? 80 : 24, left: "50%", transform: "translateX(-50%)", zIndex: 1600, background: "#1a1a2e", color: "#fff", padding: "12px 20px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 6px 24px rgba(0,0,0,0.3)", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500, maxWidth: "90vw" }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Removed</span><button onClick={() => { wpAddSlot({ id: undoToast.slot.recipeId, name: undoToast.slot.name, servings: undoToast.slot.servings, category: undoToast.slot.category }, slotDate(undoToast.slot)); clearTimeout(undoToast.timer); setUndoToast(null); }} style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#8B5CF6", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>Undo</button></div>)}
 
       {/* Add recipe modal — bottom-sheet on mobile, centered card on desktop */}
       {showAdd && (
@@ -2509,10 +3479,10 @@ function WeekPlanPhaseAPlaceholder({
           }}>
             {isMobile && <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>}
             <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 19 : 18, fontWeight: 700, marginBottom: 4 }}>
-              {addTargetDay ? `Add to ${WP_DAY_LABELS[addTargetDay]}` : "Add to Tray"}
+              {addTargetDate ? `Add to ${wpFormatDayShort(addTargetDate)}` : "Add to Tray"}
             </div>
             <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic", color: th.txM, marginTop: 0, marginBottom: 14 }}>
-              {addTargetDay ? "Pick a recipe — you can move it later." : "Recipes start in the tray, then drag (or tap) them onto days."}
+              {addTargetDate ? `${wpFormatDayLong(addTargetDate)} — pick a recipe (you can move it later).` : "Recipes start in the tray, then drag (or tap) them onto days."}
             </p>
             <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 8 }}>Filter</label>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
@@ -2568,7 +3538,7 @@ function WeekPlanPhaseAPlaceholder({
                 color: pickRecipeId ? th.txOn : th.txD,
                 fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700,
                 cursor: pickRecipeId ? "pointer" : "not-allowed",
-              }}>{addTargetDay ? `Add to ${WP_DAY_SHORT[addTargetDay]}` : "Add to Tray"}</button>
+              }}>{addTargetDate ? `Add to ${WP_DAY_SHORT[wpDayOfWeek(addTargetDate)]}` : "Add to Tray"}</button>
             </div>
           </div>
         </div>
@@ -2634,7 +3604,7 @@ function WeekPlanPhaseAPlaceholder({
             <div onClick={e => e.stopPropagation()} style={{ background: th.bgC, borderRadius: 16, maxWidth: 720, width: "100%", maxHeight: "90vh", overflowY: "auto", padding: "22px 24px", boxShadow: th.shO, color: th.tx }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.2, color: th.txM }}>{previewCardSlot.day ? WP_DAY_LABELS[previewCardSlot.day] : "Unscheduled"}</div>
+                  <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.2, color: th.txM }}>{(() => { const d = slotDate(previewCardSlot); return d ? wpFormatDayLong(d) : "Unscheduled"; })()}</div>
                   <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, marginTop: 2 }}>{resolved.card.title}</div>
                 </div>
                 <button onClick={() => setPreviewCardSlot(null)} style={{ background: "transparent", border: "none", fontSize: 18, cursor: "pointer", color: th.txM }}>{"\u00D7"}</button>
@@ -2661,6 +3631,68 @@ function WeekPlanPhaseAPlaceholder({
                   <div style={{ fontSize: 9, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, fontFamily: "'DM Sans',sans-serif" }}>Ingredients</div>
                 </div>
               </div>
+              {/* \u2500\u2500 Summary blocks (always visible) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+              {(() => {
+                const card = resolved.card;
+                const cardServings = card.yield?.servings || previewCardSlot.servings || 1;
+                const scale = previewCardSlot.servings && cardServings ? previewCardSlot.servings / cardServings : 1;
+                const fmtG = (g) => g >= 1000 ? `${(g/1000).toFixed(2)} kg` : `${Math.round(g)} g`;
+                const topIngredients = (card.ingredients || [])
+                  .filter(i => !i.isFryingMedium && (i.massGrams || 0) > 0)
+                  .slice().sort((a, b) => (b.massGrams || 0) - (a.massGrams || 0))
+                  .slice(0, 5);
+                return (
+                  <>
+                    {card.primaryIngredient && (
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10, fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 1 }}>
+                        <span>Primary</span>
+                        <span style={{ fontFamily: "'Playfair Display',serif", fontSize: 14, fontWeight: 600, color: th.tx, textTransform: "none", letterSpacing: 0 }}>{card.primaryIngredient}</span>
+                      </div>
+                    )}
+                    {topIngredients.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Top by mass</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {topIngredients.map((ing, i) => (
+                            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "6px 0", borderBottom: i < topIngredients.length - 1 ? `1px solid ${th.div}50` : "none" }}>
+                              <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, color: th.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ing.name}</span>
+                              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: th.tx2, fontWeight: 600, flexShrink: 0 }}>{fmtG((ing.massGrams || 0) * scale)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(card.criticalTemperatures || []).length > 0 && (
+                      <div style={{ marginBottom: 16, padding: "12px 14px", background: th.bgH, borderRadius: WP_R.sm }}>
+                        <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Critical heat</div>
+                        {card.criticalTemperatures.slice(0, 3).map((t, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12, fontFamily: "'DM Sans',sans-serif" }}>
+                            <span style={{ color: th.tx2 }}>{t.stage}</span>
+                            <span style={{ fontFamily: "'JetBrains Mono',monospace", color: th.acc, fontWeight: 600 }}>{t.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              {/* Expand toggle */}
+              <button onClick={() => setPreviewExpanded(v => !v)} style={{
+                width: "100%", padding: "12px 14px", borderRadius: WP_R.sm,
+                border: `1px solid ${th.bdS}`, background: previewExpanded ? th.bgH : th.bgC,
+                color: th.tx2, fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                marginBottom: previewExpanded ? 16 : 0,
+                transition: `background 0.18s ${WP_EASE_FAST}`,
+              }}>
+                {previewExpanded ? "Hide full parametric card" : "Show full parametric card"}
+                <span style={{ transform: previewExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: `transform 0.2s ${WP_EASE}`, display: "inline-flex" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><polyline points="6 9 12 15 18 9"/></svg>
+                </span>
+              </button>
+
+              {previewExpanded && (<>
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, color: th.txM, marginBottom: 6, fontFamily: "'DM Sans',sans-serif" }}>{"\u2699"} Parametric Table (primary: {resolved.card.primaryIngredient})</div>
                 <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, fontFamily: "'DM Sans',sans-serif", minWidth: 400 }}>
@@ -2721,6 +3753,7 @@ function WeekPlanPhaseAPlaceholder({
                   ))}
                 </div>
               )}
+              </>)}
             </div>
           </div>
         );
