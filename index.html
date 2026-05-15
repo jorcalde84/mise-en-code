@@ -5705,6 +5705,182 @@ function mcFlattenRows(blocks) {
   return rows;
 }
 
+/* ═══ MOBILE MC VIEW — step-by-step card flow for mobile/tablet ═══ */
+function MobileMCView({ card, rc, sv, base, t, lang, isAdmin }) {
+  const mc = card && card.mc;
+  if (!mc || !Array.isArray(mc.blocks) || !mc.blocks.length) {
+    return <div style={{padding:"40px 20px",textAlign:"center",color:"#888",fontFamily:MC_FONT_SERIF,fontStyle:"italic"}}>No MC data available.</div>;
+  }
+  const stripF = (s) => s ? s.replace(/\s*\/\s*\d+\s*°\s*F/g,"").replace(/\s*[,;]?\s*\d+\s*°\s*F/g,"") : s;
+  const trIng = (name) => trN(name,"ing",lang||"en");
+  const trTool = (name) => trN(name,"tool",lang||"en");
+  const scale = sv && base ? sv / base : 1;
+  const yieldG = Math.round((mc.yield?.value||0)*scale);
+  const yieldServ = mc.yield?.servings ? Math.round(mc.yield.servings*scale) : sv;
+
+  /* Build steps array: each step gets its associated ingredients from the same block */
+  const steps = [];
+  mc.blocks.forEach((block) => {
+    block.steps.forEach((step) => {
+      steps.push({ ...step, ingredients: block.ingredients || [], sublabel: block.sublabel });
+    });
+  });
+
+  const [currentStep, setCurrentStep] = useState(0);
+  const [showIngList, setShowIngList] = useState(false);
+  const [showRationale, setShowRationale] = useState(false);
+
+  /* All ingredients flattened for the summary */
+  const allIngs = mc.blocks.flatMap(b => b.ingredients||[]);
+
+  /* Touch swipe handling */
+  const touchStart = useRef(null);
+  const handleTouchStart = (e) => { touchStart.current = e.touches[0].clientX; };
+  const handleTouchEnd = (e) => {
+    if (touchStart.current === null) return;
+    const diff = e.changedTouches[0].clientX - touchStart.current;
+    if (Math.abs(diff) > 50) {
+      if (diff < 0 && currentStep < steps.length - 1) setCurrentStep(currentStep + 1);
+      if (diff > 0 && currentStep > 0) setCurrentStep(currentStep - 1);
+    }
+    touchStart.current = null;
+  };
+
+  const step = steps[currentStep];
+  if (!step) return null;
+
+  const P = MC_PALETTE;
+
+  return (
+    <div style={{minHeight:"100%",display:"flex",flexDirection:"column",background:P.pageBg,fontFamily:MC_FONT_SERIF,color:P.bodyText}}>
+      {/* ── Header: title + yield ── */}
+      <div style={{padding:"16px 16px 12px",borderBottom:`1px solid ${P.ruleLight}40`}}>
+        <h1 style={{fontFamily:MC_FONT_SANS,fontSize:17,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase",color:P.burgundy,margin:"0 0 4px"}}>{card.title}</h1>
+        <div style={{display:"flex",alignItems:"center",gap:12,fontSize:12,color:P.marginText}}>
+          <span>{yieldG ? `${yieldG} g` : `${yieldServ} portions`}</span>
+          {mc.referenceIngredient && <span style={{fontStyle:"italic"}}>ref: {trIng(mc.referenceIngredient.name)}</span>}
+          {scale !== 1 && <span style={{fontFamily:MC_FONT_SANS,fontSize:10,padding:"2px 6px",borderRadius:4,background:P.burgundy+"12",color:P.burgundy}}>×{scale.toFixed(1)}</span>}
+        </div>
+      </div>
+
+      {/* ── Collapsible ingredient summary ── */}
+      <div style={{borderBottom:`1px solid ${P.ruleLight}40`}}>
+        <button onClick={()=>setShowIngList(!showIngList)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",background:"none",border:"none",cursor:"pointer",fontFamily:MC_FONT_SANS,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1.2,color:P.bodyText}}>
+          <span>Ingredients ({allIngs.filter(i=>!i.isFryingMedium).length})</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{transform:showIngList?"rotate(180deg)":"rotate(0)",transition:"transform 0.2s"}}><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        {showIngList && (
+          <div style={{padding:"0 16px 12px",maxHeight:240,overflowY:"auto"}}>
+            {mc.blocks.map((block,bi) => (
+              <div key={bi}>
+                {block.sublabel && <div style={{fontSize:11,fontStyle:"italic",color:P.marginText,padding:"6px 0 2px"}}>{block.sublabel}</div>}
+                {(block.ingredients||[]).map((ing,ii) => (
+                  <div key={ii} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"4px 0",borderBottom:`0.5px solid ${P.ruleLight}25`}}>
+                    <span style={{fontSize:13,color:P.bodyText}}>{trIng(ing.name)}{ing.prepNote && <span style={{fontSize:11,color:P.marginText,fontStyle:"italic"}}>, {ing.prepNote}</span>}{ing.isReference && <span style={{color:P.burgundy,marginLeft:4,fontSize:9}}>◆</span>}</span>
+                    <span style={{fontSize:12,fontFamily:MC_FONT_SANS,color:P.marginText,whiteSpace:"nowrap",marginLeft:8}}>{ing.isFryingMedium ? "as needed" : mcScaleQty(ing.quantityDisplay,scale)}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Step progress indicator ── */}
+      <div style={{padding:"12px 16px 8px",display:"flex",alignItems:"center",gap:8}}>
+        <div style={{display:"flex",gap:3,flex:1}}>
+          {steps.map((_,i) => (
+            <div key={i} onClick={()=>setCurrentStep(i)} style={{flex:1,height:3,borderRadius:2,background:i===currentStep?P.burgundy:i<currentStep?P.burgundy+"60":P.ruleLight+"40",cursor:"pointer",transition:"background 0.2s"}}/>
+          ))}
+        </div>
+        <span style={{fontFamily:MC_FONT_SANS,fontSize:10,fontWeight:600,color:P.marginText,whiteSpace:"nowrap"}}>{currentStep+1}/{steps.length}</span>
+      </div>
+
+      {/* ── Current step card (swipeable) ── */}
+      <div style={{flex:1,padding:"4px 16px 20px",overflowY:"auto",WebkitOverflowScrolling:"touch"}} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        {/* Sublabel if this step starts a new block */}
+        {step.sublabel && currentStep === 0 || (currentStep > 0 && steps[currentStep].sublabel !== steps[currentStep-1]?.sublabel && step.sublabel) ? (
+          <div style={{fontSize:12,fontStyle:"italic",color:P.marginText,marginBottom:8}}>{step.sublabel}</div>
+        ) : null}
+
+        {/* Step number + title */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+          <div style={{width:28,height:28,borderRadius:"50%",background:P.burgundy,color:"#FFF",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MC_FONT_SANS,fontSize:12,fontWeight:700,flexShrink:0}}>{step.number}</div>
+          {step.title && <h2 style={{fontFamily:MC_FONT_SANS,fontSize:15,fontWeight:600,margin:0,color:P.bodyText}}>{step.title}</h2>}
+        </div>
+
+        {/* Instruction */}
+        <p style={{fontSize:15,lineHeight:1.65,color:P.bodyText,margin:"0 0 14px"}}>{stripF(step.instruction)}</p>
+
+        {/* Inline critical temp + time badges */}
+        {(step.criticalTemp || step.criticalTime) && (
+          <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            {step.criticalTemp && (
+              <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"6px 10px",borderRadius:8,background:P.burgundy+"0C",border:`1px solid ${P.burgundy}25`}}>
+                <span style={{fontSize:14}}>🌡️</span>
+                <span style={{fontFamily:MC_FONT_SANS,fontSize:12,fontWeight:600,color:P.burgundy}}>{stripF(step.criticalTemp)}</span>
+              </div>
+            )}
+            {step.criticalTime && (
+              <div style={{display:"inline-flex",alignItems:"center",gap:5,padding:"6px 10px",borderRadius:8,background:"#1A1A1A08",border:"1px solid #1A1A1A15"}}>
+                <span style={{fontSize:14}}>⏱</span>
+                <span style={{fontFamily:MC_FONT_SANS,fontSize:12,fontWeight:600,color:P.bodyText}}>{step.criticalTime}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Ingredients for this step */}
+        {step.ingredients.length > 0 && (
+          <div style={{marginBottom:14,padding:"10px 12px",borderRadius:10,background:"#F8F6F3",border:`1px solid ${P.ruleLight}30`}}>
+            <div style={{fontFamily:MC_FONT_SANS,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:P.marginText,marginBottom:6}}>For this step</div>
+            {step.ingredients.map((ing,i) => (
+              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"3px 0"}}>
+                <span style={{fontSize:13}}>{trIng(ing.name)}{ing.isFromAbove && <span style={{fontSize:11,fontStyle:"italic",color:P.marginText}}> (from above)</span>}</span>
+                <span style={{fontSize:12,fontFamily:MC_FONT_SANS,color:P.marginText}}>{ing.isFryingMedium?"as needed":mcScaleQty(ing.quantityDisplay,scale)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Equipment for this step (from mc.equipment matched by step number) */}
+        {(() => {
+          const eqs = (mc.equipment||[]).filter(eq => eq.stepRef === step.number || (!eq.stepRef && currentStep === 0));
+          if (!eqs.length) return null;
+          return (
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+              {eqs.map((eq,i) => (
+                <div key={i} style={{display:"inline-flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:8,background:"#F0EDE8",border:`1px solid ${P.ruleLight}30`}}>
+                  <span style={{fontSize:12}}>🔧</span>
+                  <span style={{fontFamily:MC_FONT_SANS,fontSize:11,fontWeight:500,color:P.bodyText}}>{trTool(eq.name)}</span>
+                  {eq.criticalSpec && <span style={{fontSize:10,color:P.marginText}}>— {stripF(eq.criticalSpec)}</span>}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── Bottom nav: prev/next + optional rationale ── */}
+      <div style={{padding:"10px 16px 14px",borderTop:`1px solid ${P.ruleLight}30`,background:P.pageBg}}>
+        {/* Scientific rationale toggle */}
+        {mc.scientificRationale && (
+          <div style={{marginBottom:8}}>
+            <button onClick={()=>setShowRationale(!showRationale)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:MC_FONT_SERIF,fontSize:11,fontStyle:"italic",color:P.marginText,padding:0,textDecoration:"underline",textDecorationColor:P.ruleLight}}>
+              {showRationale ? "Hide rationale" : "Why this works →"}
+            </button>
+            {showRationale && <p style={{fontSize:12,lineHeight:1.55,color:P.marginText,margin:"6px 0 0",fontStyle:"italic"}}>{mc.scientificRationale}</p>}
+          </div>
+        )}
+        <div style={{display:"flex",gap:10}}>
+          <button disabled={currentStep===0} onClick={()=>setCurrentStep(currentStep-1)} style={{flex:1,padding:"12px",borderRadius:10,border:`1px solid ${currentStep===0?P.ruleLight+"40":P.burgundy}`,background:"transparent",color:currentStep===0?P.ruleLight:P.burgundy,fontFamily:MC_FONT_SANS,fontSize:13,fontWeight:600,cursor:currentStep===0?"default":"pointer",opacity:currentStep===0?0.4:1}}>← Prev</button>
+          <button disabled={currentStep===steps.length-1} onClick={()=>setCurrentStep(currentStep+1)} style={{flex:1,padding:"12px",borderRadius:10,border:"none",background:currentStep===steps.length-1?P.ruleLight+"40":P.burgundy,color:"#FFF",fontFamily:MC_FONT_SANS,fontSize:13,fontWeight:600,cursor:currentStep===steps.length-1?"default":"pointer",opacity:currentStep===steps.length-1?0.5:1}}>Next →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
   const mc = card && card.mc;
   if (!mc || !Array.isArray(mc.blocks) || !mc.blocks.length) {
@@ -6167,8 +6343,8 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
           </div>
           <div style={{width:36}}/>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"14px 10px 36px",WebkitOverflowScrolling:"touch"}}>
-          <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin}/>
+        <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
+          <MobileMCView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin}/>
         </div>
       </div>);
     }
@@ -6191,33 +6367,58 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
       if (!found){setMStep(null);return null;}
       const {step,lane}=found; const ings=(step.ingredients||[]).filter(i=>!i.isPrepRef&&!i.multiplierRef);
       const si=lane.steps.indexOf(step); const conns=connMap[step.id]||[];
+      const hasPrev=si>0; const hasNext=si<lane.steps.length-1;
+      const goStep=(dir)=>{const ni=si+dir;if(ni>=0&&ni<lane.steps.length)setMStep(lane.steps[ni].id);};
+      /* Swipe between steps */
+      const _aTS=useRef(null);
+      const _aTStart=(e)=>{_aTS.current=e.touches[0].clientX;};
+      const _aTEnd=(e)=>{if(_aTS.current===null)return;const d=e.changedTouches[0].clientX-_aTS.current;if(Math.abs(d)>50){if(d<0&&hasNext)goStep(1);if(d>0&&hasPrev)goStep(-1);}_aTS.current=null;};
       return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:TH().bg,fontFamily:"'DM Sans',sans-serif",color:TH().tx}}>
-        <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>setMStep(null)} style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:TH().txM,fontSize:12}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>{lane.laneName}
+        {/* Header with lane name + step progress */}
+        <div style={{padding:"10px 14px 8px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <button onClick={()=>setMStep(null)} style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",gap:4,color:TH().txM,fontSize:13,fontWeight:500}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>{lane.laneName}
           </button>
+          <span style={{fontSize:11,fontWeight:600,color:TH().txD,fontFamily:"'JetBrains Mono',monospace"}}>{si+1} / {lane.steps.length}</span>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"14px 16px",WebkitOverflowScrolling:"touch"}}>
-          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:600,margin:"0 0 3px"}}>{step.title||`Step ${si+1}`}</h2>
-          <p style={{fontSize:11,color:TH().txD,margin:"0 0 14px"}}>{lane.prep.name} · Step {si+1} of {lane.steps.length}</p>
-          {step.tool && <div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Tool</div>
-            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:10,border:`1px solid ${TH().bdS}`,background:TH().bgC}}>
-              <span style={{fontSize:18}}>{step.tool.icon||"\uD83D\uDD27"}</span><div><div style={{fontSize:12,fontWeight:600}}>{step.tool.name}</div>
-              {step.tool.opts&&<div style={{fontSize:10,color:TH().txM,display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
-                {step.tool.opts._temp!=null&&<span>\uD83C\uDF21 {step.tool.opts._temp}°C</span>}
-                {step.tool.opts.heat&&<span>\uD83C\uDF21 {step.tool.opts.heat}</span>}
-                {step.tool.opts._time!=null&&<span>⏱ {step.tool.opts._time} {step.tool.opts._timeUnit||"min"}</span>}
-              </div>}</div></div></div>}
-          {ings.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Ingredients</div>
-            {ings.map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<div key={ing.uid} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`0.5px solid ${TH().bdS}`}}><span style={{fontSize:12}}>{fi?.n||ing.ingredientId}</span><span style={{fontSize:12,color:TH().txM}}>{ing.qty?`${Math.round(ing.qty*sv/base*10)/10} ${ing.unit||""}`:""}</span></div>;})}
+        {/* Step progress dots */}
+        <div style={{display:"flex",gap:3,padding:"8px 16px 4px"}}>
+          {lane.steps.map((_,i)=><div key={i} style={{flex:1,height:3,borderRadius:2,background:i===si?lane.color:i<si?lane.color+"60":TH().bdS,transition:"background 0.2s"}}/>)}
+        </div>
+        {/* Swipeable content */}
+        <div style={{flex:1,overflowY:"auto",padding:"14px 18px 20px",WebkitOverflowScrolling:"touch"}} onTouchStart={_aTStart} onTouchEnd={_aTEnd}>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:600,margin:"0 0 4px",lineHeight:1.2}}>{step.title||`Step ${si+1}`}</h2>
+          <p style={{fontSize:12,color:TH().txD,margin:"0 0 16px"}}>{lane.prep.name}</p>
+          {step.tool && <div style={{marginBottom:16,display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,border:`1px solid ${TH().bdS}`,background:TH().bgC}}>
+            <span style={{fontSize:22}}>{step.tool.icon||"🔧"}</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:600}}>{step.tool.name}</div>
+              {step.tool.opts&&<div style={{fontSize:11,color:TH().txM,display:"flex",flexWrap:"wrap",gap:6,marginTop:3}}>
+                {step.tool.opts._temp!=null&&<span style={{padding:"2px 7px",borderRadius:6,background:"#D45B5B12",color:"#D45B5B",fontWeight:600}}>🌡️ {step.tool.opts._temp}°C</span>}
+                {step.tool.opts.heat&&<span style={{padding:"2px 7px",borderRadius:6,background:"#D45B5B12",color:"#D45B5B",fontWeight:600}}>🌡️ {step.tool.opts.heat}</span>}
+                {step.tool.opts._time!=null&&<span style={{padding:"2px 7px",borderRadius:6,background:"#4A9EAF12",color:"#4A9EAF",fontWeight:600}}>⏱ {step.tool.opts._time} {step.tool.opts._timeUnit||"min"}</span>}
+              </div>}
+            </div>
           </div>}
-          {(step.processes||[]).length>0&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Processes</div>
-            {step.processes.map(proc=><div key={proc} style={{padding:"8px 10px",borderRadius:8,background:TH().proc+"08",border:`1px solid ${TH().proc}20`,marginBottom:6}}>
-              <div style={{fontSize:12,fontWeight:600,color:TH().proc}}>{trN(proc,"proc",lang)}</div>
+          {ings.length>0&&<div style={{marginBottom:16,padding:"12px 14px",borderRadius:12,background:TH().bgH||"#F8F6F3",border:`1px solid ${TH().bdS}`}}>
+            <div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>Ingredients</div>
+            {ings.map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<div key={ing.uid} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"5px 0",borderBottom:`0.5px solid ${TH().bdS}40`}}><span style={{fontSize:14}}>{fi?.n||ing.ingredientId}</span><span style={{fontSize:13,color:TH().txM,fontFamily:"'JetBrains Mono',monospace"}}>{ing.qty?`${Math.round(ing.qty*sv/base*10)/10} ${ing.unit||""}`:""}</span></div>;})}
+          </div>}
+          {(step.processes||[]).length>0&&<div style={{marginBottom:16,display:"flex",flexWrap:"wrap",gap:6}}>
+            {step.processes.map(proc=><div key={proc} style={{padding:"7px 12px",borderRadius:10,background:TH().proc+"0C",border:`1px solid ${TH().proc}22`}}>
+              <span style={{fontSize:13,fontWeight:600,color:TH().proc}}>{trN(proc,"proc",lang)}</span>
             </div>)}</div>}
-          {step.desc&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Notes</div><p style={{fontSize:12,color:TH().tx2,lineHeight:1.55,margin:0}}>{step.desc}</p></div>}
-          {conns.length>0&&<div style={{padding:"8px 10px",borderRadius:8,background:TH().bgS,border:`1px solid ${TH().bdS}`}}><div style={{fontSize:10,color:TH().txD,marginBottom:3}}>Feeds into</div>{conns.map((c,ci3)=><div key={ci3} style={{fontSize:12,color:TH().acc}}>→ {c.laneName}</div>)}</div>}
-        </div></div>);
+          {step.desc&&<div style={{marginBottom:16}}><p style={{fontSize:14,color:TH().tx2,lineHeight:1.6,margin:0}}>{step.desc}</p></div>}
+          {conns.length>0&&<div style={{padding:"10px 12px",borderRadius:10,background:TH().bgS,border:`1px solid ${TH().bdS}`}}>
+            <div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.8,marginBottom:4}}>Feeds into</div>
+            {conns.map((c,ci3)=><div key={ci3} style={{fontSize:13,color:TH().acc,fontWeight:500,padding:"2px 0"}}>→ {c.laneName}</div>)}</div>}
+        </div>
+        {/* Bottom nav: prev / next */}
+        <div style={{display:"flex",gap:10,padding:"10px 16px 14px",borderTop:`1px solid ${TH().div}`}}>
+          <button disabled={!hasPrev} onClick={()=>goStep(-1)} style={{flex:1,padding:"12px",borderRadius:10,border:`1px solid ${hasPrev?lane.color:TH().bdS}`,background:"transparent",color:hasPrev?lane.color:TH().txD,fontSize:13,fontWeight:600,cursor:hasPrev?"pointer":"default",opacity:hasPrev?1:0.4,fontFamily:"'DM Sans',sans-serif"}}>← Prev</button>
+          <button disabled={!hasNext} onClick={()=>goStep(1)} style={{flex:1,padding:"12px",borderRadius:10,border:"none",background:hasNext?lane.color:TH().bdS,color:"#FFF",fontSize:13,fontWeight:600,cursor:hasNext?"pointer":"default",opacity:hasNext?1:0.5,fontFamily:"'DM Sans',sans-serif"}}>Next →</button>
+        </div>
+      </div>);
     }
 
     const _aCC = rc.category === "Entrees" ? "#7EAA7E" : rc.category === "Mains" ? "#C49A6C" : rc.category === "Desserts" ? "#E89EC0" : rc.category === "Drinks & Cocktails" ? "#6B9FC4" : rc.category === "Sides & Salads" ? "#8AAE6F" : "#C49A6C";
@@ -6257,34 +6458,35 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
       <div style={{height:1,background:TH().div,margin:"0 18px"}}/>
       <div style={{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch"}}>
         {mTab==="timeline"&&<div style={{padding:"12px 16px"}}>
-          {allLanes.map((lane,li)=><div key={li} style={{marginBottom:14}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-              <div style={{width:9,height:9,borderRadius:"50%",background:lane.color,flexShrink:0}}/>
-              <span style={{fontSize:11,fontWeight:600}}>{lane.laneName}</span>
-              {lane.isModule&&<span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:TH().mod+"15",color:TH().mod,border:`0.5px solid ${TH().mod}30`}}>Module</span>}
-              <span style={{fontSize:9,color:TH().txD}}>({lane.prep.name})</span>
+          {allLanes.map((lane,li)=><div key={li} style={{marginBottom:20}}>
+            {/* Stronger lane header */}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,padding:"8px 12px",borderRadius:10,background:lane.color+"0C",borderLeft:`3px solid ${lane.color}`}}>
+              <span style={{fontSize:14,fontWeight:700,color:TH().tx}}>{lane.laneName}</span>
+              {lane.isModule&&<span style={{fontSize:9,padding:"2px 7px",borderRadius:5,background:TH().mod+"18",color:TH().mod,fontWeight:600}}>Module</span>}
+              <span style={{fontSize:11,color:TH().txD,marginLeft:"auto"}}>{lane.steps.length} steps</span>
             </div>
-            <div style={{position:"relative",paddingLeft:18,marginBottom:4}}>
-              <div style={{position:"absolute",left:4,top:0,bottom:0,width:1.5,background:lane.color+"30",borderRadius:1}}/>
+            <div style={{position:"relative",paddingLeft:20,marginBottom:4}}>
+              <div style={{position:"absolute",left:5,top:0,bottom:0,width:2,background:lane.color+"25",borderRadius:1}}/>
               {lane.steps.map((step,si)=>{const ings2=(step.ingredients||[]).filter(i=>!i.isPrepRef&&!i.multiplierRef);const conns=connMap[step.id]||[];
+                const hasCrit=step.tool&&step.tool.opts&&(step.tool.opts._temp!=null||step.tool.opts._time!=null);
                 return<div key={step.id}>
-                  <div onClick={()=>setMStep(step.id)} style={{position:"relative",padding:"8px 10px",borderRadius:8,border:`0.5px solid ${TH().bdS}`,background:TH().bgC,marginBottom:conns.length?4:6,cursor:"pointer"}}>
-                    <div style={{position:"absolute",left:-18,top:"50%",transform:"translateY(-50%)",width:9,height:9,borderRadius:"50%",border:`2px solid ${lane.color}`,background:TH().bg}}/>
-                    <div style={{fontSize:12,fontWeight:600,marginBottom:3}}>{step.title||`Step ${si+1}`}</div>
-                    {ings2.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginBottom:3}}>
-                      {ings2.slice(0,4).map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<span key={ing.uid} style={{fontSize:9,padding:"1px 5px",borderRadius:4,border:`0.5px solid ${TH().bdS}`,color:TH().txM}}>{fi?.n||ing.ingredientId}</span>;})}
-                      {ings2.length>4&&<span style={{fontSize:9,color:TH().txD}}>+{ings2.length-4}</span>}
-                    </div>}
-                    {(step.processes||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3}}>
-                      {step.processes.map(proc=><span key={proc} style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:TH().proc+"10",border:`0.5px solid ${TH().proc}25`,color:TH().proc}}>{trN(proc,"proc",lang)}</span>)}
-                    </div>}
-                    {step.tool&&<div style={{fontSize:9,color:TH().txD,marginTop:3}}>{step.tool.icon||"🔧"} {step.tool.name}</div>}
-                    <div style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:TH().bdS}}>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  <div onClick={()=>setMStep(step.id)} style={{position:"relative",padding:"10px 12px",borderRadius:10,border:`1px solid ${hasCrit?lane.color+"40":TH().bdS}`,background:TH().bgC,marginBottom:conns.length?4:8,cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+                    <div style={{position:"absolute",left:-20,top:"50%",transform:"translateY(-50%)",width:10,height:10,borderRadius:"50%",border:`2.5px solid ${lane.color}`,background:TH().bg}}/>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:14,fontWeight:600}}>{step.title||`Step ${si+1}`}</div>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={TH().txD} strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
+                    {ings2.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
+                      {ings2.slice(0,2).map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<span key={ing.uid} style={{fontSize:10,padding:"2px 7px",borderRadius:5,border:`1px solid ${TH().bdS}`,color:TH().txM}}>{fi?.n||ing.ingredientId}</span>;})}
+                      {ings2.length>2&&<span style={{fontSize:10,color:TH().txD,padding:"2px 4px"}}>+{ings2.length-2} more</span>}
+                    </div>}
+                    {hasCrit&&<div style={{display:"flex",gap:6,marginTop:6}}>
+                      {step.tool.opts._temp!=null&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:"#D45B5B10",color:"#D45B5B",fontWeight:600}}>🌡️ {step.tool.opts._temp}°C</span>}
+                      {step.tool.opts._time!=null&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:5,background:"#4A9EAF10",color:"#4A9EAF",fontWeight:600}}>⏱ {step.tool.opts._time}{step.tool.opts._timeUnit||"min"}</span>}
+                    </div>}
                   </div>
-                  {conns.map((c,ci3)=><div key={ci3} style={{display:"flex",alignItems:"center",gap:6,padding:"0 0 4px 4px",marginBottom:4}}>
-                    <span style={{fontSize:9,color:TH().acc}}>↘ connects to</span><div style={{flex:1,height:0,borderTop:`1px dashed ${TH().acc}40`}}/><span style={{fontSize:9,color:TH().acc,fontWeight:600}}>{c.laneName}</span>
+                  {conns.map((c,ci3)=><div key={ci3} style={{display:"flex",alignItems:"center",gap:6,padding:"0 0 4px 6px",marginBottom:6}}>
+                    <span style={{fontSize:10,color:TH().acc,fontWeight:500}}>→ feeds into</span><div style={{flex:1,height:0,borderTop:`1px dashed ${TH().acc}35`}}/><span style={{fontSize:10,color:TH().acc,fontWeight:700}}>{c.laneName}</span>
                   </div>)}
                 </div>;})}
             </div>
