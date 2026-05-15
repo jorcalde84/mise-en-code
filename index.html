@@ -6400,9 +6400,9 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
               </div>}
             </div>
           </div>}
-          {ings.length>0&&<div style={{marginBottom:16,padding:"12px 14px",borderRadius:12,background:TH().bgH||"#F8F6F3",border:`1px solid ${TH().bdS}`}}>
-            <div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.8,marginBottom:8}}>Ingredients</div>
-            {ings.map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<div key={ing.uid} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"5px 0",borderBottom:`0.5px solid ${TH().bdS}40`}}><span style={{fontSize:14}}>{fi?.n||ing.ingredientId}</span><span style={{fontSize:13,color:TH().txM,fontFamily:"'JetBrains Mono',monospace"}}>{ing.qty?`${Math.round(ing.qty*sv/base*10)/10} ${ing.unit||""}`:""}</span></div>;})}
+          {ings.length>0&&<div style={{marginBottom:16,padding:"14px 16px",borderRadius:12,background:TH().bgH||"#F8F6F3",border:`1px solid ${TH().bdS}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.8,marginBottom:10}}>Ingredients</div>
+            {ings.map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<div key={ing.uid} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`0.5px solid ${TH().bdS}40`}}><span style={{fontSize:16,fontWeight:500,color:TH().tx}}>{fi?.n||ing.ingredientId}</span><span style={{fontSize:16,fontWeight:700,color:TH().tx,fontFamily:"'JetBrains Mono',monospace",background:TH().bgC,padding:"3px 8px",borderRadius:6,border:`1px solid ${TH().bdS}`}}>{ing.qty?`${Math.round(ing.qty*sv/base*10)/10} ${ing.unit||""}`:"—"}</span></div>;})}
           </div>}
           {(step.processes||[]).length>0&&<div style={{marginBottom:16,display:"flex",flexWrap:"wrap",gap:6}}>
             {step.processes.map(proc=><div key={proc} style={{padding:"7px 12px",borderRadius:10,background:TH().proc+"0C",border:`1px solid ${TH().proc}22`}}>
@@ -6477,7 +6477,7 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={TH().txD} strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
                     {ings2.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
-                      {ings2.slice(0,2).map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<span key={ing.uid} style={{fontSize:10,padding:"2px 7px",borderRadius:5,border:`1px solid ${TH().bdS}`,color:TH().txM}}>{fi?.n||ing.ingredientId}</span>;})}
+                      {ings2.slice(0,2).map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);const q=ing.qty?`${Math.round(ing.qty*sv/base*10)/10}${ing.unit||""}`:null;return<span key={ing.uid} style={{fontSize:11,padding:"3px 8px",borderRadius:6,border:`1px solid ${TH().bdS}`,color:TH().tx,background:TH().bgC}}>{fi?.n||ing.ingredientId}{q&&<span style={{fontWeight:700,marginLeft:4,color:TH().txM}}>{q}</span>}</span>;})}
                       {ings2.length>2&&<span style={{fontSize:10,color:TH().txD,padding:"2px 4px"}}>+{ings2.length-2} more</span>}
                     </div>}
                     {hasCrit&&<div style={{display:"flex",gap:6,marginTop:6}}>
