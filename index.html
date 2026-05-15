@@ -6195,6 +6195,7 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
   if (isMobile || isTablet) {
     const [mTab, setMTab] = useState("timeline");
     const [mStep, setMStep] = useState(null);
+    const _aTS = useRef(null);
 
     /* ── Card View (default on mobile/tablet) ── */
     if (viewMode === "card" && card) {
@@ -6370,7 +6371,6 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
       const hasPrev=si>0; const hasNext=si<lane.steps.length-1;
       const goStep=(dir)=>{const ni=si+dir;if(ni>=0&&ni<lane.steps.length)setMStep(lane.steps[ni].id);};
       /* Swipe between steps */
-      const _aTS=useRef(null);
       const _aTStart=(e)=>{_aTS.current=e.touches[0].clientX;};
       const _aTEnd=(e)=>{if(_aTS.current===null)return;const d=e.changedTouches[0].clientX-_aTS.current;if(Math.abs(d)>50){if(d<0&&hasNext)goStep(1);if(d>0&&hasPrev)goStep(-1);}_aTS.current=null;};
       return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:TH().bg,fontFamily:"'DM Sans',sans-serif",color:TH().tx}}>
