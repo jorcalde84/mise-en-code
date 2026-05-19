@@ -18,6 +18,34 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #D5CEBC; border-radius: 3px; }
+
+    /* ─── PRINT STYLES (Download PDF) ─────────────────────────────────
+       Triggered by window.print(); the user picks "Save as PDF" in the
+       browser's print dialog. We hide anything marked .no-print or with
+       data-noprint attribute, force a white background, and add page-break
+       hygiene so MC blocks and Algorithm steps don't split awkwardly. */
+    @media print {
+      @page { size: letter; margin: 14mm 12mm; }
+      html, body { background: #FFFFFF !important; }
+      body.dark-mode { background: #FFFFFF !important; }
+      .no-print, [data-noprint] { display: none !important; }
+      /* Print-time recipe surface — fills the page, removes max-widths */
+      .print-recipe-root {
+        max-width: none !important;
+        margin: 0 !important; padding: 0 !important;
+        box-shadow: none !important; background: #FFFFFF !important;
+      }
+      /* Compact / single-page friendly */
+      body, html { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+      /* Block-break hygiene */
+      h1, h2, h3 { page-break-after: avoid; break-after: avoid-page; }
+      table, .mc-block, .recipe-step { page-break-inside: avoid; break-inside: avoid; }
+      /* Hide cursor / hover artefacts */
+      *:hover { cursor: auto !important; }
+      /* Suppress scroll containers — let content flow */
+      [style*="overflow"] { overflow: visible !important; }
+      [style*="max-height"] { max-height: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -5943,18 +5971,394 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
   );
 }
 
+/* ─── PRINT HTML BUILDERS ────────────────────────────────────────────────
+   Generates a self-contained HTML document for Save-as-PDF. The current
+   in-app views were designed for screen; for print we render a purpose-built
+   document into a hidden iframe, then call iframe.contentWindow.print().
+   Two layouts:
+     - MC view → A4 landscape, 2-column body (ingredients | procedure).
+       Most recipes fit 1 page; long ones overflow to 2.
+     - Algorithm view → A4 portrait, vertical step list with every prep's
+       chef note and every step's full instruction visible inline
+       (the in-app tooltip content is always rendered for print). */
+const _wpHe = (s) => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const _wpHtml = (parts) => Array.isArray(parts) ? parts.filter(Boolean).join("") : (parts || "");
+const _wpScaleNum = (n, scale) => {
+  if (typeof n !== "number" || !isFinite(n)) return n;
+  const v = n * scale;
+  if (v < 10) return Math.round(v * 10) / 10;
+  return Math.round(v);
+};
+const _wpFmtMass = (g) => {
+  if (g == null) return "";
+  if (g >= 1000) return (g / 1000).toFixed(2) + " kg";
+  if (g >= 10)   return Math.round(g) + " g";
+  return (Math.round(g * 10) / 10) + " g";
+};
+const _wpProcessLabel = (p) => {
+  if (!p) return "";
+  return String(p).replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+/* Build a complete <html> document for the MC card. Landscape A4. */
+function _wpBuildMcPrintHtml(rc, parametricCard, servings) {
+  const mc = parametricCard.mc || {};
+  const baseServ = (parametricCard.yield && parametricCard.yield.servings) || rc.servings || 1;
+  const scale = servings ? (servings / baseServ) : 1;
+  const blocks = Array.isArray(mc.blocks) ? mc.blocks : [];
+
+  /* Flatten block ingredients into a single list with first-step ref */
+  let stepCount = 0;
+  const ingredientRows = [];
+  blocks.forEach((blk) => {
+    (blk.ingredients || []).forEach((ing) => {
+      const massG = (ing.massGrams != null) ? _wpScaleNum(ing.massGrams, scale) : null;
+      ingredientRows.push({
+        name: ing.name || ing.rawName || "",
+        prepNote: ing.prepNote || "",
+        massLabel: ing.isFryingMedium ? "as needed" : (massG != null ? _wpFmtMass(massG) : ""),
+        scaling: (ing.scalingDisplay != null) ? ing.scalingDisplay : (ing.scalingPercent != null ? Math.round(ing.scalingPercent) + " %" : ""),
+        firstStep: ing.firstStepNumber || null,
+        isReference: !!ing.isReference,
+      });
+    });
+  });
+
+  /* Procedure: flattened from blocks */
+  const procedureBlocks = blocks.map((blk) => ({
+    sublabel: blk.sublabel || "",
+    steps: (blk.steps || []).map((s) => {
+      stepCount = Math.max(stepCount, s.number || stepCount + 1);
+      return {
+        number: s.number,
+        verb: s.verb || "",
+        tempLabel: s.tempLabel || "",
+        timeLabel: s.timeLabel || "",
+        instruction: s.instruction || "",
+      };
+    }),
+  }));
+
+  const yieldG = parametricCard.yield ? _wpScaleNum(parametricCard.yield.value || 0, scale) : 0;
+  const yieldServ = servings || baseServ;
+  const ratlinale = mc.scientificRationale || parametricCard.scientificRationale || "";
+
+  /* Chef notes from prep.comment (synced — always visible in print) */
+  const chefNotes = (rc.preparations || [])
+    .filter(p => p.comment && p.comment.trim())
+    .map(p => ({ prep: p.name || "", note: p.comment.trim() }));
+
+  const critTemps = (mc.criticalTemperatures || parametricCard.criticalTemperatures || []);
+  const equipment = (mc.equipment || parametricCard.equipment || []);
+
+  return _wpHtml([
+    "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'/>",
+    "<title>", _wpHe(rc.name || "Recipe"), " &mdash; Modernist Cuisine</title>",
+    "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap' rel='stylesheet'/>",
+    "<style>",
+    "@page { size: A4 landscape; margin: 9mm 11mm; }",
+    "* { box-sizing: border-box; }",
+    "html, body { margin: 0; padding: 0; background: #FFFFFF; color: #1A1A1A; font-family: 'Inter','Helvetica',sans-serif; font-size: 9pt; line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }",
+    ".header { border-bottom: 1.8pt solid #2A2A2A; padding-bottom: 6pt; margin-bottom: 8pt; }",
+    ".eye { font-size: 7pt; font-weight: 700; color: #6B1D1D; letter-spacing: 1.5pt; margin-bottom: 3pt; }",
+    "h1 { font-family: 'Inter','Helvetica',sans-serif; font-weight: 700; font-size: 16pt; color: #6B1D1D; margin: 0 0 3pt; letter-spacing: 1.2pt; }",
+    ".sub { font-family: 'Source Serif 4', Georgia, serif; font-style: italic; font-size: 10pt; color: #3A3A3A; margin: 0 0 4pt; }",
+    ".yldline { font-size: 8pt; color: #1A1A1A; margin-top: 3pt; }",
+    ".yldline b { font-weight: 600; }",
+    ".body { display: grid; grid-template-columns: 38% 62%; gap: 14pt; }",
+    ".col h2 { font-family: 'Inter','Helvetica',sans-serif; font-weight: 700; font-size: 7.5pt; color: #1A1A1A; letter-spacing: 1.2pt; margin: 0 0 5pt; text-transform: uppercase; }",
+    "table.ing { width: 100%; border-collapse: collapse; }",
+    "table.ing th { font-size: 6.5pt; font-weight: 700; color: #1A1A1A; letter-spacing: 1pt; text-align: left; padding: 2pt 3pt; border-bottom: 0.5pt solid #888; }",
+    "table.ing th.r { text-align: right; }",
+    "table.ing td { font-family: 'Source Serif 4', Georgia, serif; font-size: 9pt; padding: 3pt 3pt; vertical-align: top; border-bottom: 0.25pt solid #D5D0C5; }",
+    "table.ing td.r { text-align: right; font-family: 'Inter','Helvetica',sans-serif; font-weight: 500; font-size: 8.5pt; }",
+    "table.ing td.pct { color: #3A3A3A; }",
+    "table.ing td.ref { color: #6B1D1D; font-family: 'Source Serif 4', Georgia, serif; }",
+    "table.ing .pn { display: block; font-style: italic; font-size: 7.5pt; color: #3A3A3A; margin-top: 1pt; }",
+    "table.ing .ref-mark { color: #6B1D1D; font-size: 7pt; margin-left: 3pt; }",
+    ".step { display: flex; gap: 6pt; align-items: flex-start; margin-bottom: 6pt; page-break-inside: avoid; break-inside: avoid; }",
+    ".step .num { flex: 0 0 14pt; width: 14pt; height: 14pt; border-radius: 50%; background: #6B1D1D; color: #FFFFFF; font-size: 7pt; font-weight: 700; text-align: center; line-height: 14pt; margin-top: 1pt; }",
+    ".step .body-txt { flex: 1; min-width: 0; }",
+    ".step .verb { font-weight: 700; font-size: 8pt; color: #6B1D1D; letter-spacing: 0.6pt; text-transform: uppercase; }",
+    ".step .meta { font-size: 7.5pt; color: #3A3A3A; margin-left: 4pt; }",
+    ".step .instr { font-family: 'Source Serif 4', Georgia, serif; font-size: 9pt; line-height: 1.42; color: #1A1A1A; margin-top: 1pt; }",
+    ".sublabel { font-family: 'Source Serif 4', Georgia, serif; font-style: italic; font-size: 8pt; color: #3A3A3A; margin: 4pt 0 3pt; }",
+    ".side { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; margin-top: 5pt; padding-top: 5pt; border-top: 0.5pt solid #888; }",
+    ".side .row { display: flex; justify-content: space-between; font-size: 8pt; padding: 1.5pt 0; }",
+    ".side .row .v { font-weight: 500; color: #6B1D1D; }",
+    ".side .row .eq-name { font-weight: 600; }",
+    ".side .row .eq-spec { color: #3A3A3A; font-style: italic; margin-left: 3pt; }",
+    ".rat { font-family: 'Source Serif 4', Georgia, serif; font-style: italic; font-size: 8.5pt; line-height: 1.5; color: #3A3A3A; margin-top: 7pt; padding-top: 5pt; border-top: 0.5pt solid #888; }",
+    ".chef { margin-top: 6pt; padding-top: 5pt; border-top: 0.5pt solid #888; }",
+    ".chef .lbl { font-size: 7pt; font-weight: 700; color: #1A1A1A; letter-spacing: 1pt; text-transform: uppercase; margin-bottom: 3pt; }",
+    ".chef .item { font-family: 'Source Serif 4', Georgia, serif; font-size: 8.5pt; color: #3A3A3A; margin-bottom: 2pt; line-height: 1.45; }",
+    ".chef .item .ph { font-weight: 600; color: #1A1A1A; }",
+    ".footer { margin-top: 8pt; padding-top: 5pt; border-top: 1.5pt solid #2A2A2A; display: flex; justify-content: space-between; font-size: 6.5pt; color: #3A3A3A; letter-spacing: 1pt; text-transform: uppercase; }",
+    "</style></head>",
+    "<body onload='setTimeout(function(){window.print();},250);'>",
+    "<div class='header'>",
+    "<div class='eye'>", _wpHe(rc.category || "Recipe"), " &nbsp;&middot;&nbsp; Modernist Cuisine Card</div>",
+    "<h1>", _wpHe(rc.name || ""), "</h1>",
+    rc.description ? `<div class='sub'>${_wpHe(rc.description)}</div>` : "",
+    `<div class='yldline'><b>YIELD</b> ${yieldG} g &nbsp;&middot;&nbsp; <b>SERVES</b> ${yieldServ}${parametricCard.primaryIngredient ? ` &nbsp;&middot;&nbsp; <b>REFERENCE</b> ${_wpHe(parametricCard.primaryIngredient)}` : ""}</div>`,
+    "</div>",
+    /* ─── 2-col body ─── */
+    "<div class='body'>",
+    /* Left: ingredients */
+    "<div class='col'>",
+    "<h2>Ingredients</h2>",
+    "<table class='ing'><thead><tr><th>Name</th><th class='r'>Mass</th><th class='r'>%</th><th>Step</th></tr></thead><tbody>",
+    ingredientRows.map((r) => `<tr><td>${_wpHe(r.name)}${r.isReference ? "<span class='ref-mark'>&#9670;</span>" : ""}${r.prepNote ? `<span class='pn'>${_wpHe(r.prepNote)}</span>` : ""}</td><td class='r'>${_wpHe(r.massLabel)}</td><td class='r pct'>${_wpHe(r.scaling)}</td><td class='ref'>${r.firstStep ? "&#9312;&#9313;&#9314;&#9315;&#9316;&#9317;&#9318;&#9319;&#9320;&#9321;".substring(r.firstStep - 1, r.firstStep) : ""}</td></tr>`).join(""),
+    "</tbody></table>",
+    /* Critical temps + Equipment side-by-side */
+    (critTemps.length || equipment.length) ? [
+      "<div class='side'>",
+      critTemps.length ? [
+        "<div>",
+        "<h2 style='margin-bottom:3pt;'>Critical Temperatures</h2>",
+        critTemps.map(ct => `<div class='row'><span>${_wpHe(ct.stage || ct.name || "")}</span><span class='v'>${_wpHe(ct.value || "")}</span></div>`).join(""),
+        "</div>",
+      ].join("") : "<div></div>",
+      equipment.length ? [
+        "<div>",
+        "<h2 style='margin-bottom:3pt;'>Equipment</h2>",
+        equipment.map(eq => `<div class='row'><span><span class='eq-name'>${_wpHe(eq.name || "")}</span>${eq.criticalSpec ? `<span class='eq-spec'>&mdash; ${_wpHe(eq.criticalSpec)}</span>` : ""}</span></div>`).join(""),
+        "</div>",
+      ].join("") : "<div></div>",
+      "</div>",
+    ].join("") : "",
+    /* Rationale */
+    ratlinale ? `<div class='rat'>${_wpHe(ratlinale)}</div>` : "",
+    "</div>",
+    /* Right: procedure + chef notes */
+    "<div class='col'>",
+    "<h2>Procedure</h2>",
+    procedureBlocks.map((blk, bi) => [
+      blk.sublabel ? `<div class='sublabel'>${_wpHe(blk.sublabel)}</div>` : "",
+      blk.steps.map((s) => [
+        "<div class='step'>",
+        `<div class='num'>${s.number || ""}</div>`,
+        "<div class='body-txt'>",
+        `<div><span class='verb'>${_wpHe(s.verb || "Step")}</span>${(s.tempLabel || s.timeLabel) ? `<span class='meta'>${_wpHe([s.tempLabel, s.timeLabel].filter(Boolean).join(" · "))}</span>` : ""}</div>`,
+        `<div class='instr'>${_wpHe(s.instruction)}</div>`,
+        "</div></div>",
+      ].join("")).join(""),
+    ].join("")).join(""),
+    chefNotes.length ? [
+      "<div class='chef'>",
+      "<div class='lbl'>Chef Notes</div>",
+      chefNotes.map(n => `<div class='item'>${chefNotes.length > 1 ? `<span class='ph'>${_wpHe(n.prep)}: </span>` : ""}${_wpHe(n.note)}</div>`).join(""),
+      "</div>",
+    ].join("") : "",
+    "</div>",
+    "</div>",
+    "<div class='footer'><span>Mise en Code &middot; MC-1.0</span><span>", _wpHe(rc.name || ""), "</span></div>",
+    "</body></html>",
+  ]);
+}
+
+/* Build a complete <html> document for the Algorithm view. Portrait A4.
+   Renders a clean step list with every prep's chef note + every step's
+   full instruction text inline (the on-screen tooltip content). */
+function _wpBuildAlgoPrintHtml(rc, parametricCard, servings) {
+  const baseServ = rc.servings || 1;
+  const scale = servings ? (servings / baseServ) : 1;
+  const preps = rc.preparations || [];
+
+  /* Flatten grid into ordered (row, lane) steps */
+  function flatten(prep) {
+    const grid = prep.grid || [];
+    const out = [];
+    for (let r = 0; r < grid.length; r++) {
+      const row = grid[r] || [];
+      for (let li = 0; li < row.length; li++) {
+        const s = row[li];
+        if (!s) continue;
+        out.push({
+          step: s,
+          lane: (prep.laneNames && prep.laneNames[li]) || `Lane ${li + 1}`,
+          rowIdx: r,
+        });
+      }
+    }
+    return out;
+  }
+
+  function fmtParam(pp) {
+    if (!pp) return "";
+    const parts = [];
+    if (pp._temp != null) parts.push(`${pp._temp} °${pp._tempUnit || "C"}`);
+    if (pp._time != null) parts.push(`${pp._time} ${pp._timeUnit || "min"}`);
+    return parts.join(" · ");
+  }
+
+  function renderStep(item, globalIdx) {
+    const s = item.step;
+    const procs = (s.processes && s.processes.length) ? s.processes : (s.process ? [s.process] : []);
+    const procLine = procs.map(_wpProcessLabel).join(", ");
+    const toolName = s.tool && s.tool.name ? s.tool.name : "";
+    const params = fmtParam(s.processParams);
+    const meta = [toolName, procLine, params].filter(Boolean).join("  ·  ");
+    const ings = (s.ingredients || []).filter(i => !i.isPrepRef);
+    return `
+      <div class='step'>
+        <div class='num'>${globalIdx + 1}</div>
+        <div class='body-txt'>
+          <div class='top'>
+            <span class='ttl'>${_wpHe(s.title || "Step")}</span>
+            <span class='lane'>${_wpHe(item.lane)}</span>
+          </div>
+          ${meta ? `<div class='meta'>${_wpHe(meta)}</div>` : ""}
+          ${s.instruction ? `<div class='instr'>${_wpHe(s.instruction)}</div>` : ""}
+          ${ings.length ? `<div class='ings'>${ings.map(i => {
+            const q = (i.qty != null) ? _wpScaleNum(i.qty, scale) : "";
+            const u = i.unit ? ` ${_wpHe(i.unit)}` : "";
+            return `<span class='ing'><span class='qty'>${q}${u}</span> ${_wpHe(i.name || "")}</span>`;
+          }).join("")}</div>` : ""}
+        </div>
+      </div>`;
+  }
+
+  let globalIdx = 0;
+  const prepBlocks = preps.map((prep) => {
+    const items = flatten(prep);
+    const itemsHtml = items.map((it) => renderStep(it, globalIdx++)).join("");
+    return `
+      <section class='prep ${prep.isModule ? "module" : ""}'>
+        <div class='prep-head'>
+          <span class='prep-name'>${_wpHe(prep.name || "")}${prep.isModule ? ' <span class="mod-tag">MODULE</span>' : ""}</span>
+        </div>
+        ${prep.comment ? `<div class='prep-comment'>${_wpHe(prep.comment)}</div>` : ""}
+        ${itemsHtml}
+      </section>`;
+  }).join("");
+
+  return _wpHtml([
+    "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'/>",
+    "<title>", _wpHe(rc.name || "Recipe"), " &mdash; Algorithm</title>",
+    "<link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@500&display=swap' rel='stylesheet'/>",
+    "<style>",
+    "@page { size: A4 portrait; margin: 12mm 14mm; }",
+    "* { box-sizing: border-box; }",
+    "html, body { margin: 0; padding: 0; background: #FFFFFF; color: #1A1A1A; font-family: 'Inter','Helvetica',sans-serif; font-size: 9.5pt; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }",
+    ".header { border-bottom: 1.5pt solid #2A2A2A; padding-bottom: 5pt; margin-bottom: 10pt; }",
+    ".eye { font-size: 7pt; font-weight: 700; color: #6B1D1D; letter-spacing: 1.5pt; margin-bottom: 3pt; text-transform: uppercase; }",
+    "h1 { font-family: 'Inter','Helvetica',sans-serif; font-weight: 700; font-size: 18pt; color: #1A1A1A; margin: 0 0 3pt; letter-spacing: 0.3pt; }",
+    ".sub { font-family: 'Source Serif 4', Georgia, serif; font-style: italic; font-size: 10pt; color: #3A3A3A; margin: 0 0 4pt; }",
+    ".yldline { font-size: 8.5pt; color: #1A1A1A; margin-top: 3pt; }",
+    ".yldline b { font-weight: 600; }",
+    ".prep { margin-bottom: 10pt; page-break-inside: auto; }",
+    ".prep.module .prep-head { background: #F5F0E8; }",
+    ".prep-head { padding: 4pt 6pt; border-left: 2pt solid #6B1D1D; background: #FAF7F0; margin-bottom: 5pt; page-break-after: avoid; }",
+    ".prep-name { font-family: 'Inter','Helvetica',sans-serif; font-weight: 700; font-size: 11pt; color: #1A1A1A; letter-spacing: 0.3pt; }",
+    ".mod-tag { font-size: 6.5pt; font-weight: 700; color: #6B1D1D; background: #FFFFFF; border: 0.5pt solid #6B1D1D; padding: 0.5pt 3pt; border-radius: 3pt; margin-left: 4pt; letter-spacing: 0.8pt; vertical-align: middle; }",
+    ".prep-comment { font-family: 'Source Serif 4', Georgia, serif; font-style: italic; font-size: 9pt; color: #3A3A3A; padding: 0 0 5pt; line-height: 1.5; }",
+    ".step { display: flex; gap: 7pt; align-items: flex-start; margin-bottom: 5pt; padding: 4pt 0; border-bottom: 0.25pt solid #E8E2D6; page-break-inside: avoid; break-inside: avoid; }",
+    ".step:last-child { border-bottom: none; }",
+    ".step .num { flex: 0 0 16pt; width: 16pt; height: 16pt; border-radius: 50%; background: #6B1D1D; color: #FFFFFF; font-size: 8pt; font-weight: 700; text-align: center; line-height: 16pt; margin-top: 1pt; }",
+    ".step .body-txt { flex: 1; min-width: 0; }",
+    ".step .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8pt; }",
+    ".step .ttl { font-weight: 700; font-size: 10pt; color: #1A1A1A; }",
+    ".step .lane { font-family: 'JetBrains Mono', monospace; font-size: 7pt; font-weight: 500; color: #6B1D1D; letter-spacing: 0.5pt; text-transform: uppercase; flex-shrink: 0; }",
+    ".step .meta { font-family: 'JetBrains Mono', monospace; font-size: 8pt; color: #3A3A3A; margin: 1pt 0 1pt; letter-spacing: 0.1pt; }",
+    ".step .instr { font-family: 'Source Serif 4', Georgia, serif; font-size: 9.5pt; line-height: 1.5; color: #1A1A1A; margin-top: 2pt; }",
+    ".step .ings { font-size: 8pt; color: #3A3A3A; margin-top: 3pt; padding-top: 3pt; border-top: 0.25pt dashed #D5D0C5; }",
+    ".step .ing { display: inline-block; margin-right: 8pt; margin-bottom: 1pt; }",
+    ".step .ing .qty { font-family: 'JetBrains Mono', monospace; font-weight: 500; color: #1A1A1A; }",
+    ".footer { margin-top: 8pt; padding-top: 5pt; border-top: 1pt solid #2A2A2A; display: flex; justify-content: space-between; font-size: 6.5pt; color: #3A3A3A; letter-spacing: 1pt; text-transform: uppercase; }",
+    "</style></head>",
+    "<body onload='setTimeout(function(){window.print();},250);'>",
+    "<div class='header'>",
+    "<div class='eye'>", _wpHe(rc.category || "Recipe"), " &middot; Algorithm View</div>",
+    "<h1>", _wpHe(rc.name || ""), "</h1>",
+    rc.description ? `<div class='sub'>${_wpHe(rc.description)}</div>` : "",
+    `<div class='yldline'><b>SERVES</b> ${servings || baseServ}${parametricCard && parametricCard.yield ? ` &nbsp;&middot;&nbsp; <b>YIELD</b> ${_wpScaleNum(parametricCard.yield.value || 0, scale)} g` : ""}${preps.length ? ` &nbsp;&middot;&nbsp; <b>${preps.length}</b> preparation${preps.length === 1 ? "" : "s"}` : ""}</div>`,
+    "</div>",
+    prepBlocks,
+    "<div class='footer'><span>Mise en Code &middot; Algorithm View</span><span>", _wpHe(rc.name || ""), "</span></div>",
+    "</body></html>",
+  ]);
+}
+
+function wpBuildPrintHtml(rc, parametricCard, view, servings) {
+  if (view === "mc" && parametricCard && parametricCard.mc && Array.isArray(parametricCard.mc.blocks) && parametricCard.mc.blocks.length > 0) {
+    return _wpBuildMcPrintHtml(rc, parametricCard, servings);
+  }
+  return _wpBuildAlgoPrintHtml(rc, parametricCard, servings);
+}
+
 /* ═══ GANTT VIEW — auto-height arrows, named lanes, ingredient summary, module anchors ═══ */
 function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametricCards, recipeVersionHash }) {
   const [sv, sSv] = useState(rc.servings);
   const base = rc.servings;
   const isTablet = typeof window !== "undefined" && window.innerWidth >= 768 && window.innerWidth < 1024;
   const useCardDefault = isMobile || isTablet;
-  const [viewMode, setViewMode] = useState(useCardDefault ? "card" : "algorithm"); /* card | algorithm | modernist */
+  /* Pre-flight check: does this recipe have a Modernist Cuisine card with
+     populated `mc.blocks`? This drives the mobile default — we lead with
+     the MC view when available, as it's the premium presentation. */
+  const hasMcCard = useMemo(() => {
+    if (!parametricCards || !parametricCards.cards) return false;
+    const entry = parametricCards.cards.find(c => c.recipeId === rc.id);
+    if (!entry || !entry.parametricCard || !entry.parametricCard.mc) return false;
+    return Array.isArray(entry.parametricCard.mc.blocks) && entry.parametricCard.mc.blocks.length > 0;
+  }, [parametricCards, rc.id]);
+  /* Mobile/tablet default: Modernist when an MC card exists, else the
+     legacy Card layout. Desktop default: Algorithm (unchanged). */
+  const [viewMode, setViewMode] = useState(() => {
+    if (useCardDefault) return hasMcCard ? "modernist" : "card";
+    return "algorithm";
+  });
   /* Desktop-only secondary view toggle: switch between the existing Algorithm
      view and the Modernist Cuisine view. Only available when the loaded
      parametric card has an `mc.blocks` structure (i.e., produced by
      tools/modernize.js v2-MC). */
   const [dtView, setDtView] = useState("algorithm"); /* algorithm | modernist */
+
+  /* ── Download as PDF ──
+     Builds a purpose-built print HTML (landscape MC card, or portrait
+     Algorithm step list with every tooltip-instruction inline) into a
+     hidden iframe, then triggers its print(). The browser's print dialog
+     defaults to "Save as PDF" on every modern OS. */
+  const printRecipe = () => {
+    try {
+      const onMobile = isMobile || isTablet;
+      const showingMC = onMobile
+        ? (viewMode === "modernist")
+        : (dtView === "modernist");
+      const view = showingMC ? "mc" : "algorithm";
+      const html = wpBuildPrintHtml(rc, card, view, sv);
+      const frame = document.createElement("iframe");
+      frame.setAttribute("aria-hidden", "true");
+      frame.style.position = "fixed";
+      frame.style.right = "0";
+      frame.style.bottom = "0";
+      frame.style.width = "0";
+      frame.style.height = "0";
+      frame.style.border = "0";
+      frame.style.opacity = "0";
+      frame.style.pointerEvents = "none";
+      document.body.appendChild(frame);
+      const ifrDoc = frame.contentDocument || frame.contentWindow.document;
+      ifrDoc.open();
+      ifrDoc.write(html);
+      ifrDoc.close();
+      /* The iframe body's onload calls window.print() after a short delay
+         (gives the Google Fonts a chance to apply); we just clean up. */
+      const cleanup = () => {
+        try { document.body.removeChild(frame); } catch {}
+        window.removeEventListener("afterprint", cleanup);
+      };
+      window.addEventListener("afterprint", cleanup);
+      /* Belt-and-braces — remove the iframe after 30s even if afterprint
+         never fires (some browsers don't fire it when print is cancelled). */
+      setTimeout(cleanup, 30000);
+    } catch (e) {
+      console.warn("Print failed, falling back to native print:", e);
+      try { window.print(); } catch (e2) {}
+    }
+  };
   
   /* Look up parametric card for this recipe */
   const cardEntry = useMemo(() => {
@@ -6027,8 +6431,8 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
       const _mCC = rc.category === "Entrees" ? "#7EAA7E" : rc.category === "Mains" ? "#C49A6C" : rc.category === "Desserts" ? "#E89EC0" : rc.category === "Drinks & Cocktails" ? "#6B9FC4" : rc.category === "Sides & Salads" ? "#8AAE6F" : "#C49A6C";
       const _mCL = rc.category === "Entrees" ? (t.catEntrees||"Entrees") : rc.category === "Mains" ? (t.catMains||"Mains") : rc.category === "Desserts" ? (t.catDesserts||"Desserts") : rc.category === "Drinks & Cocktails" ? (t.catDrinks||"Drinks & Cocktails") : rc.category === "Sides & Salads" ? (t.catSides||"Sides & Salads") : (rc.category||"Mains");
       return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:th.bg,fontFamily:"'DM Sans',sans-serif",color:th.tx}}>
-        {/* Sticky glass header — back · segmented Card/Algorithm toggle */}
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+        {/* Sticky glass header — back · segmented Card/Algorithm toggle · download */}
+        <div className="no-print" style={{padding:"10px 14px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
           <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
@@ -6039,7 +6443,9 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
             )}
             <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="algorithm"?th.pri:"transparent",color:viewMode==="algorithm"?th.txOn:th.txM,borderRadius:999,letterSpacing:0.3}}>Algo</button>
           </div>
-          <div style={{width:36}}/>
+          <button onClick={printRecipe} aria-label="Download as PDF" title="Download as PDF" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
         </div>
 
         {/* Card content */}
@@ -6156,7 +6562,7 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
       const th = TH();
       return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:th.bg}}>
         {/* Sticky toggle bar — back + segmented Card/MC/Algorithm toggle */}
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+        <div className="no-print" style={{padding:"10px 14px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
           <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
@@ -6165,7 +6571,9 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
             <button onClick={()=>setViewMode("modernist")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"#6B1D1D",color:"#FFFFFF",borderRadius:999,letterSpacing:0.3}}>MC</button>
             <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Algo</button>
           </div>
-          <div style={{width:36}}/>
+          <button onClick={printRecipe} aria-label="Download as PDF" title="Download as PDF" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"14px 10px 36px",WebkitOverflowScrolling:"touch"}}>
           <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin}/>
@@ -6223,8 +6631,8 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
     const _aCC = rc.category === "Entrees" ? "#7EAA7E" : rc.category === "Mains" ? "#C49A6C" : rc.category === "Desserts" ? "#E89EC0" : rc.category === "Drinks & Cocktails" ? "#6B9FC4" : rc.category === "Sides & Salads" ? "#8AAE6F" : "#C49A6C";
     const _aCL = rc.category === "Entrees" ? (t.catEntrees||"Entrees") : rc.category === "Mains" ? (t.catMains||"Mains") : rc.category === "Desserts" ? (t.catDesserts||"Desserts") : rc.category === "Drinks & Cocktails" ? (t.catDrinks||"Drinks & Cocktails") : rc.category === "Sides & Salads" ? (t.catSides||"Sides & Salads") : (rc.category||"Mains");
     return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:TH().bg,fontFamily:"'DM Sans',sans-serif",color:TH().tx}}>
-      {/* Sticky glass header — back · segmented Card/Algorithm toggle */}
-      <div style={{padding:"10px 14px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:TH().glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+      {/* Sticky glass header — back · segmented Card/Algorithm toggle · download */}
+      <div className="no-print" style={{padding:"10px 14px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:TH().glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
         <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${TH().bdS}`,background:TH().bgC,color:TH().tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
@@ -6235,7 +6643,9 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
           )}
           <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:TH().pri,color:TH().txOn,borderRadius:999,letterSpacing:0.3}}>Algo</button>
         </div> : <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:11,color:TH().txD,fontStyle:"italic"}}>view only</div>}
-        <div style={{width:36}}/>
+        <button onClick={printRecipe} aria-label="Download as PDF" title="Download as PDF" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${TH().bdS}`,background:TH().bgC,color:TH().tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
       </div>
       {/* Hero — eyebrow + title + flavour mini bars */}
       <div style={{padding:"16px 18px 10px"}}>
@@ -6338,8 +6748,8 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
   return (<>
     <div style={{ maxWidth:1180,margin:"0 auto",padding:"28px 24px 40px" }}>
 
-    {/* Top action bar — back + view-toggle (Algorithm / Modernist) + edit */}
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18, gap:12 }}>
+    {/* Top action bar — back + view-toggle (Algorithm / Modernist) + download + edit */}
+    <div className="no-print" style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18, gap:12 }}>
       <button onClick={oB} style={{
         display:"inline-flex", alignItems:"center", gap:6,
         padding:"9px 16px", borderRadius:999, border:`1px solid ${TH().bdS}`,
@@ -6376,15 +6786,29 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
         </div>
       )}
 
-      {isAdmin && !isMobile && <button onClick={oE} style={{
-        display:"inline-flex", alignItems:"center", gap:6,
-        padding:"10px 18px", borderRadius:999, border:"none",
-        background:TH().pri, color:TH().txOn, cursor:"pointer",
-        fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700,
-        boxShadow:"0 6px 16px rgba(42,36,32,0.18)",
-      }}>
-        <Ic.Ed/>{t.edit}
-      </button>}
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <button onClick={printRecipe} aria-label="Download as PDF" title={dtView === "modernist" ? "Download Modernist Cuisine card as PDF" : "Download Algorithm view as PDF"} style={{
+          display:"inline-flex", alignItems:"center", gap:6,
+          padding:"9px 14px", borderRadius:999, border:`1px solid ${TH().bdS}`,
+          background:TH().bgC, color:TH().tx2, cursor:"pointer",
+          fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600,
+          transition:"background 0.18s, color 0.18s, border-color 0.18s"
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = TH().bdSt; e.currentTarget.style.color = TH().tx; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = TH().bdS; e.currentTarget.style.color = TH().tx2; }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download PDF
+        </button>
+        {isAdmin && !isMobile && <button onClick={oE} style={{
+          display:"inline-flex", alignItems:"center", gap:6,
+          padding:"10px 18px", borderRadius:999, border:"none",
+          background:TH().pri, color:TH().txOn, cursor:"pointer",
+          fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700,
+          boxShadow:"0 6px 16px rgba(42,36,32,0.18)",
+        }}>
+          <Ic.Ed/>{t.edit}
+        </button>}
+      </div>
     </div>
 
     {/* ─── MODERNIST CUISINE VIEW (alternative to Algorithm) ─── */}
