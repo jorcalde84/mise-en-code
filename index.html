@@ -948,10 +948,18 @@ const recipeVersionHash = (recipe) => {
      fires. Pure quantity / title / instruction edits do NOT trigger it. */
 function deriveStructuralCard(recipe, procParams) {
   if (!recipe) return null;
-  const preps = (recipe.preparations || []).filter(p => p && !p.isModule);
   /* Collect every step in execution order — preparation index, row, lane.
-     Modules are excluded; they're rendered separately in the algorithm view
-     and don't belong in the primary parametric card. */
+     Modules are normally excluded; they're rendered separately in the
+     algorithm view and don't belong in the primary parametric card.
+     Exception: when EVERY preparation is a module (i.e. the recipe was
+     authored as a single self-contained module like a sauce/condiment/side
+     — Pebre, Guacamole, Salmorejo de Tomate, etc.), there'd be nothing
+     left to derive. In that case the modules ARE the recipe content, so
+     we include them. Otherwise the MC view + toggle would silently
+     disappear on ~15 of our 57 recipes. */
+  const allPreps = (recipe.preparations || []).filter(p => p);
+  const nonModulePreps = allPreps.filter(p => !p.isModule);
+  const preps = nonModulePreps.length > 0 ? nonModulePreps : allPreps;
   const allSteps = [];
   preps.forEach(prep => {
     const grid = prep.grid || [];
@@ -6441,7 +6449,7 @@ function mcFlattenRows(blocks) {
   return rows;
 }
 
-function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
+function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin, isMobile }) {
   const mc = card && card.mc;
   if (!mc || !Array.isArray(mc.blocks) || !mc.blocks.length) {
     return <div style={{ padding:"40px 20px", textAlign:"center", color:"#888", fontFamily:MC_FONT_SERIF, fontStyle:"italic" }}>
@@ -6477,7 +6485,8 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
   return (
     <div style={{
       background: MC_PALETTE.pageBg, color: MC_PALETTE.bodyText,
-      fontFamily: MC_FONT_SERIF, padding: "44px 56px 36px",
+      fontFamily: MC_FONT_SERIF,
+      padding: isMobile ? "22px 18px 28px" : "44px 56px 36px",
       maxWidth: 1100, margin: "0 auto",
       boxShadow: "0 6px 32px rgba(0,0,0,0.10)",
       borderRadius: 4,
@@ -6516,81 +6525,160 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
         </div>
       )}
 
-      {/* Four-column parametric table */}
-      <table style={{
-        width: "100%", borderCollapse: "collapse", tableLayout: "fixed",
-        marginTop: 6, marginBottom: 18,
-      }}>
-        <colgroup>
-          <col style={{ width: "27%" }}/>
-          <col style={{ width: "10%" }}/>
-          <col style={{ width:  "8%" }}/>
-          <col style={{ width: "55%" }}/>
-        </colgroup>
-        <thead>
-          <tr>
-            <th style={headerCellStyle}>{ml.ingredient}</th>
-            <th style={headerCellStyle}>{ml.quantity}</th>
-            <th style={headerCellStyle}>{ml.scaling}</th>
-            <th style={headerCellStyle}>{ml.procedure}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, idx) => {
-            if (row.kind === "sublabel") {
-              return (
-                <tr key={`sub-${idx}`}>
-                  <td colSpan={4} style={{
-                    fontFamily: MC_FONT_SERIF, fontSize: 11.5, fontStyle: "italic",
-                    padding: "10px 8px 4px", color: MC_PALETTE.bodyText,
-                  }}>{row.text}</td>
-                </tr>
-              );
-            }
-            const { ingredient: ing, step, border } = row;
+      {isMobile ? (
+        /* ─── Mobile block-stacked layout ─────────────────────────────────
+           The desktop 4-col table compresses badly on a 375 px viewport
+           (the 27/10/8/55 % columns become 100/37/30/206 px and headers
+           overlap, ingredient values wrap awkwardly). Mobile gets a
+           block-grouped layout instead: each MC block is a self-contained
+           section with sublabel header, ingredients listed (name ←→
+           quantity · scaling), then procedure steps with their numbered
+           circles + full-width instructions. Linkage is preserved within
+           each block; typography gets room to breathe. */
+        <div style={{ marginTop: 8, marginBottom: 18 }}>
+          {mc.blocks.map((block, bi) => {
+            const ings = block.ingredients || [];
+            const steps = block.steps || [];
+            const isLast = bi === mc.blocks.length - 1;
             return (
-              <tr key={`d-${idx}`}>
-                <td style={{ ...cellBaseStyle, borderBottom: border }}>
-                  {ing ? (
-                    <>
-                      <span style={ing.isFromAbove ? { fontStyle: "italic" } : null}>
-                        {trIng(ing.name)}{ing.isFromAbove ? ", from above" : ""}
-                      </span>
-                      {ing.prepNote && <>, {ing.prepNote}</>}
-                      {ing.isReference && <span title="100% reference" style={{ color: MC_PALETTE.burgundy, marginLeft: 4, fontSize: 8 }}>◆</span>}
-                      {ing.crossRef && (
-                        <div style={{ fontStyle: "italic", fontSize: 9.5, color: MC_PALETTE.bodyText, marginTop: 1 }}>
-                          see page {ing.crossRef}
-                        </div>
-                      )}
-                    </>
-                  ) : ""}
-                </td>
-                <td style={{ ...cellBaseStyle, borderBottom: border }}>
-                  {ing ? (ing.isFryingMedium ? "as needed" : mcScaleQty(ing.quantityDisplay, scale)) : ""}
-                </td>
-                <td style={{ ...cellBaseStyle, borderBottom: border, color: ing && ing.isReference ? MC_PALETTE.burgundy : MC_PALETTE.bodyText }}>
-                  {ing ? (ing.scalingDisplay || "") : ""}
-                </td>
-                <td style={{ ...cellBaseStyle, borderBottom: border }}>
-                  {step ? (
-                    <div style={{ display: "flex", alignItems: "flex-start" }}>
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        width: 17, height: 17, borderRadius: "50%",
-                        background: MC_PALETTE.burgundy, color: "#FFFFFF",
-                        fontFamily: MC_FONT_SANS, fontSize: 9.5, fontWeight: 600,
-                        lineHeight: 1, marginRight: 6, flexShrink: 0, marginTop: 2,
-                      }}>{step.number}</span>
-                      <span style={{ flex: 1 }}>{stripF(step.instruction)}</span>
-                    </div>
-                  ) : ""}
-                </td>
-              </tr>
+              <div key={`b-${bi}`} style={{
+                paddingTop: bi === 0 ? 0 : 12,
+                paddingBottom: 12,
+                borderBottom: isLast ? `2px solid ${MC_PALETTE.ruleHeavy}` : `0.75px solid ${MC_PALETTE.ruleLight}`,
+              }}>
+                {block.sublabel && (
+                  <div style={{
+                    fontFamily: MC_FONT_SERIF, fontSize: 13, fontStyle: "italic",
+                    color: MC_PALETTE.bodyText, marginBottom: 8,
+                  }}>{block.sublabel}</div>
+                )}
+                {/* Ingredients — flex rows (name | qty · scaling) */}
+                {ings.length > 0 && (
+                  <div style={{ marginBottom: steps.length ? 10 : 0 }}>
+                    {ings.map((ing, ii) => (
+                      <div key={`i-${bi}-${ii}`} style={{
+                        display: "flex", alignItems: "baseline", justifyContent: "space-between",
+                        gap: 12, padding: "4px 0",
+                        fontFamily: MC_FONT_SERIF, fontSize: 13, color: MC_PALETTE.bodyText, lineHeight: 1.4,
+                      }}>
+                        <span style={{ flex: 1, minWidth: 0 }}>
+                          <span style={ing.isFromAbove ? { fontStyle: "italic" } : null}>
+                            {trIng(ing.name)}{ing.isFromAbove ? ", from above" : ""}
+                          </span>
+                          {ing.prepNote && <>, <span style={{ color: MC_PALETTE.marginText }}>{ing.prepNote}</span></>}
+                          {ing.isReference && <span title="100% reference" style={{ color: MC_PALETTE.burgundy, marginLeft: 4, fontSize: 9 }}>◆</span>}
+                          {ing.crossRef && <div style={{ fontStyle: "italic", fontSize: 10, color: MC_PALETTE.bodyText, marginTop: 1 }}>see page {ing.crossRef}</div>}
+                        </span>
+                        <span style={{
+                          flexShrink: 0, fontFamily: MC_FONT_SANS, fontSize: 12,
+                          color: ing.isReference ? MC_PALETTE.burgundy : MC_PALETTE.bodyText,
+                          whiteSpace: "nowrap", textAlign: "right",
+                        }}>
+                          {ing.isFryingMedium ? "as needed" : mcScaleQty(ing.quantityDisplay, scale)}
+                          {ing.scalingDisplay && <span style={{ color: MC_PALETTE.marginText, marginLeft: 6 }}>· {ing.scalingDisplay}</span>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Procedure steps — numbered circle + full-width instruction */}
+                {steps.map((step, si) => (
+                  <div key={`s-${bi}-${si}`} style={{
+                    display: "flex", alignItems: "flex-start", gap: 8,
+                    padding: "4px 0",
+                    fontFamily: MC_FONT_SERIF, fontSize: 13, lineHeight: 1.45, color: MC_PALETTE.bodyText,
+                  }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      width: 20, height: 20, borderRadius: "50%",
+                      background: MC_PALETTE.burgundy, color: "#FFFFFF",
+                      fontFamily: MC_FONT_SANS, fontSize: 11, fontWeight: 600,
+                      lineHeight: 1, flexShrink: 0, marginTop: 1,
+                    }}>{step.number}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>{stripF(step.instruction)}</span>
+                  </div>
+                ))}
+              </div>
             );
           })}
-        </tbody>
-      </table>
+        </div>
+      ) : (
+        /* Four-column parametric table (desktop) */
+        <table style={{
+          width: "100%", borderCollapse: "collapse", tableLayout: "fixed",
+          marginTop: 6, marginBottom: 18,
+        }}>
+          <colgroup>
+            <col style={{ width: "27%" }}/>
+            <col style={{ width: "10%" }}/>
+            <col style={{ width:  "8%" }}/>
+            <col style={{ width: "55%" }}/>
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={headerCellStyle}>{ml.ingredient}</th>
+              <th style={headerCellStyle}>{ml.quantity}</th>
+              <th style={headerCellStyle}>{ml.scaling}</th>
+              <th style={headerCellStyle}>{ml.procedure}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => {
+              if (row.kind === "sublabel") {
+                return (
+                  <tr key={`sub-${idx}`}>
+                    <td colSpan={4} style={{
+                      fontFamily: MC_FONT_SERIF, fontSize: 11.5, fontStyle: "italic",
+                      padding: "10px 8px 4px", color: MC_PALETTE.bodyText,
+                    }}>{row.text}</td>
+                  </tr>
+                );
+              }
+              const { ingredient: ing, step, border } = row;
+              return (
+                <tr key={`d-${idx}`}>
+                  <td style={{ ...cellBaseStyle, borderBottom: border }}>
+                    {ing ? (
+                      <>
+                        <span style={ing.isFromAbove ? { fontStyle: "italic" } : null}>
+                          {trIng(ing.name)}{ing.isFromAbove ? ", from above" : ""}
+                        </span>
+                        {ing.prepNote && <>, {ing.prepNote}</>}
+                        {ing.isReference && <span title="100% reference" style={{ color: MC_PALETTE.burgundy, marginLeft: 4, fontSize: 8 }}>◆</span>}
+                        {ing.crossRef && (
+                          <div style={{ fontStyle: "italic", fontSize: 9.5, color: MC_PALETTE.bodyText, marginTop: 1 }}>
+                            see page {ing.crossRef}
+                          </div>
+                        )}
+                      </>
+                    ) : ""}
+                  </td>
+                  <td style={{ ...cellBaseStyle, borderBottom: border }}>
+                    {ing ? (ing.isFryingMedium ? "as needed" : mcScaleQty(ing.quantityDisplay, scale)) : ""}
+                  </td>
+                  <td style={{ ...cellBaseStyle, borderBottom: border, color: ing && ing.isReference ? MC_PALETTE.burgundy : MC_PALETTE.bodyText }}>
+                    {ing ? (ing.scalingDisplay || "") : ""}
+                  </td>
+                  <td style={{ ...cellBaseStyle, borderBottom: border }}>
+                    {step ? (
+                      <div style={{ display: "flex", alignItems: "flex-start" }}>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: 17, height: 17, borderRadius: "50%",
+                          background: MC_PALETTE.burgundy, color: "#FFFFFF",
+                          fontFamily: MC_FONT_SANS, fontSize: 9.5, fontWeight: 600,
+                          lineHeight: 1, marginRight: 6, flexShrink: 0, marginTop: 2,
+                        }}>{step.number}</span>
+                        <span style={{ flex: 1 }}>{stripF(step.instruction)}</span>
+                      </div>
+                    ) : ""}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
 
       {/* Scaling footnotes (MC special-scaling notation, when applicable) */}
       {(mc.scalingFootnotes || []).map((fn, i) => (
@@ -6627,9 +6715,9 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin }) {
         );
       })()}
 
-      {/* Critical temperatures + equipment side-by-side */}
+      {/* Critical temperatures + equipment side-by-side on desktop, stacked on mobile */}
       {(mc.criticalTemperatures?.length || mc.equipment?.length) ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, marginTop: 22 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 18 : 28, marginTop: 22 }}>
           {mc.criticalTemperatures?.length > 0 && (
             <div>
               <div style={{
@@ -7642,7 +7730,7 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"16px 16px 36px",WebkitOverflowScrolling:"touch"}}>
           <StaleCardBanner isStale={isStale} onEdit={oE} onRegenerate={onRegenerate} regenStatus={regenStatus} regenError={regenError} hasApiKey={hasApiKey} isMobile={isMobile} t={t}/>
-          <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin}/>
+          <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin} isMobile={isMobile}/>
         </div>
       </div>);
     }
@@ -7915,7 +8003,7 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
     {dtView === "modernist" && card && card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0 ? (
       <>
         <StaleCardBanner isStale={isStale} onEdit={oE} onRegenerate={onRegenerate} regenStatus={regenStatus} regenError={regenError} hasApiKey={hasApiKey} isMobile={isMobile} t={t}/>
-        <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin}/>
+        <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin} isMobile={isMobile}/>
       </>
     ) : (<>
 
