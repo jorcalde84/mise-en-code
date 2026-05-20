@@ -19,6 +19,39 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #D5CEBC; border-radius: 3px; }
 
+    /* ─── ACCESSIBILITY: focus rings (Phase D1) ───────────────────────
+       Most interactive elements are inline-styled <button>s and
+       role="button" divs; their default focus outline was suppressed by
+       browser quirks + opinionated reset. Restore a clear, theme-aware
+       ring on KEYBOARD focus (`:focus-visible`) so tab-navigation works
+       for keyboard, switch-control, and screen-reader users. */
+    button:focus-visible,
+    [role="button"]:focus-visible,
+    [role="tab"]:focus-visible,
+    [tabindex]:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 0;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.34) !important;
+      border-radius: 6px;
+    }
+    body.dark-mode button:focus-visible,
+    body.dark-mode [role="button"]:focus-visible,
+    body.dark-mode [role="tab"]:focus-visible,
+    body.dark-mode [tabindex]:focus-visible,
+    body.dark-mode a:focus-visible,
+    body.dark-mode input:focus-visible,
+    body.dark-mode select:focus-visible,
+    body.dark-mode textarea:focus-visible {
+      box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.42) !important;
+    }
+    /* Remove the focus ring under print so PDFs aren't cluttered. */
+    @media print {
+      button:focus-visible, [role="button"]:focus-visible { box-shadow: none !important; }
+    }
+
     /* ─── PRINT STYLES (Download PDF) ─────────────────────────────────
        Triggered by window.print(); the user picks "Save as PDF" in the
        browser's print dialog. We hide anything marked .no-print or with
@@ -55,9 +88,9 @@
 
 /* ═══ i18n ═══ */
 const T = {
-  en: { recipes:"Recipes",newRecipe:"New Recipe",yourRecipes:"Your Recipes",subtitle:"Drag, drop, compose. Build recipes like code.",search:"Search recipes or tags...",searchIng:"Search ingredients...",searchTool:"Search tools...",searchProc:"Search processes...",servings:"Servings",flavour:"Flavour Profile",sweetness:"Sweetness",richness:"Richness",spiciness:"Spiciness",acidity:"Acidity",umami:"Umami",edit:"Edit",save:"Save",publish:"Publish",cancel:"Cancel",serves:"Serves",preparations:"Preparations",addPrep:"Add Prep",addStep:"Add Step",ingredients:"Ingredients",tools:"Tools & Equipment",processes:"Processes",importModule:"Import Module",moduleLib:"Module Library",moduleDesc:"Import a reusable preparation.",noModules:"No modules available.",reusableModule:"Reusable module",module:"Module",import:"Import",back:"\u2190 Back",hoverHint:"hover for details",end:"End",stepTitle:"Step title...",stepDesc:"Description / notes...",recipeName:"Recipe name...",recipeDesc:"Recipe description...",tags:"Tags (comma or semicolon)...",prepComment:"Notes for this preparation...",dropIngHere:"Drop ingredients",dropToolHere:"Drop tool",dropProcHere:"Drop process",selectEggSize:"Select Egg Size",eggStandard:"Australian standard",whole:"Whole",white:"White",avgMass:"Avg",noDesc:"No description",draft:"draft",published:"published",servingsUnit:"servings",prepsUnit:"preps",from:"from",steps:"steps",addIngredient:"Add Ingredient",addTool:"Add Tool",addProcess:"Add Process",newIngredient:"New Ingredient",newTool:"New Tool",newProcess:"New Process",prepAsIngredient:"Preparations",tempLabel:"Temp",timeLabel:"Time",speedLabel:"Speed",scaleLabel:"Scale",customIngName:"Ingredient name...",customToolName:"Tool name...",customProcName:"Process name...",customIngCat:"Category",customIngUnit:"Default unit",laneName:"Process name",addLaneRight:"+ Lane (right)",addLaneLeft:"+ Lane (left)",addLaneHere:"+ Add lane here",insertStep:"Insert step here",step:"Step",procPanelTitle:"Processes \u2014 drag onto steps",lane:"Lane",mainProc:"Main Processes",ingredientSummary:"Ingredients",connectRight:"Connect to right",connectLeft:"Connect to left",moduleAnchor:"Connects at:",moduleLink:"link",delete:"Delete",confirmDelete:"Delete recipe?",confirmDeleteBody:"This will permanently delete",cannotUndo:"This cannot be undone.",savedDraft:"Draft saved",catEntrees:"Entrees",catMains:"Mains",catDesserts:"Desserts",catDrinks:"Drinks & Cocktails",catSides:"Sides & Salads",allCats:"All",recipeCategory:"Category",selectChilliHeat:"Select Chilli Heat",chilliHeatHint:"Heat levels follow the Scoville scale",flavourProfile:"Flavour profile",analyseWithAI:"Analyse with AI",analysing:"Analysing...",apiKey:"Anthropic API key (sk-ant-...)",apiKeyHint:"Stored locally in your browser only. Never sent anywhere except Anthropic.",aiNeedsKey:"Add your API key to enable AI analysis",aiFailed:"AI analysis failed",aiDetected:"AI detected",aiGuessed:"Values are AI-guessed \u2014 adjust as needed",markAsChilli:"This is a chilli",mcStaleTitle:"Recipe edited since this card was generated",mcStaleBody:"The Modernist Cuisine view may not reflect your latest changes.",mcOpenEditor:"Open editor",mcEditOnDesktop:"Edit on a laptop or desktop to refresh this card.",mcRegenerate:"Regenerate narrative",mcRegenerating:"Regenerating...",mcRegenSuccess:"Updated",mcRegenerateHint:"Regenerate the scientific narrative with AI. Uses your Anthropic API key.",mcNeedsApiKey:"Add your Anthropic API key first (Settings → API key)." },
-  es: { recipes:"Recetas",newRecipe:"Nueva Receta",yourRecipes:"Tus Recetas",subtitle:"Arrastra, suelta, compone.",search:"Buscar recetas...",searchIng:"Buscar ingredientes...",searchTool:"Buscar herramientas...",searchProc:"Buscar procesos...",servings:"Porciones",flavour:"Perfil de Sabor",sweetness:"Dulzor",richness:"Untuosidad",spiciness:"Picante",acidity:"Acidez",umami:"Umami",edit:"Editar",save:"Guardar",publish:"Publicar",cancel:"Cancelar",serves:"Porciones",preparations:"Preparaciones",addPrep:"Agregar Prep",addStep:"Agregar Paso",ingredients:"Ingredientes",tools:"Herramientas",processes:"Procesos",importModule:"Importar M\u00F3dulo",moduleLib:"Biblioteca",moduleDesc:"Importa preparaci\u00F3n reutilizable.",noModules:"Sin m\u00F3dulos.",reusableModule:"M\u00F3dulo reutilizable",module:"M\u00F3dulo",import:"Importar",back:"\u2190 Volver",hoverHint:"pasa el mouse",end:"Fin",stepTitle:"T\u00EDtulo...",stepDesc:"Descripci\u00F3n...",recipeName:"Nombre...",recipeDesc:"Descripci\u00F3n...",tags:"Etiquetas (coma o punto y coma)...",prepComment:"Notas...",dropIngHere:"Suelta ingrediente",dropToolHere:"Suelta herramienta",dropProcHere:"Suelta proceso",selectEggSize:"Tama\u00F1o Huevo",eggStandard:"Est\u00E1ndar AU",whole:"Entero",white:"Clara",avgMass:"Prom",noDesc:"Sin descripci\u00F3n",draft:"borrador",published:"publicada",servingsUnit:"porciones",prepsUnit:"preps",from:"de",steps:"pasos",addIngredient:"Agregar Ingrediente",addTool:"Agregar Herramienta",addProcess:"Agregar Proceso",newIngredient:"Nuevo Ingrediente",newTool:"Nueva Herramienta",newProcess:"Nuevo Proceso",prepAsIngredient:"Preparaciones",tempLabel:"Temp",timeLabel:"Tiempo",speedLabel:"Vel",scaleLabel:"Balanza",customIngName:"Nombre...",customToolName:"Nombre herramienta...",customProcName:"Nombre proceso...",customIngCat:"Categor\u00EDa",customIngUnit:"Unidad",laneName:"Nombre del proceso",addLaneRight:"+ Carril (der.)",addLaneLeft:"+ Carril (izq.)",addLaneHere:"+ Insertar carril",insertStep:"Insertar paso aqu\u00ED",step:"Paso",procPanelTitle:"Procesos \u2014 arrastra a los pasos",lane:"Carril",mainProc:"Procesos Principales",ingredientSummary:"Ingredientes",connectRight:"Conectar a la derecha",connectLeft:"Conectar a la izquierda",moduleAnchor:"Conecta en:",moduleLink:"enlace",delete:"Eliminar",confirmDelete:"¿Eliminar receta?",confirmDeleteBody:"Esto eliminará permanentemente",cannotUndo:"Esta acción no se puede deshacer.",savedDraft:"Borrador guardado",catEntrees:"Entradas",catMains:"Platos Principales",catDesserts:"Postres",catDrinks:"Bebidas y Cocteles",catSides:"Acompañamientos y Ensaladas",allCats:"Todos",recipeCategory:"Categor\u00EDa",selectChilliHeat:"Nivel de Picor",chilliHeatHint:"Niveles seg\u00FAn escala Scoville",flavourProfile:"Perfil de sabor",analyseWithAI:"Analizar con IA",analysing:"Analizando...",apiKey:"API key de Anthropic (sk-ant-...)",apiKeyHint:"Se guarda solo en tu navegador. Nunca se env\u00EDa a otro lugar.",aiNeedsKey:"Agrega tu API key para habilitar IA",aiFailed:"Fall\u00F3 el an\u00E1lisis",aiDetected:"IA detect\u00F3",aiGuessed:"Valores estimados por IA \u2014 ajusta a tu gusto",markAsChilli:"Esto es un aj\u00ED",mcStaleTitle:"Receta editada desde que se gener\u00F3 esta ficha",mcStaleBody:"La vista Modernist Cuisine puede no reflejar tus cambios m\u00E1s recientes.",mcOpenEditor:"Abrir editor",mcEditOnDesktop:"Edita en un computador para refrescar esta ficha.",mcRegenerate:"Regenerar narrativa",mcRegenerating:"Regenerando...",mcRegenSuccess:"Actualizada",mcRegenerateHint:"Regenera la narrativa científica con IA. Usa tu API key de Anthropic.",mcNeedsApiKey:"Primero agrega tu API key de Anthropic (Ajustes → API key)." },
-  fr: { recipes:"Recettes",newRecipe:"Nouvelle Recette",yourRecipes:"Vos Recettes",subtitle:"Glissez, d\u00E9posez, composez.",search:"Rechercher...",searchIng:"Ingr\u00E9dients...",searchTool:"Outils...",searchProc:"Processus...",servings:"Portions",flavour:"Profil Saveur",sweetness:"Sucr\u00E9",richness:"Onctuosit\u00E9",spiciness:"Piquant",acidity:"Acidit\u00E9",umami:"Umami",edit:"Modifier",save:"Sauvegarder",publish:"Publier",cancel:"Annuler",serves:"Portions",preparations:"Pr\u00E9parations",addPrep:"Pr\u00E9p",addStep:"\u00C9tape",ingredients:"Ingr\u00E9dients",tools:"Outils",processes:"Processus",importModule:"Importer",moduleLib:"Biblioth\u00E8que",moduleDesc:"Importez une pr\u00E9paration r\u00E9utilisable.",noModules:"Pas de modules.",reusableModule:"Module r\u00E9utilisable",module:"Module",import:"Importer",back:"\u2190 Retour",hoverHint:"survoler",end:"Fin",stepTitle:"Titre...",stepDesc:"Description...",recipeName:"Nom...",recipeDesc:"Description...",tags:"Tags (virgule ou point-virgule)...",prepComment:"Notes...",dropIngHere:"D\u00E9poser ingr\u00E9dient",dropToolHere:"D\u00E9poser outil",dropProcHere:"D\u00E9poser processus",selectEggSize:"Taille \u0152uf",eggStandard:"Standard AU",whole:"Entier",white:"Blanc",avgMass:"Moy",noDesc:"Aucune",draft:"brouillon",published:"publi\u00E9e",servingsUnit:"portions",prepsUnit:"pr\u00E9ps",from:"de",steps:"\u00E9tapes",addIngredient:"Ajouter Ingr\u00E9dient",addTool:"Ajouter Outil",addProcess:"Ajouter Processus",newIngredient:"Nouvel Ingr\u00E9dient",newTool:"Nouvel Outil",newProcess:"Nouveau Processus",prepAsIngredient:"Pr\u00E9parations",tempLabel:"Temp",timeLabel:"Temps",speedLabel:"Vit",scaleLabel:"Balance",customIngName:"Nom...",customToolName:"Nom outil...",customProcName:"Nom processus...",customIngCat:"Cat\u00E9gorie",customIngUnit:"Unit\u00E9",laneName:"Nom du processus",addLaneRight:"+ Voie (droite)",addLaneLeft:"+ Voie (gauche)",addLaneHere:"+ Ins\u00E9rer voie",insertStep:"Ins\u00E9rer \u00E9tape",step:"\u00C9tape",procPanelTitle:"Processus \u2014 glisser sur les \u00E9tapes",lane:"Voie",mainProc:"Processus Principaux",ingredientSummary:"Ingr\u00E9dients",connectRight:"Connecter \u00E0 droite",connectLeft:"Connecter \u00E0 gauche",moduleAnchor:"Connecte \u00E0:",moduleLink:"lien",delete:"Supprimer",confirmDelete:"Supprimer la recette?",confirmDeleteBody:"Ceci supprimera définitivement",cannotUndo:"Cette action est irréversible.",savedDraft:"Brouillon sauvegardé",catEntrees:"Entrées",catMains:"Plats Principaux",catDesserts:"Desserts",catDrinks:"Boissons et Cocktails",catSides:"Accompagnements et Salades",allCats:"Tous",recipeCategory:"Catégorie",selectChilliHeat:"Niveau de Piquant",chilliHeatHint:"Niveaux selon l'\u00E9chelle de Scoville",flavourProfile:"Profil aromatique",analyseWithAI:"Analyser avec IA",analysing:"Analyse en cours...",apiKey:"Clé API Anthropic (sk-ant-...)",apiKeyHint:"Stockée uniquement dans votre navigateur. Jamais transmise ailleurs.",aiNeedsKey:"Ajoutez votre clé API pour activer l'IA",aiFailed:"Échec de l'analyse",aiDetected:"IA a détecté",aiGuessed:"Valeurs estimées par IA \u2014 ajustez si besoin",markAsChilli:"C'est un piment",mcStaleTitle:"Recette modifiée depuis la génération de cette fiche",mcStaleBody:"La vue Modernist Cuisine peut ne pas refléter vos derniers changements.",mcOpenEditor:"Ouvrir l'éditeur",mcEditOnDesktop:"Modifiez sur ordinateur pour actualiser cette fiche.",mcRegenerate:"Régénérer la narration",mcRegenerating:"Régénération...",mcRegenSuccess:"Mise à jour",mcRegenerateHint:"Régénérer la narration scientifique avec l'IA. Utilise votre clé API Anthropic.",mcNeedsApiKey:"Ajoutez d'abord votre clé API Anthropic (Réglages → Clé API)." },
+  en: { recipes:"Recipes",newRecipe:"New Recipe",yourRecipes:"Your Recipes",subtitle:"Drag, drop, compose. Build recipes like code.",search:"Search recipes or tags...",searchIng:"Search ingredients...",searchTool:"Search tools...",searchProc:"Search processes...",servings:"Servings",flavour:"Flavour Profile",sweetness:"Sweetness",richness:"Richness",spiciness:"Spiciness",acidity:"Acidity",umami:"Umami",edit:"Edit",save:"Save",publish:"Publish",cancel:"Cancel",serves:"Serves",preparations:"Preparations",addPrep:"Add Prep",addStep:"Add Step",ingredients:"Ingredients",tools:"Tools & Equipment",processes:"Processes",importModule:"Import Module",moduleLib:"Module Library",moduleDesc:"Import a reusable preparation.",noModules:"No modules available.",reusableModule:"Reusable module",module:"Module",import:"Import",back:"\u2190 Back",hoverHint:"hover for details",end:"End",stepTitle:"Step title...",stepDesc:"Description / notes...",recipeName:"Recipe name...",recipeDesc:"Recipe description...",tags:"Tags (comma or semicolon)...",prepComment:"Notes for this preparation...",dropIngHere:"Drop ingredients",dropToolHere:"Drop tool",dropProcHere:"Drop process",selectEggSize:"Select Egg Size",eggStandard:"Australian standard",whole:"Whole",white:"White",avgMass:"Avg",noDesc:"No description",draft:"draft",published:"published",servingsUnit:"servings",prepsUnit:"preps",from:"from",steps:"steps",addIngredient:"Add Ingredient",addTool:"Add Tool",addProcess:"Add Process",newIngredient:"New Ingredient",newTool:"New Tool",newProcess:"New Process",prepAsIngredient:"Preparations",tempLabel:"Temp",timeLabel:"Time",speedLabel:"Speed",scaleLabel:"Scale",customIngName:"Ingredient name...",customToolName:"Tool name...",customProcName:"Process name...",customIngCat:"Category",customIngUnit:"Default unit",laneName:"Process name",addLaneRight:"+ Lane (right)",addLaneLeft:"+ Lane (left)",addLaneHere:"+ Add lane here",insertStep:"Insert step here",step:"Step",procPanelTitle:"Processes \u2014 drag onto steps",lane:"Lane",mainProc:"Main Processes",ingredientSummary:"Ingredients",connectRight:"Connect to right",connectLeft:"Connect to left",moduleAnchor:"Connects at:",moduleLink:"link",delete:"Delete",confirmDelete:"Delete recipe?",confirmDeleteBody:"This will permanently delete",cannotUndo:"This cannot be undone.",savedDraft:"Draft saved",catEntrees:"Entrees",catMains:"Mains",catDesserts:"Desserts",catDrinks:"Drinks & Cocktails",catSides:"Sides & Salads",allCats:"All",recipeCategory:"Category",selectChilliHeat:"Select Chilli Heat",chilliHeatHint:"Heat levels follow the Scoville scale",flavourProfile:"Flavour profile",analyseWithAI:"Analyse with AI",analysing:"Analysing...",apiKey:"Anthropic API key (sk-ant-...)",apiKeyHint:"Stored locally in your browser only. Never sent anywhere except Anthropic.",aiNeedsKey:"Add your API key to enable AI analysis",aiFailed:"AI analysis failed",aiDetected:"AI detected",aiGuessed:"Values are AI-guessed \u2014 adjust as needed",markAsChilli:"This is a chilli",mcStaleTitle:"Recipe edited since this card was generated",mcStaleBody:"The Modernist Cuisine view may not reflect your latest changes.",mcOpenEditor:"Open editor",mcEditOnDesktop:"Tap Regenerate above to refresh the narrative, or open on desktop to edit.",mcRegenerate:"Regenerate narrative",mcRegenerating:"Regenerating...",mcRegenSuccess:"Updated",mcRegenerateHint:"Regenerate the scientific narrative with AI. Uses your Anthropic API key.",mcNeedsApiKey:"Add your Anthropic API key first (Settings → API key).",moreActions:"More actions",mobileEditCreateTitle:"Composing happens on desktop",mobileEditCreateBody:"Building a recipe needs the drag-and-drop editor. Open Mise en Code on a laptop to compose.",mobileEditExistingBody:"Editing is desktop-only. Flag this recipe so you can find it quickly when you're back on a laptop, or copy it as text to jot changes elsewhere.",mobileEditMark:"Mark for review on desktop",mobileEditUnmark:"Marked for review — tap to remove",mobileEditCopy:"Copy as text",mobileEditCopied:"Copied to clipboard",mobileEditCopyError:"Copy failed — try long-press to select",flaggedFromMobile:"Flagged from mobile",clearAllFlags:"Clear all" },
+  es: { recipes:"Recetas",newRecipe:"Nueva Receta",yourRecipes:"Tus Recetas",subtitle:"Arrastra, suelta, compone.",search:"Buscar recetas...",searchIng:"Buscar ingredientes...",searchTool:"Buscar herramientas...",searchProc:"Buscar procesos...",servings:"Porciones",flavour:"Perfil de Sabor",sweetness:"Dulzor",richness:"Untuosidad",spiciness:"Picante",acidity:"Acidez",umami:"Umami",edit:"Editar",save:"Guardar",publish:"Publicar",cancel:"Cancelar",serves:"Porciones",preparations:"Preparaciones",addPrep:"Agregar Prep",addStep:"Agregar Paso",ingredients:"Ingredientes",tools:"Herramientas",processes:"Procesos",importModule:"Importar M\u00F3dulo",moduleLib:"Biblioteca",moduleDesc:"Importa preparaci\u00F3n reutilizable.",noModules:"Sin m\u00F3dulos.",reusableModule:"M\u00F3dulo reutilizable",module:"M\u00F3dulo",import:"Importar",back:"\u2190 Volver",hoverHint:"pasa el mouse",end:"Fin",stepTitle:"T\u00EDtulo...",stepDesc:"Descripci\u00F3n...",recipeName:"Nombre...",recipeDesc:"Descripci\u00F3n...",tags:"Etiquetas (coma o punto y coma)...",prepComment:"Notas...",dropIngHere:"Suelta ingrediente",dropToolHere:"Suelta herramienta",dropProcHere:"Suelta proceso",selectEggSize:"Tama\u00F1o Huevo",eggStandard:"Est\u00E1ndar AU",whole:"Entero",white:"Clara",avgMass:"Prom",noDesc:"Sin descripci\u00F3n",draft:"borrador",published:"publicada",servingsUnit:"porciones",prepsUnit:"preps",from:"de",steps:"pasos",addIngredient:"Agregar Ingrediente",addTool:"Agregar Herramienta",addProcess:"Agregar Proceso",newIngredient:"Nuevo Ingrediente",newTool:"Nueva Herramienta",newProcess:"Nuevo Proceso",prepAsIngredient:"Preparaciones",tempLabel:"Temp",timeLabel:"Tiempo",speedLabel:"Vel",scaleLabel:"Balanza",customIngName:"Nombre...",customToolName:"Nombre herramienta...",customProcName:"Nombre proceso...",customIngCat:"Categor\u00EDa",customIngUnit:"Unidad",laneName:"Nombre del proceso",addLaneRight:"+ Carril (der.)",addLaneLeft:"+ Carril (izq.)",addLaneHere:"+ Insertar carril",insertStep:"Insertar paso aqu\u00ED",step:"Paso",procPanelTitle:"Procesos \u2014 arrastra a los pasos",lane:"Carril",mainProc:"Procesos Principales",ingredientSummary:"Ingredientes",connectRight:"Conectar a la derecha",connectLeft:"Conectar a la izquierda",moduleAnchor:"Conecta en:",moduleLink:"enlace",delete:"Eliminar",confirmDelete:"¿Eliminar receta?",confirmDeleteBody:"Esto eliminará permanentemente",cannotUndo:"Esta acción no se puede deshacer.",savedDraft:"Borrador guardado",catEntrees:"Entradas",catMains:"Platos Principales",catDesserts:"Postres",catDrinks:"Bebidas y Cocteles",catSides:"Acompañamientos y Ensaladas",allCats:"Todos",recipeCategory:"Categor\u00EDa",selectChilliHeat:"Nivel de Picor",chilliHeatHint:"Niveles seg\u00FAn escala Scoville",flavourProfile:"Perfil de sabor",analyseWithAI:"Analizar con IA",analysing:"Analizando...",apiKey:"API key de Anthropic (sk-ant-...)",apiKeyHint:"Se guarda solo en tu navegador. Nunca se env\u00EDa a otro lugar.",aiNeedsKey:"Agrega tu API key para habilitar IA",aiFailed:"Fall\u00F3 el an\u00E1lisis",aiDetected:"IA detect\u00F3",aiGuessed:"Valores estimados por IA \u2014 ajusta a tu gusto",markAsChilli:"Esto es un aj\u00ED",mcStaleTitle:"Receta editada desde que se gener\u00F3 esta ficha",mcStaleBody:"La vista Modernist Cuisine puede no reflejar tus cambios m\u00E1s recientes.",mcOpenEditor:"Abrir editor",mcEditOnDesktop:"Toca Regenerar arriba para refrescar la narrativa, o abre en computador para editar.",mcRegenerate:"Regenerar narrativa",mcRegenerating:"Regenerando...",mcRegenSuccess:"Actualizada",mcRegenerateHint:"Regenera la narrativa científica con IA. Usa tu API key de Anthropic.",mcNeedsApiKey:"Primero agrega tu API key de Anthropic (Ajustes → API key).",moreActions:"Más acciones",mobileEditCreateTitle:"Componer se hace en computador",mobileEditCreateBody:"Crear una receta requiere el editor de arrastrar y soltar. Abre Mise en Code en un computador para componer.",mobileEditExistingBody:"La edición es solo de escritorio. Marca esta receta para encontrarla rápido cuando vuelvas al computador, o cópiala como texto para anotar cambios en otra app.",mobileEditMark:"Marcar para revisar en computador",mobileEditUnmark:"Marcada para revisar — toca para quitar",mobileEditCopy:"Copiar como texto",mobileEditCopied:"Copiada al portapapeles",mobileEditCopyError:"No se pudo copiar — intenta seleccionar manualmente",flaggedFromMobile:"Marcadas desde móvil",clearAllFlags:"Limpiar todas" },
+  fr: { recipes:"Recettes",newRecipe:"Nouvelle Recette",yourRecipes:"Vos Recettes",subtitle:"Glissez, d\u00E9posez, composez.",search:"Rechercher...",searchIng:"Ingr\u00E9dients...",searchTool:"Outils...",searchProc:"Processus...",servings:"Portions",flavour:"Profil Saveur",sweetness:"Sucr\u00E9",richness:"Onctuosit\u00E9",spiciness:"Piquant",acidity:"Acidit\u00E9",umami:"Umami",edit:"Modifier",save:"Sauvegarder",publish:"Publier",cancel:"Annuler",serves:"Portions",preparations:"Pr\u00E9parations",addPrep:"Pr\u00E9p",addStep:"\u00C9tape",ingredients:"Ingr\u00E9dients",tools:"Outils",processes:"Processus",importModule:"Importer",moduleLib:"Biblioth\u00E8que",moduleDesc:"Importez une pr\u00E9paration r\u00E9utilisable.",noModules:"Pas de modules.",reusableModule:"Module r\u00E9utilisable",module:"Module",import:"Importer",back:"\u2190 Retour",hoverHint:"survoler",end:"Fin",stepTitle:"Titre...",stepDesc:"Description...",recipeName:"Nom...",recipeDesc:"Description...",tags:"Tags (virgule ou point-virgule)...",prepComment:"Notes...",dropIngHere:"D\u00E9poser ingr\u00E9dient",dropToolHere:"D\u00E9poser outil",dropProcHere:"D\u00E9poser processus",selectEggSize:"Taille \u0152uf",eggStandard:"Standard AU",whole:"Entier",white:"Blanc",avgMass:"Moy",noDesc:"Aucune",draft:"brouillon",published:"publi\u00E9e",servingsUnit:"portions",prepsUnit:"pr\u00E9ps",from:"de",steps:"\u00E9tapes",addIngredient:"Ajouter Ingr\u00E9dient",addTool:"Ajouter Outil",addProcess:"Ajouter Processus",newIngredient:"Nouvel Ingr\u00E9dient",newTool:"Nouvel Outil",newProcess:"Nouveau Processus",prepAsIngredient:"Pr\u00E9parations",tempLabel:"Temp",timeLabel:"Temps",speedLabel:"Vit",scaleLabel:"Balance",customIngName:"Nom...",customToolName:"Nom outil...",customProcName:"Nom processus...",customIngCat:"Cat\u00E9gorie",customIngUnit:"Unit\u00E9",laneName:"Nom du processus",addLaneRight:"+ Voie (droite)",addLaneLeft:"+ Voie (gauche)",addLaneHere:"+ Ins\u00E9rer voie",insertStep:"Ins\u00E9rer \u00E9tape",step:"\u00C9tape",procPanelTitle:"Processus \u2014 glisser sur les \u00E9tapes",lane:"Voie",mainProc:"Processus Principaux",ingredientSummary:"Ingr\u00E9dients",connectRight:"Connecter \u00E0 droite",connectLeft:"Connecter \u00E0 gauche",moduleAnchor:"Connecte \u00E0:",moduleLink:"lien",delete:"Supprimer",confirmDelete:"Supprimer la recette?",confirmDeleteBody:"Ceci supprimera définitivement",cannotUndo:"Cette action est irréversible.",savedDraft:"Brouillon sauvegardé",catEntrees:"Entrées",catMains:"Plats Principaux",catDesserts:"Desserts",catDrinks:"Boissons et Cocktails",catSides:"Accompagnements et Salades",allCats:"Tous",recipeCategory:"Catégorie",selectChilliHeat:"Niveau de Piquant",chilliHeatHint:"Niveaux selon l'\u00E9chelle de Scoville",flavourProfile:"Profil aromatique",analyseWithAI:"Analyser avec IA",analysing:"Analyse en cours...",apiKey:"Clé API Anthropic (sk-ant-...)",apiKeyHint:"Stockée uniquement dans votre navigateur. Jamais transmise ailleurs.",aiNeedsKey:"Ajoutez votre clé API pour activer l'IA",aiFailed:"Échec de l'analyse",aiDetected:"IA a détecté",aiGuessed:"Valeurs estimées par IA \u2014 ajustez si besoin",markAsChilli:"C'est un piment",mcStaleTitle:"Recette modifiée depuis la génération de cette fiche",mcStaleBody:"La vue Modernist Cuisine peut ne pas refléter vos derniers changements.",mcOpenEditor:"Ouvrir l'éditeur",mcEditOnDesktop:"Touchez Régénérer ci-dessus pour rafraîchir la narration, ou ouvrez sur ordinateur pour éditer.",mcRegenerate:"Régénérer la narration",mcRegenerating:"Régénération...",mcRegenSuccess:"Mise à jour",mcRegenerateHint:"Régénérer la narration scientifique avec l'IA. Utilise votre clé API Anthropic.",mcNeedsApiKey:"Ajoutez d'abord votre clé API Anthropic (Réglages → Clé API).",moreActions:"Plus d'actions",mobileEditCreateTitle:"La composition se fait sur ordinateur",mobileEditCreateBody:"Créer une recette nécessite l'éditeur glisser-déposer. Ouvrez Mise en Code sur un ordinateur pour composer.",mobileEditExistingBody:"L'édition est réservée à l'ordinateur. Marquez cette recette pour la retrouver vite quand vous serez sur ordinateur, ou copiez-la en texte pour noter des modifications ailleurs.",mobileEditMark:"Marquer pour révision sur ordinateur",mobileEditUnmark:"Marquée pour révision — appuyez pour retirer",mobileEditCopy:"Copier en texte",mobileEditCopied:"Copiée dans le presse-papiers",mobileEditCopyError:"Échec de la copie — essayez la sélection manuelle",flaggedFromMobile:"Marquées depuis le mobile",clearAllFlags:"Tout effacer" },
 };
 const LF = { en: "\uD83C\uDDE6\uD83C\uDDFA", es: "\uD83C\uDDE8\uD83C\uDDF1", fr: "\uD83C\uDDEB\uD83C\uDDF7" };
 
@@ -462,6 +495,36 @@ const THEMES = {
 const LS_THEME="mise_en_code_theme";
 let _ct;try{_ct=localStorage.getItem(LS_THEME)||"light";}catch{_ct="light";}
 const TH=()=>THEMES[_ct]||THEMES.light;
+
+/* ═══ Typography ramp (Phase E reference) ═══
+   Recommended scale — major-third ratio (~1.25), rounded to a pleasant
+   grid. New components should pull from this; old fontSize literals stay
+   to avoid a sweeping refactor.
+
+   ┌──────────┬────────┬──────────────────────────────────────┐
+   │ Token    │ Size   │ Where to use                         │
+   ├──────────┼────────┼──────────────────────────────────────┤
+   │ micro    │  9 px  │ JetBrains Mono counters, micro tags  │
+   │ caption  │ 10 px  │ DM Sans 700 uppercase eyebrows       │
+   │ small    │ 11 px  │ Meta lines, badges, pill labels      │
+   │ body-s   │ 12 px  │ Toggle buttons, dense table cells    │
+   │ body     │ 14 px  │ Default DM Sans body                 │
+   │ lead     │ 17 px  │ Browse card titles, recipe meta      │
+   │ h3       │ 22 px  │ Playfair section headings            │
+   │ h2       │ 27 px  │ Mobile detail-view titles            │
+   │ h1       │ 34 px  │ Browse hero "Your Recipes"           │
+   │ display  │ 44 px  │ Reserved for marketing surfaces      │
+   └──────────┴────────┴──────────────────────────────────────┘
+
+   Font-family rules of thumb:
+     - Playfair Display: titles + display surfaces (h1/h2/h3)
+     - Cormorant Garamond italic: tagline / descriptive copy
+     - DM Sans: all UI / buttons / meta (caption → body)
+     - JetBrains Mono: numeric counters, code-like values
+
+   The mobile detail-view h1 currently lives at 24–26 px; future polish
+   passes should harmonize toward 27 px (the h2 token).
+*/
 
 /* ═══ Styles (theme-aware) ═══ */
 const S = {
@@ -1600,6 +1663,26 @@ function App() {
   const [favs, sFavs] = useState(new Set(Array.isArray(BOOT.favourites) ? BOOT.favourites : [])); /* favourite ingredient IDs */
   const toggleFav = id => sFavs(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  /* Phase B (mobile sync) — list of recipe IDs flagged from mobile for
+     review on desktop. Persisted in its own localStorage key (additive,
+     no schema change to the main data blob). */
+  const [markedForReview, setMarkedForReview] = useState(() => {
+    try {
+      const raw = localStorage.getItem("mise_en_code_marked_for_review");
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("mise_en_code_marked_for_review", JSON.stringify(markedForReview)); } catch {}
+  }, [markedForReview]);
+  const toggleMarkForReview = (id) => {
+    setMarkedForReview(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  /* State for the mobile edit-restriction bottom sheet. null = closed.
+     { recipe } = editing/marking an existing recipe. { create: true } = trying to create. */
+  const [mobileEditSheet, setMobileEditSheet] = useState(null);
+
   /* ── Boot: load data from cloud → localStorage → BOOT ── */
   useEffect(() => {
     let cancelled = false;
@@ -2116,19 +2199,19 @@ function App() {
         {/* Tools menu — Export / Import / Sync collapsed behind a kebab */}
         {!isMobile && <>
           <div style={{ width:1,height:18,background:TH().div,margin:"0 2px" }}/>
-          <button style={{...S.nb(false),padding:"7px 10px",position:"relative"}} onClick={()=>setShowSettings(true)} title="Cloud sync · Export · Import">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+          <button style={{...S.nb(false),padding:"7px 10px",position:"relative"}} onClick={()=>setShowSettings(true)} aria-label="Settings — Cloud sync, Export, Import" title="Cloud sync · Export · Import">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
             {syncUrl && <span style={{ position:"absolute",top:4,right:4,width:7,height:7,borderRadius:"50%",background:syncStatus==="error"?TH().err:syncStatus==="saving"?TH().warn:TH().ok,boxShadow:`0 0 0 2px ${TH().bg}` }}/>}
           </button>
-          <button style={{...S.nb(false),padding:"7px 10px"}} onClick={exportAll} title="Export all recipes as JSON">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <button style={{...S.nb(false),padding:"7px 10px"}} onClick={exportAll} aria-label="Export all recipes as JSON" title="Export all recipes as JSON">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </button>
-          <button style={{...S.nb(false),padding:"7px 10px"}} onClick={()=>fileRef.current?.click()} title="Import recipes from JSON">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <button style={{...S.nb(false),padding:"7px 10px"}} onClick={()=>fileRef.current?.click()} aria-label="Import recipes from JSON" title="Import recipes from JSON">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           </button>
         </>}
         {/* Theme toggle */}
-        <button onClick={toggleTheme} style={{...S.nb(false),padding:"7px 12px",borderRadius:999,border:`1px solid ${TH().bdS}`,background:TH().bgC,gap:5,transition:"all 0.22s"}} title={theme==="light"?"Switch to dark mode":"Switch to light mode"}>
+        <button onClick={toggleTheme} aria-label={theme==="light"?"Switch to dark mode":"Switch to light mode"} style={{...S.nb(false),padding:"7px 12px",borderRadius:999,border:`1px solid ${TH().bdS}`,background:TH().bgC,gap:5,transition:"all 0.22s"}} title={theme==="light"?"Switch to dark mode":"Switch to light mode"}>
           {theme==="light" ? <><span style={{fontSize:13,lineHeight:1}}>🌙</span>{!isMobile && <span>Dark</span>}</> : <><span style={{fontSize:13,lineHeight:1}}>☀️</span>{!isMobile && <span>Light</span>}</>}
         </button>
         {/* Role badge + login/logout */}
@@ -2168,7 +2251,7 @@ function App() {
             </div>
             <div><div style={{ fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:700 }}>Import Pro</div><div style={{ fontSize:9,color:TH().txM }}>AI-powered recipe agent · Secure backend</div></div>
           </div>
-          <button onClick={()=>{setShowIP(false);ipReset();}} style={{ background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:TH().txM }}>&times;</button>
+          <button onClick={()=>{setShowIP(false);ipReset();}} aria-label="Close" style={{ background:"transparent",border:"none",cursor:"pointer",fontSize:16,color:TH().txM }}>&times;</button>
         </div>
 
         {/* Body */}
@@ -2288,7 +2371,7 @@ function App() {
       <div onClick={e=>e.stopPropagation()} style={{ background:"#FDFAF5",borderRadius:16,padding:"24px 28px",maxWidth:520,width:"92%",boxShadow:"0 16px 50px rgba(42,36,32,0.25)",fontFamily:"'DM Sans',sans-serif" }}>
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
           <h3 style={{ fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,margin:0 }}>Cloud Sync Settings</h3>
-          <button onClick={()=>setShowSettings(false)} style={{ background:"transparent",border:"none",cursor:"pointer",fontSize:18,color:"#8A7E72" }}>&times;</button>
+          <button onClick={()=>setShowSettings(false)} aria-label="Close" style={{ background:"transparent",border:"none",cursor:"pointer",fontSize:18,color:"#8A7E72" }}>&times;</button>
         </div>
         <div style={{ marginBottom:16 }}>
           <label style={{ fontSize:11,fontWeight:700,color:"#6A6058",textTransform:"uppercase",letterSpacing:0.5,display:"block",marginBottom:4 }}>Google Apps Script URL</label>
@@ -2364,7 +2447,7 @@ function App() {
       <div style={{ fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,color:"#2A2420" }}><span style={{ color:"#C49A6C" }}>&#9670;</span> Mise en Code</div>
       <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:"#B0A898" }}>{syncUrl ? "Loading from cloud..." : "Loading..."}</div>
     </div>}
-    {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={r=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(r);}} oC={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}cN();}} oD={delR} wpAddSlot={wpAddSlot} weekPlan={weekPlan} t={t} isAdmin={isAdmin} isMobile={isMobile} lib={lib}/>}
+    {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={r=>{if(isMobile){setMobileEditSheet({ recipe: r });return;}oE(r);}} oC={()=>{if(isMobile){setMobileEditSheet({ create: true });return;}cN();}} oD={delR} wpAddSlot={wpAddSlot} weekPlan={weekPlan} t={t} isAdmin={isAdmin} isMobile={isMobile} lib={lib} markedForReview={markedForReview} onClearFlags={() => setMarkedForReview([])}/>}
     {!loading && vw==="weekplan" && <WeeklyPlannerView
       weekPlan={weekPlan} weekPlanSnapshots={weekPlanSnapshots} parametricCards={parametricCards} recs={recs}
       wpAddSlot={wpAddSlot} wpRemoveSlot={wpRemoveSlot} wpSetServings={wpSetServings}
@@ -2376,8 +2459,17 @@ function App() {
       wpClearSidecar={wpClearSidecar} importSidecarFile={importSidecarFile}
       exportCardsOnly={exportCardsOnly} recipeVersionHash={recipeVersionHash}
       isMobile={isMobile} theme={theme}/>}
-    {!loading && vw==="view" && act && <VwV r={act} oB={()=>sVWithHistory("browse")} oE={()=>{if(isMobile){alert("Editor is available on laptop/desktop only.");return;}oE(act);}} t={t} lib={lib} tl={tl} lang={lang} isAdmin={isAdmin} isMobile={isMobile} parametricCards={parametricCards} setParametricCards={setParametricCards} recipeVersionHash={recipeVersionHash}/>}
+    {!loading && vw==="view" && act && <VwV r={act} oB={()=>sVWithHistory("browse")} oE={()=>{if(isMobile){setMobileEditSheet({ recipe: act });return;}oE(act);}} t={t} lib={lib} tl={tl} lang={lang} isAdmin={isAdmin} isMobile={isMobile} parametricCards={parametricCards} setParametricCards={setParametricCards} recipeVersionHash={recipeVersionHash}/>}
     {!loading && vw==="edit" && eR && !isMobile && <EdV r={eR} sR={sER} oS={svR} oC={()=>sV(aId?"view":"browse")} mL={mL} t={t} lib={lib} tl={tl} pl={pl} aCI={isAdmin?addCI:()=>{}} aCT={isAdmin?addCT:()=>{}} aCP={isAdmin?addCP:()=>{}} favs={favs} toggleFav={toggleFav} lang={lang} isAdmin={isAdmin}/>}
+    {/* Phase B (mobile sync) — bottom sheet that replaces the old "Editor
+        is desktop-only" alert with mark-for-review + copy-as-text. */}
+    <MobileEditSheet
+      sheet={mobileEditSheet}
+      onClose={() => setMobileEditSheet(null)}
+      t={t}
+      isMarked={(id) => markedForReview.includes(id)}
+      onToggleMark={toggleMarkForReview}
+    />
   </div>);
 }
 
@@ -4312,9 +4404,15 @@ function WeeklyPlannerView({
 }
 
 /* ═══ BROWSE ═══ */
-function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isMobile, lib }) {
+function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isMobile, lib, markedForReview, onClearFlags }) {
   const [confirmDel, setConfirmDel] = useState(null);
   const [activeCat, setActiveCat] = useState("all");
+  /* Phase B (mobile sync) — when true, the recipe grid is filtered to
+     just the recipes flagged from mobile. Desktop-only; the chip that
+     toggles this only renders for non-mobile viewers. */
+  const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
+  const flaggedSet = useMemo(() => new Set(Array.isArray(markedForReview) ? markedForReview : []), [markedForReview]);
+  const flaggedCount = (markedForReview || []).filter(id => rs.some(r => r.id === id)).length;
   const [toast, setToast] = useState(null);
   const longPressRef = useRef(null);
   const [contextMenu, setContextMenu] = useState(null);
@@ -4334,7 +4432,8 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
   const _fc = { sweetness:"#E89EC0", richness:"#C49A6C", spiciness:"#D45B5B", acidity:"#E8B84B", umami:"#6B9FC4" };
 
   /* Filter by active category. Recipes without a category default to "Mains". */
-  const catRs = activeCat === "all" ? rs : rs.filter(r => (r.category || "Mains") === activeCat);
+  const catBaseRs = activeCat === "all" ? rs : rs.filter(r => (r.category || "Mains") === activeCat);
+  const catRs = showFlaggedOnly ? catBaseRs.filter(r => flaggedSet.has(r.id)) : catBaseRs;
   const countFor = cat => cat === "all" ? rs.length : rs.filter(r => (r.category || "Mains") === cat).length;
 
   /* Mobile long-press → polished bottom-sheet style menu */
@@ -4403,15 +4502,17 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
 
   const cats = ["all", "Entrees", "Mains", "Desserts", "Drinks & Cocktails", "Sides & Salads"];
 
-  /* Pill style for category filter — dot prefix + label, active = filled */
+  /* Pill style for category filter — dot prefix + label, active = filled.
+     Mobile gets a larger hit target (~40dp tall) to meet 48dp/44pt union. */
   const pillStyle = (active, cat) => ({
     display: "inline-flex", alignItems: "center", gap: 7,
-    padding: isMobile ? "8px 14px" : "8px 14px",
+    padding: isMobile ? "12px 16px" : "8px 14px",
+    minHeight: isMobile ? 40 : 0,
     borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
     background: active ? th.pri : th.bgC,
     color: active ? th.txOn : th.tx2,
     border: `1px solid ${active ? th.pri : th.bdS}`,
-    fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600,
+    fontFamily: "'DM Sans',sans-serif", fontSize: isMobile ? 13 : 12, fontWeight: 600,
     transition: "background 0.18s, color 0.18s, border-color 0.18s, transform 0.12s",
   });
 
@@ -4464,25 +4565,57 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
         onBlur={e => { e.target.style.borderColor = th.bdS; e.target.style.boxShadow = "0 1px 4px rgba(42,36,32,0.04)"; }}
       />
       {sr && <button onClick={() => sSr("")} aria-label="Clear search" style={{
-        position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-        width: 28, height: 28, borderRadius: "50%", border: "none", background: th.bgH, color: th.txM,
+        position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)",
+        width: isMobile ? 40 : 32, height: isMobile ? 40 : 32, borderRadius: "50%", border: "none", background: th.bgH, color: th.txM,
         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>}
     </div>
 
-    {/* ── Category pills ── */}
-    <div style={{ display: "flex", gap: 8, marginBottom: 22, overflowX: "auto", paddingBottom: 4, marginRight: -16, paddingRight: 16, WebkitOverflowScrolling: "touch" }}>
+    {/* ── Category pills ── (with right-edge fade signaling h-scroll) */}
+    <div style={{ position: "relative", marginBottom: 22 }}>
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginRight: -16, paddingRight: 16, WebkitOverflowScrolling: "touch", alignItems: "center" }}>
       {cats.map(c => {
         const active = activeCat === c;
         const dot = c === "all" ? th.tx2 : catColor(c);
-        return <button key={c} onClick={() => setActiveCat(c)} style={pillStyle(active, c)}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0, opacity: active ? 1 : 0.85 }}/>
+        return <button key={c} onClick={() => { setActiveCat(c); setShowFlaggedOnly(false); }} style={pillStyle(active, c)}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0, opacity: active && !showFlaggedOnly ? 1 : 0.85 }}/>
           <span>{c === "all" ? (t.allCats || "All") : catLabel(c)}</span>
           <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, opacity: 0.7, marginLeft: 2 }}>{countFor(c)}</span>
         </button>;
       })}
+      {/* Phase B (mobile sync) — flagged-from-mobile chip. Desktop only;
+          shows only when there's at least one flagged recipe. When the
+          filter is active, an extra "Clear all flags" link lets the user
+          drain the review queue after they've addressed each item. */}
+      {!isMobile && flaggedCount > 0 && (
+        <>
+          <span style={{ width: 1, height: 22, background: th.bdS, flexShrink: 0, margin: "0 2px" }}/>
+          <button onClick={() => setShowFlaggedOnly(v => !v)} style={{
+            ...pillStyle(showFlaggedOnly, "flagged"),
+            background: showFlaggedOnly ? th.warn : `${th.warn}15`,
+            color: showFlaggedOnly ? "#FFFFFF" : (th.warn === "#E8B84B" ? "#8A6A0E" : th.warn),
+            border: `1px solid ${showFlaggedOnly ? th.warn : `${th.warn}50`}`,
+          }}>
+            <span style={{ fontSize: 12 }}>🚩</span>
+            <span>{t.flaggedFromMobile || "Flagged from mobile"}</span>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, opacity: 0.85, marginLeft: 2 }}>{flaggedCount}</span>
+          </button>
+          {showFlaggedOnly && (
+            <button onClick={() => { setShowFlaggedOnly(false); if (typeof onClearFlags === "function") onClearFlags(); }} style={{
+              padding: "8px 12px", borderRadius: 999, border: "none", background: "transparent",
+              color: th.txM, cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+              fontSize: 11.5, fontWeight: 600, letterSpacing: 0.2, whiteSpace: "nowrap",
+            }}>
+              {t.clearAllFlags || "Clear all"}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+    {/* Right-edge fade — signals there's more chips to scroll on narrow screens. */}
+    <div aria-hidden="true" style={{ position: "absolute", top: 0, right: 0, bottom: 4, width: 28, pointerEvents: "none", background: `linear-gradient(to right, transparent, ${th.bg})` }}/>
     </div>
 
     {/* ── Empty state when filter yields 0 ── */}
@@ -4538,6 +4671,10 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
           const _hovered = hoveredCardId === r.id;
           const _fp = flavoursByRecipe[r.id];
           return (<div key={r.id}
+            role="article"
+            aria-label={`${r.name || "Untitled"}, ${cat}${r.status === "published" ? ", published" : ", draft"}, ${r.servings} ${t.servingsUnit||"servings"}`}
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); oO(r.id); } }}
             draggable={!isMobile}
             onDragStart={e => onCardDragStart(e, r)}
             onClick={() => oO(r.id)}
@@ -4667,6 +4804,19 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                   </button>
                 </div>}
+                {/* Mobile overflow ⋯ — opens the existing context bottom-sheet
+                    with edit / delete / add-to-plan / view actions. */}
+                {isAdmin && isMobile && <button
+                  onClick={e => { e.stopPropagation(); setContextMenu({ recipe: r }); }}
+                  aria-label={t.moreActions || "More actions"}
+                  style={{
+                    width: 44, height: 44, borderRadius: "50%", border: "none",
+                    background: "transparent", color: th.txM, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    marginRight: -8 /* hugs card edge without breaking layout */
+                  }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                </button>}
               </div>
             </div>
 
@@ -4744,20 +4894,57 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
           View Recipe
         </button>
         <button onClick={() => { addToPlan(contextMenu.recipe); setContextMenu(null); }} style={{
-          display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 12px",
+          display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 12px", minHeight: 48,
           border: "none", background: "transparent", cursor: "pointer", color: th.sec,
           fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, textAlign: "left",
         }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M12 14v4m-2-2h4"/></svg>
           Add to Weekly Plan
         </button>
+        {isAdmin && <button onClick={() => { const r = contextMenu.recipe; setContextMenu(null); oE(r); }} style={{
+          display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 12px", minHeight: 48,
+          border: "none", background: "transparent", cursor: "pointer", color: th.acc,
+          fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, textAlign: "left",
+        }}>
+          <Ic.Ed/>
+          {t.edit || "Edit"}
+        </button>}
+        {isAdmin && <button onClick={() => { const r = contextMenu.recipe; setContextMenu(null); setConfirmDel({ id: r.id, name: r.name || "Untitled" }); }} style={{
+          display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 12px", minHeight: 48,
+          border: "none", background: "transparent", cursor: "pointer", color: th.err,
+          fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, textAlign: "left",
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          {t.delete || "Delete"}
+        </button>}
         <button onClick={() => setContextMenu(null)} style={{
-          width: "100%", padding: "12px", marginTop: 6, borderRadius: 12,
+          width: "100%", padding: "14px", marginTop: 6, borderRadius: 12, minHeight: 48,
           border: "none", background: "transparent", color: th.txM,
-          fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
-        }}>Cancel</button>
+          fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer",
+        }}>{t.cancel || "Cancel"}</button>
       </div>
     </div>}
+
+    {/* Mobile-only New Recipe FAB — bottom-right, primary colored.
+        Visible only when admin + mobile, hidden in PDF. Hides when the
+        context bottom-sheet is open so it doesn't compete for the eye. */}
+    {isAdmin && isMobile && !contextMenu && <button
+      onClick={oC}
+      aria-label={t.newRecipe || "New Recipe"}
+      data-noprint
+      style={{
+        position: "fixed", bottom: 20, right: 16, zIndex: 100,
+        width: 56, height: 56, borderRadius: "50%", border: "none",
+        background: th.pri, color: th.txOn, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: "0 8px 24px rgba(42,36,32,0.32), 0 2px 6px rgba(42,36,32,0.18)",
+        transition: "transform 0.15s",
+      }}
+      onTouchStart={e => { e.currentTarget.style.transform = "scale(0.94)"; }}
+      onTouchEnd={e => { e.currentTarget.style.transform = ""; }}
+    >
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>}
 
     {/* Toast notification */}
     {toast && <div style={{
@@ -6828,72 +7015,273 @@ function StaleCardBanner({ isStale, onEdit, onRegenerate, regenStatus, regenErro
   const loading = regenStatus === "loading";
   const errored = regenStatus === "error";
   const canRegen = typeof onRegenerate === "function";
+  /* Inline action button (desktop). */
+  const renderInlineRegen = () => (canRegen && (
+    <button
+      onClick={hasApiKey ? onRegenerate : undefined}
+      disabled={!hasApiKey || loading}
+      aria-label={t.mcRegenerate || "Regenerate narrative"}
+      title={hasApiKey ? (loading ? t.mcRegenerating : t.mcRegenerate) : (t.mcNeedsApiKey || "Add your Anthropic API key first")}
+      style={{
+        flexShrink:0, alignSelf:"center",
+        padding:"8px 14px", borderRadius:999, border:`1px solid ${bd}`,
+        background: loading ? bd + "22" : (hasApiKey ? bd : "transparent"),
+        color: hasApiKey ? "#FFFFFF" : tx,
+        opacity: hasApiKey ? (loading ? 0.7 : 1) : 0.5,
+        cursor: hasApiKey && !loading ? "pointer" : "not-allowed",
+        fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700,
+        letterSpacing:0.3, whiteSpace:"nowrap",
+      }}>
+      {loading ? ("⌛ " + (t.mcRegenerating || "Regenerating...")) : ("✨ " + (t.mcRegenerate || "Regenerate"))}
+    </button>
+  ));
+  /* Full-width regen button on mobile (Phase A). */
+  const renderMobileRegen = () => (canRegen && (
+    <button
+      onClick={hasApiKey ? onRegenerate : undefined}
+      disabled={!hasApiKey || loading}
+      aria-label={t.mcRegenerate || "Regenerate narrative"}
+      style={{
+        width:"100%", minHeight:48,
+        padding:"12px 16px", borderRadius:12, border:`1px solid ${bd}`,
+        background: loading ? bd + "22" : (hasApiKey ? bd : "transparent"),
+        color: hasApiKey ? "#FFFFFF" : tx,
+        opacity: hasApiKey ? (loading ? 0.7 : 1) : 0.55,
+        cursor: hasApiKey && !loading ? "pointer" : "not-allowed",
+        fontFamily:"'DM Sans',sans-serif", fontSize:13, fontWeight:700,
+        letterSpacing:0.3, whiteSpace:"nowrap",
+        display:"inline-flex", alignItems:"center", justifyContent:"center", gap:6,
+      }}>
+      <span style={{ fontSize:14, lineHeight:1 }}>{loading ? "⌛" : "✨"}</span>
+      {loading ? (t.mcRegenerating || "Regenerating...") : (t.mcRegenerate || "Regenerate")}
+    </button>
+  ));
   return (
     <div data-noprint role="status" aria-live="polite" style={{
-      display:"flex", alignItems:"flex-start", gap:10,
-      padding:"10px 14px", margin:"0 0 14px",
+      display:"flex", flexDirection:"column", gap:isMobile ? 10 : 0,
+      padding:"12px 14px", margin:"0 0 14px",
       borderRadius:10, border:`1px solid ${bd}`, background:bg,
       fontFamily:"'DM Sans',sans-serif"
     }}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={ico} strokeWidth="2.2"
-           style={{ flexShrink:0, marginTop:1 }} aria-hidden="true">
-        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-        <line x1="12" y1="9" x2="12" y2="13"/>
-        <line x1="12" y1="17" x2="12.01" y2="17"/>
-      </svg>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontSize:12.5, fontWeight:700, color:tx, marginBottom:2, lineHeight:1.3 }}>
-          {t.mcStaleTitle}
-        </div>
-        <div style={{ fontSize:11.5, color:tx, opacity:0.85, lineHeight:1.45 }}>
-          {t.mcStaleBody}
-        </div>
-        {errored && regenError && (
-          <div style={{ fontSize:10.5, color:"#A0421B", marginTop:4, fontStyle:"italic" }}>
-            {regenError}
+      {/* Row 1: icon + text. Desktop also tucks the actions in here. */}
+      <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={ico} strokeWidth="2.2"
+             style={{ flexShrink:0, marginTop:1 }} aria-hidden="true">
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:12.5, fontWeight:700, color:tx, marginBottom:2, lineHeight:1.3 }}>
+            {t.mcStaleTitle}
           </div>
+          <div style={{ fontSize:11.5, color:tx, opacity:0.85, lineHeight:1.45 }}>
+            {t.mcStaleBody}
+          </div>
+          {errored && regenError && (
+            <div style={{ fontSize:10.5, color:"#A0421B", marginTop:4, fontStyle:"italic" }}>
+              {regenError}
+            </div>
+          )}
+        </div>
+        {!isMobile && renderInlineRegen()}
+        {!isMobile && (
+          <button onClick={onEdit} aria-label={t.mcOpenEditor || "Open editor"} style={{
+            flexShrink:0, alignSelf:"center",
+            padding:"8px 14px", borderRadius:999, border:`1px solid ${bd}`,
+            background:"transparent", color:tx, cursor:"pointer",
+            fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:700,
+            letterSpacing:0.3, whiteSpace:"nowrap"
+          }}>
+            {t.mcOpenEditor}
+          </button>
         )}
       </div>
-      {/* Regenerate action — desktop only, only when the parent wired
-          onRegenerate. Disabled (with tooltip) when no API key. */}
-      {canRegen && !isMobile && (
-        <button
-          onClick={hasApiKey ? onRegenerate : undefined}
-          disabled={!hasApiKey || loading}
-          title={hasApiKey ? (loading ? t.mcRegenerating : t.mcRegenerate) : (t.mcNeedsApiKey || "Add your Anthropic API key first")}
-          style={{
-            flexShrink:0, alignSelf:"center",
-            padding:"6px 12px", borderRadius:999, border:`1px solid ${bd}`,
-            background: loading ? bd + "22" : (hasApiKey ? bd : "transparent"),
-            color: hasApiKey ? "#FFFFFF" : tx,
-            opacity: hasApiKey ? (loading ? 0.7 : 1) : 0.5,
-            cursor: hasApiKey && !loading ? "pointer" : "not-allowed",
-            fontFamily:"'DM Sans',sans-serif", fontSize:11.5, fontWeight:700,
-            letterSpacing:0.3, whiteSpace:"nowrap",
+      {/* Row 2 (mobile only): full-width regen + edit-on-desktop hint. */}
+      {isMobile && (
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {renderMobileRegen()}
+          <span style={{
+            fontSize:10.5, fontStyle:"italic", color:tx, opacity:0.7,
+            textAlign:"center", lineHeight:1.35
           }}>
-          {loading ? ("⌛ " + (t.mcRegenerating || "Regenerating...")) : ("✨ " + (t.mcRegenerate || "Regenerate"))}
-        </button>
+            {t.mcEditOnDesktop}
+          </span>
+        </div>
       )}
-      {/* "Open editor" — desktop only when not regenerating. On mobile we
-          show the passive notice instead since the editor is desktop-only. */}
-      {isMobile ? (
-        <span style={{
-          fontSize:10.5, fontStyle:"italic", color:tx, opacity:0.75,
-          alignSelf:"center", flexShrink:0, maxWidth:160, textAlign:"right", lineHeight:1.35
-        }}>
-          {t.mcEditOnDesktop}
-        </span>
-      ) : (
-        <button onClick={onEdit} style={{
-          flexShrink:0, alignSelf:"center",
-          padding:"6px 12px", borderRadius:999, border:`1px solid ${bd}`,
-          background:"transparent", color:tx, cursor:"pointer",
-          fontFamily:"'DM Sans',sans-serif", fontSize:11.5, fontWeight:700,
-          letterSpacing:0.3, whiteSpace:"nowrap"
-        }}>
-          {t.mcOpenEditor}
-        </button>
-      )}
+    </div>
+  );
+}
+
+/* ═══ Phase B (mobile sync) — recipe → plaintext for copy-to-clipboard.
+   Used by MobileEditSheet to let mobile users export a recipe summary
+   into Notes / WhatsApp / etc. for jotting changes that'll be applied
+   later from desktop. */
+function recipeToText(recipe) {
+  if (!recipe) return "";
+  const lines = [];
+  lines.push(recipe.name || "Untitled recipe");
+  if (recipe.description) lines.push(recipe.description);
+  if (recipe.servings) lines.push(`Serves: ${recipe.servings}`);
+  /* Collect all ingredients across preparations. */
+  const allIngs = [];
+  (recipe.preparations || []).forEach(p => {
+    (p.grid || []).forEach(row => {
+      (row || []).forEach(step => {
+        if (!step) return;
+        (step.ingredients || []).forEach(ing => {
+          if (ing.isPrepRef || ing.multiplierRef) return;
+          const nm = ing.name || ing.n || ing.ingredientId || "?";
+          const qty = ing.qty != null ? ing.qty : "";
+          let unit = ing.unit || (qty ? "g" : "");
+          /* Eggs: include size + part for clarity. */
+          if (ing.isEgg && ing.eggSize) unit = `ea (${ing.eggSize} ${ing.eggPart || "whole"})`;
+          allIngs.push(`- ${nm}${qty !== "" ? `: ${qty} ${unit}` : ""}`);
+        });
+      });
+    });
+  });
+  if (allIngs.length) {
+    lines.push("", "INGREDIENTS:");
+    /* Dedupe by line text (same ingredient may appear in multiple steps). */
+    const seen = new Set();
+    allIngs.forEach(l => { if (!seen.has(l)) { seen.add(l); lines.push(l); } });
+  }
+  /* Numbered steps in execution order. */
+  const steps = [];
+  (recipe.preparations || []).forEach(p => {
+    if (p.isModule) return;
+    (p.grid || []).forEach(row => (row || []).forEach(step => { if (step) steps.push(step); }));
+  });
+  if (steps.length) {
+    lines.push("", "STEPS:");
+    steps.forEach((s, i) => {
+      const toolName = s.tool ? (s.tool.name || s.tool.n || "") : "";
+      const procs = (s.processes || []).join(", ");
+      const meta = [toolName, procs].filter(Boolean).join(" · ");
+      const title = s.title || `Step ${i + 1}`;
+      lines.push(`${i + 1}. ${title}${meta ? ` [${meta}]` : ""}`);
+      if (s.instruction) lines.push(`   ${s.instruction}`);
+      const sIngs = (s.ingredients || []).filter(ig => !ig.isPrepRef && !ig.multiplierRef);
+      if (sIngs.length) {
+        const ingTxt = sIngs.map(ig => {
+          const nm = ig.name || ig.n || "?";
+          const qty = ig.qty != null ? ig.qty : "";
+          let unit = ig.unit || (qty ? "g" : "");
+          if (ig.isEgg && ig.eggSize) unit = `ea (${ig.eggSize} ${ig.eggPart || "whole"})`;
+          return `${nm}${qty !== "" ? ` ${qty} ${unit}` : ""}`;
+        }).join(", ");
+        lines.push(`   Ingredients: ${ingTxt}`);
+      }
+      lines.push("");
+    });
+  }
+  lines.push("— Generated from Mise en Code");
+  return lines.join("\n");
+}
+
+/* ═══ Phase B — MobileEditSheet: bottom-sheet replacement for the old
+   alert("Editor is available on laptop/desktop only.") wall.
+   Two modes:
+     - sheet.recipe → "you edited an existing recipe": offer Mark for
+       review (flag for desktop) + Copy as text + Cancel.
+     - sheet.create → "you tried to create new": just an explainer + Cancel
+       (nothing to mark or copy yet).
+   Polite copy, soft branding, theme-aware. */
+function MobileEditSheet({ sheet, onClose, t, isMarked, onToggleMark }) {
+  const [copyState, setCopyState] = useState(null); /* null | "done" | "error" */
+  if (!sheet) return null;
+  const th = TH();
+  const isCreate = !!sheet.create;
+  const recipe = sheet.recipe || null;
+  const marked = recipe && isMarked && isMarked(recipe.id);
+  const handleCopy = async () => {
+    if (!recipe) return;
+    const txt = recipeToText(recipe);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(txt);
+        setCopyState("done");
+        setTimeout(() => setCopyState(null), 2400);
+        return;
+      }
+      /* Fallback: hidden textarea + execCommand for older browsers. */
+      const ta = document.createElement("textarea");
+      ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand && document.execCommand("copy");
+      document.body.removeChild(ta);
+      setCopyState(ok ? "done" : "error");
+      setTimeout(() => setCopyState(null), 2400);
+    } catch {
+      setCopyState("error");
+      setTimeout(() => setCopyState(null), 2400);
+    }
+  };
+  return (
+    <div onClick={onClose} onTouchStart={onClose} style={{
+      position: "fixed", inset: 0, background: th.ov, zIndex: 1500,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+      backdropFilter: "blur(6px)",
+    }}>
+      <div onClick={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} style={{
+        background: th.bgC, width: "100%", maxWidth: 520,
+        borderTopLeftRadius: 18, borderTopRightRadius: 18,
+        padding: "10px 18px 26px",
+        boxShadow: th.shO,
+      }}>
+        <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>
+        {/* Title row */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 19, fontWeight: 700, color: th.tx, lineHeight: 1.25 }}>
+              {isCreate ? (t.mobileEditCreateTitle || "Composing happens on desktop") : (recipe ? recipe.name : (t.edit || "Edit"))}
+            </div>
+            <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic", color: th.txM, marginTop: 4, lineHeight: 1.4 }}>
+              {isCreate
+                ? (t.mobileEditCreateBody || "Building a recipe needs the drag-and-drop editor. Open Mise en Code on a laptop or desktop to compose.")
+                : (t.mobileEditExistingBody || "Editing is desktop-only. Flag this recipe so you can find it quickly when you're back on a laptop, or copy it as text to jot changes in another app.")}
+            </div>
+          </div>
+        </div>
+        {/* Actions */}
+        {!isCreate && recipe && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+            <button onClick={() => { onToggleMark(recipe.id); onClose(); }} style={{
+              display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 14px", minHeight: 48,
+              border: `1px solid ${marked ? th.acc : th.bdS}`,
+              background: marked ? `${th.acc}10` : th.bgH,
+              cursor: "pointer", color: marked ? th.acc : th.tx,
+              fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, textAlign: "left",
+              borderRadius: 12,
+            }}>
+              <span style={{ fontSize: 17, lineHeight: 1 }}>{marked ? "✓" : "🚩"}</span>
+              {marked ? (t.mobileEditUnmark || "Marked for review — tap to remove") : (t.mobileEditMark || "Mark for review on desktop")}
+            </button>
+            <button onClick={handleCopy} disabled={copyState === "done"} style={{
+              display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "14px 14px", minHeight: 48,
+              border: `1px solid ${copyState === "done" ? th.ok : th.bdS}`,
+              background: copyState === "done" ? `${th.ok}15` : th.bgH,
+              cursor: copyState === "done" ? "default" : "pointer",
+              color: copyState === "done" ? th.ok : (copyState === "error" ? th.err : th.tx),
+              fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 700, textAlign: "left",
+              borderRadius: 12,
+            }}>
+              <span style={{ fontSize: 17, lineHeight: 1 }}>{copyState === "done" ? "✓" : copyState === "error" ? "⚠" : "📋"}</span>
+              {copyState === "done"
+                ? (t.mobileEditCopied || "Copied to clipboard")
+                : copyState === "error"
+                  ? (t.mobileEditCopyError || "Copy failed — try long-press to select")
+                  : (t.mobileEditCopy || "Copy as text")}
+            </button>
+          </div>
+        )}
+        <button onClick={onClose} style={{
+          width: "100%", padding: "14px", marginTop: 12, borderRadius: 12, minHeight: 48,
+          border: "none", background: "transparent", color: th.txM,
+          fontFamily: "'DM Sans',sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer",
+        }}>{t.cancel || "Cancel"}</button>
+      </div>
     </div>
   );
 }
@@ -7076,6 +7464,28 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
   if (isMobile || isTablet) {
     const [mTab, setMTab] = useState("timeline");
     const [mStep, setMStep] = useState(null);
+    /* Phase C6: preserve scroll position when entering/leaving step detail.
+       The mobile branch's outer container is taller than the viewport, so
+       scrolling happens at window level (not inside the flex:1 container).
+       We capture window.scrollY when the user drills in, restore it once
+       the Algorithm view re-mounts (mStep → null). */
+    const savedScrollRef = useRef(0);
+    const enterStep = (id) => {
+      savedScrollRef.current = window.scrollY || document.documentElement.scrollTop || 0;
+      setMStep(id);
+    };
+    useLayoutEffect(() => {
+      if (mStep === null && savedScrollRef.current > 0) {
+        const y = savedScrollRef.current;
+        /* Two-pass restore: immediate, then on next frame in case content height
+           hasn't settled. After restore, clear so it doesn't fire on first mount. */
+        window.scrollTo(0, y);
+        requestAnimationFrame(() => { window.scrollTo(0, y); savedScrollRef.current = 0; });
+      } else if (mStep !== null) {
+        /* When opening step detail, jump to top so the step is visible. */
+        window.scrollTo(0, 0);
+      }
+    }, [mStep]);
 
     /* ── Card View (default on mobile/tablet) ── */
     if (viewMode === "card" && card) {
@@ -7085,24 +7495,25 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
       const _mCL = rc.category === "Entrees" ? (t.catEntrees||"Entrees") : rc.category === "Mains" ? (t.catMains||"Mains") : rc.category === "Desserts" ? (t.catDesserts||"Desserts") : rc.category === "Drinks & Cocktails" ? (t.catDrinks||"Drinks & Cocktails") : rc.category === "Sides & Salads" ? (t.catSides||"Sides & Salads") : (rc.category||"Mains");
       return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:th.bg,fontFamily:"'DM Sans',sans-serif",color:th.tx}}>
         {/* Sticky glass header — back · segmented Card/Algorithm toggle · download */}
-        <div className="no-print" style={{padding:"10px 14px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
-          <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div className="no-print" style={{padding:"8px 14px",borderBottom:`1px solid ${th.div}`,boxShadow:th.sh,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+          <button onClick={oB} aria-label="Back to recipes" style={{width:44,height:44,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <div style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${th.bdS}`,background:th.bgC}}>
-            <button onClick={()=>setViewMode("card")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="card"?th.pri:"transparent",color:viewMode==="card"?th.txOn:th.txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
+          <div role="tablist" aria-label="Recipe view mode" style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${th.bdS}`,background:th.bgC}}>
+            <button onClick={()=>setViewMode("card")} role="tab" aria-selected={viewMode==="card"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="card"?th.pri:"transparent",color:viewMode==="card"?th.txOn:th.txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
             {card && card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0 && (
-              <button onClick={()=>setViewMode("modernist")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="modernist"?"#6B1D1D":"transparent",color:viewMode==="modernist"?"#FFFFFF":th.txM,borderRadius:999,letterSpacing:0.3}}>MC</button>
+              <button onClick={()=>setViewMode("modernist")} role="tab" aria-selected={viewMode==="modernist"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="modernist"?th.pri:"transparent",color:viewMode==="modernist"?th.txOn:th.txM,borderRadius:999,letterSpacing:0.3}}>MC</button>
             )}
-            <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="algorithm"?th.pri:"transparent",color:viewMode==="algorithm"?th.txOn:th.txM,borderRadius:999,letterSpacing:0.3}}>Algo</button>
+            <button onClick={()=>setViewMode("algorithm")} role="tab" aria-selected={viewMode==="algorithm"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:viewMode==="algorithm"?th.pri:"transparent",color:viewMode==="algorithm"?th.txOn:th.txM,borderRadius:999,letterSpacing:0.3}}>Algo</button>
           </div>
-          <button onClick={printRecipe} aria-label="Download as PDF" title="Download as PDF" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          </button>
+          {/* Phase E: PDF removed on mobile (landscape A4 isn't phone-useful);
+              a same-size spacer keeps the sticky-header layout balanced. */}
+          <div aria-hidden="true" style={{width:44,height:44,flexShrink:0}}/>
         </div>
 
         {/* Card content */}
-        <div style={{flex:1,overflowY:"auto",padding:"18px 18px 36px",WebkitOverflowScrolling:"touch"}}>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 16px 36px",WebkitOverflowScrolling:"touch"}}>
+          <StaleCardBanner isStale={isStale} onEdit={oE} onRegenerate={onRegenerate} regenStatus={regenStatus} regenError={regenError} hasApiKey={hasApiKey} isMobile={isMobile} t={t}/>
           {/* Hero: eyebrow + title + italic tagline */}
           <div style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.6,color:_mCC,marginBottom:8}}>
             <span style={{width:5,height:5,borderRadius:"50%",background:_mCC}}/>
@@ -7111,7 +7522,8 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
           <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:26,fontWeight:700,margin:"0 0 6px",lineHeight:1.1,letterSpacing:-0.4,color:th.tx}}>{card.title}</h1>
           {rc.description && <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,fontStyle:"italic",color:th.tx2,margin:"0 0 10px",lineHeight:1.45}}>{rc.description}</p>}
           {rc.tags && rc.tags.length > 0 && <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:16}}>
-            {rc.tags.slice(0,5).map(tg => <span key={tg} style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:500,color:th.tx2,background:th.bgH,border:`1px solid ${th.bdS}`,padding:"2px 9px",borderRadius:999}}>{tg}</span>)}
+            {rc.tags.slice(0,3).map(tg => <span key={tg} style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:500,color:th.tx2,background:th.bgH,border:`1px solid ${th.bdS}`,padding:"2px 9px",borderRadius:999}}>{tg}</span>)}
+            {rc.tags.length > 3 && <span title={rc.tags.slice(3).join(", ")} style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,fontWeight:500,color:th.txD,padding:"2px 6px"}}>+{rc.tags.length - 3}</span>}
           </div>}
 
           {/* Yield stat strip — 3 cards */}
@@ -7215,20 +7627,20 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
       const th = TH();
       return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:th.bg}}>
         {/* Sticky toggle bar — back + segmented Card/MC/Algorithm toggle */}
-        <div className="no-print" style={{padding:"10px 14px",borderBottom:`1px solid ${th.div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
-          <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div className="no-print" style={{padding:"8px 14px",borderBottom:`1px solid ${th.div}`,boxShadow:th.sh,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:th.glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+          <button onClick={oB} aria-label="Back to recipes" style={{width:44,height:44,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <div style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${th.bdS}`,background:th.bgC}}>
-            <button onClick={()=>setViewMode("card")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
-            <button onClick={()=>setViewMode("modernist")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"#6B1D1D",color:"#FFFFFF",borderRadius:999,letterSpacing:0.3}}>MC</button>
-            <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Algo</button>
+          <div role="tablist" aria-label="Recipe view mode" style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${th.bdS}`,background:th.bgC}}>
+            <button onClick={()=>setViewMode("card")} role="tab" aria-selected={viewMode==="card"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
+            <button onClick={()=>setViewMode("modernist")} role="tab" aria-selected={viewMode==="modernist"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:th.pri,color:th.txOn,borderRadius:999,letterSpacing:0.3}}>MC</button>
+            <button onClick={()=>setViewMode("algorithm")} role="tab" aria-selected={viewMode==="algorithm"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:th.txM,borderRadius:999,letterSpacing:0.3}}>Algo</button>
           </div>
-          <button onClick={printRecipe} aria-label="Download as PDF" title="Download as PDF" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${th.bdS}`,background:th.bgC,color:th.tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          </button>
+          {/* Phase E: PDF removed on mobile (landscape A4 isn't phone-useful);
+              a same-size spacer keeps the sticky-header layout balanced. */}
+          <div aria-hidden="true" style={{width:44,height:44,flexShrink:0}}/>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"14px 10px 36px",WebkitOverflowScrolling:"touch"}}>
+        <div style={{flex:1,overflowY:"auto",padding:"16px 16px 36px",WebkitOverflowScrolling:"touch"}}>
           <StaleCardBanner isStale={isStale} onEdit={oE} onRegenerate={onRegenerate} regenStatus={regenStatus} regenError={regenError} hasApiKey={hasApiKey} isMobile={isMobile} t={t}/>
           <ModernistCardView card={card} rc={rc} sv={sv} base={base} t={t} lang={lang} isAdmin={isAdmin}/>
         </div>
@@ -7286,20 +7698,20 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
     const _aCL = rc.category === "Entrees" ? (t.catEntrees||"Entrees") : rc.category === "Mains" ? (t.catMains||"Mains") : rc.category === "Desserts" ? (t.catDesserts||"Desserts") : rc.category === "Drinks & Cocktails" ? (t.catDrinks||"Drinks & Cocktails") : rc.category === "Sides & Salads" ? (t.catSides||"Sides & Salads") : (rc.category||"Mains");
     return (<div style={{minHeight:"100vh",display:"flex",flexDirection:"column",background:TH().bg,fontFamily:"'DM Sans',sans-serif",color:TH().tx}}>
       {/* Sticky glass header — back · segmented Card/Algorithm toggle · download */}
-      <div className="no-print" style={{padding:"10px 14px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:TH().glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
-        <button onClick={oB} aria-label="Back to recipes" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${TH().bdS}`,background:TH().bgC,color:TH().tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div className="no-print" style={{padding:"8px 14px",borderBottom:`1px solid ${TH().div}`,boxShadow:TH().sh,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:TH().glass,backdropFilter:"saturate(140%) blur(14px)",WebkitBackdropFilter:"saturate(140%) blur(14px)",position:"sticky",top:0,zIndex:50}}>
+        <button onClick={oB} aria-label="Back to recipes" style={{width:44,height:44,borderRadius:"50%",border:`1px solid ${TH().bdS}`,background:TH().bgC,color:TH().tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        {card ? <div style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${TH().bdS}`,background:TH().bgC}}>
-          <button onClick={()=>setViewMode("card")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:TH().txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
+        {card ? <div role="tablist" aria-label="Recipe view mode" style={{display:"flex",gap:0,borderRadius:999,padding:3,border:`1px solid ${TH().bdS}`,background:TH().bgC}}>
+          <button onClick={()=>setViewMode("card")} role="tab" aria-selected={viewMode==="card"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:TH().txM,borderRadius:999,letterSpacing:0.3}}>Card</button>
           {card.mc && Array.isArray(card.mc.blocks) && card.mc.blocks.length > 0 && (
-            <button onClick={()=>setViewMode("modernist")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:TH().txM,borderRadius:999,letterSpacing:0.3}}>MC</button>
+            <button onClick={()=>setViewMode("modernist")} role="tab" aria-selected={viewMode==="modernist"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:"transparent",color:TH().txM,borderRadius:999,letterSpacing:0.3}}>MC</button>
           )}
-          <button onClick={()=>setViewMode("algorithm")} style={{padding:"6px 12px",fontSize:11,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:TH().pri,color:TH().txOn,borderRadius:999,letterSpacing:0.3}}>Algo</button>
+          <button onClick={()=>setViewMode("algorithm")} role="tab" aria-selected={viewMode==="algorithm"} style={{padding:"10px 14px",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",background:TH().pri,color:TH().txOn,borderRadius:999,letterSpacing:0.3}}>Algo</button>
         </div> : <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:11,color:TH().txD,fontStyle:"italic"}}>view only</div>}
-        <button onClick={printRecipe} aria-label="Download as PDF" title="Download as PDF" style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${TH().bdS}`,background:TH().bgC,color:TH().tx2,cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        </button>
+        {/* Phase E: PDF removed on mobile (landscape A4 isn't phone-useful);
+            spacer keeps the sticky-header layout balanced. */}
+        <div aria-hidden="true" style={{width:44,height:44,flexShrink:0}}/>
       </div>
       {/* Hero — eyebrow + title + flavour mini bars */}
       <div style={{padding:"16px 18px 10px"}}>
@@ -7332,19 +7744,19 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
               <div style={{position:"absolute",left:4,top:0,bottom:0,width:1.5,background:lane.color+"30",borderRadius:1}}/>
               {lane.steps.map((step,si)=>{const ings2=(step.ingredients||[]).filter(i=>!i.isPrepRef&&!i.multiplierRef);const conns=connMap[step.id]||[];
                 return<div key={step.id}>
-                  <div onClick={()=>setMStep(step.id)} style={{position:"relative",padding:"8px 10px",borderRadius:8,border:`0.5px solid ${TH().bdS}`,background:TH().bgC,marginBottom:conns.length?4:6,cursor:"pointer"}}>
-                    <div style={{position:"absolute",left:-18,top:"50%",transform:"translateY(-50%)",width:9,height:9,borderRadius:"50%",border:`2px solid ${lane.color}`,background:TH().bg}}/>
-                    <div style={{fontSize:12,fontWeight:600,marginBottom:3}}>{step.title||`Step ${si+1}`}</div>
-                    {ings2.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginBottom:3}}>
-                      {ings2.slice(0,4).map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<span key={ing.uid} style={{fontSize:9,padding:"1px 5px",borderRadius:4,border:`0.5px solid ${TH().bdS}`,color:TH().txM}}>{fi?.n||ing.ingredientId}</span>;})}
-                      {ings2.length>4&&<span style={{fontSize:9,color:TH().txD}}>+{ings2.length-4}</span>}
+                  <div onClick={()=>enterStep(step.id)} role="button" tabIndex={0} style={{position:"relative",padding:"12px 32px 12px 12px",borderRadius:10,border:`0.5px solid ${TH().bdS}`,background:TH().bgC,marginBottom:conns.length?4:6,cursor:"pointer",minHeight:48}}>
+                    <div style={{position:"absolute",left:-18,top:"50%",transform:"translateY(-50%)",width:10,height:10,borderRadius:"50%",border:`2px solid ${lane.color}`,background:TH().bg}}/>
+                    <div style={{fontSize:13,fontWeight:600,marginBottom:5}}>{step.title||`Step ${si+1}`}</div>
+                    {ings2.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:4}}>
+                      {ings2.slice(0,4).map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<span key={ing.uid} style={{fontSize:11,padding:"3px 8px",borderRadius:6,border:`0.5px solid ${TH().bdS}`,color:TH().txM}}>{fi?.n||ing.ingredientId}</span>;})}
+                      {ings2.length>4&&<span style={{fontSize:11,padding:"3px 6px",color:TH().txD}}>+{ings2.length-4}</span>}
                     </div>}
-                    {(step.processes||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3}}>
-                      {step.processes.map(proc=><span key={proc} style={{fontSize:9,padding:"1px 5px",borderRadius:4,background:TH().proc+"10",border:`0.5px solid ${TH().proc}25`,color:TH().proc}}>{trN(proc,"proc",lang)}</span>)}
+                    {(step.processes||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                      {step.processes.map(proc=><span key={proc} style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:TH().proc+"10",border:`0.5px solid ${TH().proc}25`,color:TH().proc}}>{trN(proc,"proc",lang)}</span>)}
                     </div>}
-                    {step.tool&&<div style={{fontSize:9,color:TH().txD,marginTop:3}}>{step.tool.icon||"🔧"} {step.tool.name}</div>}
-                    <div style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:TH().bdS}}>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                    {step.tool&&<div style={{fontSize:11,color:TH().txD,marginTop:5}}>{step.tool.icon||"🔧"} {step.tool.name}</div>}
+                    <div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:TH().txD}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
                   </div>
                   {conns.map((c,ci3)=><div key={ci3} style={{display:"flex",alignItems:"center",gap:6,padding:"0 0 4px 4px",marginBottom:4}}>
@@ -7433,8 +7845,8 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
           <button role="tab" aria-selected={dtView==="modernist"} onClick={()=>setDtView("modernist")} style={{
             padding:"7px 18px", fontSize:11.5, fontWeight:700, border:"none", cursor:"pointer",
             fontFamily:"'DM Sans',sans-serif",
-            background: dtView==="modernist" ? "#6B1D1D" : "transparent",
-            color: dtView==="modernist" ? "#FFFFFF" : TH().txM,
+            background: dtView==="modernist" ? TH().pri : "transparent",
+            color: dtView==="modernist" ? TH().txOn : TH().txM,
             borderRadius:999, letterSpacing:0.3,
           }}>Modernist Cuisine</button>
         </div>
