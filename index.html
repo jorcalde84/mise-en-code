@@ -52,6 +52,16 @@
       button:focus-visible, [role="button"]:focus-visible { box-shadow: none !important; }
     }
 
+    /* ─── Phase C3 — scope-change fade (shopping list) ─────────────────
+       When the user switches scope (All / This week / Today / Inbox), the
+       filtered category list fades in over 120 ms. The scope filter chips
+       themselves stay instant — chips must feel snappy. */
+    @keyframes wp-scope-fade-in {
+      from { opacity: 0; transform: translateY(2px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .wp-scope-list { animation: wp-scope-fade-in 120ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+
     /* ─── PRINT STYLES (Download PDF) ─────────────────────────────────
        Triggered by window.print(); the user picks "Save as PDF" in the
        browser's print dialog. We hide anything marked .no-print or with
@@ -1894,6 +1904,15 @@ function App() {
       slots: plan.slots.map(s => s.uid === slotUid ? { ...s, servings: next } : s),
     }));
   };
+  /* Phase D1 — per-slot notes. "use half garlic; double the basil." Saved on
+     the slot, never touches the recipe definition. */
+  const wpSetSlotNotes = (slotUid, notes) => {
+    const clean = (notes || "").slice(0, 280); /* one-tweet cap, sane upper bound */
+    setWeekPlanAndPersist(plan => ({
+      ...plan,
+      slots: plan.slots.map(s => s.uid === slotUid ? { ...s, notes: clean } : s),
+    }));
+  };
   /* Mark a slot as cooked / skipped — keeps it in history but removes it from
      "planned" surfaces. cookedAt / skippedAt timestamps preserved for analytics. */
   const wpMarkCooked = (slotUid) => {
@@ -2458,7 +2477,7 @@ function App() {
     {!loading && vw==="browse" && <BrV rs={filt} sr={sr} sSr={sSr} oO={oV} oE={r=>{if(isMobile){setMobileEditSheet({ recipe: r });return;}oE(r);}} oC={()=>{if(isMobile){setMobileEditSheet({ create: true });return;}cN();}} oD={delR} wpAddSlot={wpAddSlot} weekPlan={weekPlan} t={t} isAdmin={isAdmin} isMobile={isMobile} lib={lib} markedForReview={markedForReview} onClearFlags={() => setMarkedForReview([])}/>}
     {!loading && vw==="weekplan" && <WeeklyPlannerView
       weekPlan={weekPlan} weekPlanSnapshots={weekPlanSnapshots} parametricCards={parametricCards} recs={recs}
-      wpAddSlot={wpAddSlot} wpRemoveSlot={wpRemoveSlot} wpSetServings={wpSetServings}
+      wpAddSlot={wpAddSlot} wpRemoveSlot={wpRemoveSlot} wpSetServings={wpSetServings} wpSetSlotNotes={wpSetSlotNotes}
       wpResetWeek={wpResetWeek} wpMoveSlot={wpMoveSlot} wpSwapSlots={wpSwapSlots} wpScheduleSlot={wpScheduleSlot}
       wpMarkCooked={wpMarkCooked} wpMarkSkipped={wpMarkSkipped} wpRevertStatus={wpRevertStatus}
       setWeekPlanAndPersist={setWeekPlanAndPersist}
@@ -2507,12 +2526,17 @@ const WP_S = { x1: 4, x2: 8, x3: 12, x4: 16, x5: 20, x6: 24, x8: 32 };
 
 function WeeklyPlannerView({
   weekPlan, weekPlanSnapshots, parametricCards, recs,
-  wpAddSlot, wpRemoveSlot, wpSetServings, wpResetWeek, wpMoveSlot, wpSwapSlots,
+  wpAddSlot, wpRemoveSlot, wpSetServings, wpSetSlotNotes, wpResetWeek, wpMoveSlot, wpSwapSlots,
   wpMarkCooked, wpMarkSkipped, wpRevertStatus, setWeekPlanAndPersist,
   wpSaveSnapshot, wpRestoreSnapshot, wpDeleteSnapshot, wpDuplicateSnapshot,
   wpClearSidecar, importSidecarFile, exportCardsOnly, recipeVersionHash, wpScheduleSlot,
   isMobile, theme,
 }) {
+  /* Phase B5 — tablet breakpoint. iPad portrait/landscape gets a 4-col day
+     grid instead of the cramped 7-col desktop layout or stacked 1-col mobile.
+     Reads window.innerWidth once on mount (matches isMobile pattern at line
+     ~1592). The 768/1180 thresholds mirror VwV's tablet logic at ~line 7718. */
+  const isTablet = typeof window !== "undefined" && window.innerWidth >= 768 && window.innerWidth <= 1180 && !isMobile;
   const [showAdd, setShowAdd] = useState(false);
   const [pickRecipeId, setPickRecipeId] = useState("");
   const [pickCategory, setPickCategory] = useState("all");
@@ -2593,15 +2617,15 @@ function WeeklyPlannerView({
       if (k === "t") { e.preventDefault(); setWeekOffset(0); return; }
       if (k === "n") { e.preventDefault(); openAddRecipeModal(null); return; }
       if (k === "s" && totalSlots > 0) { e.preventDefault(); setShowSnapForm(true); return; }
-      if (k === "r" && totalSlots > 0) {
+      if (k === "r" && scheduledThisWeek > 0) {
         e.preventDefault();
-        if (window.confirm("Reset the active week plan?")) wpResetWeek();
+        confirmResetVisibleWeek();
         return;
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showAdd, showSnapForm, previewCardSlot, moveSheetSlot, undoToast, selectedUids, totalSlots]);
+  }, [showAdd, showSnapForm, previewCardSlot, moveSheetSlot, undoToast, selectedUids, totalSlots, scheduledThisWeek, visibleWeekDates]);
 
   /* ── Mobile-first state ──
      mobileTab: segmented control (Plan / Shopping / Saved).
@@ -2629,7 +2653,12 @@ function WeeklyPlannerView({
   const [previewExpanded, setPreviewExpanded] = useState(false);
   useEffect(() => { setPreviewExpanded(false); }, [previewCardSlot]);
   const [hideChecked, setHideChecked] = useState(false);
-  const [collapsedCats, setCollapsedCats] = useState(new Set());
+  const [collapsedCats, setCollapsedCats] = useState(() => {
+    /* Phase B7 — persist category-collapse state. "I always want Vegetables
+       collapsed" is sticky muscle memory, not a per-session choice. */
+    try { return new Set(JSON.parse(localStorage.getItem("mise_en_code_shopping_collapsed_cats") || "[]")); }
+    catch { return new Set(); }
+  });
   /* Auto-collapse only past days that have NO planned items — past days
      with unfinished slots stay expanded so they're immediately visible
      (the past-rollover banner is then a summary, not the only entry point).
@@ -2672,7 +2701,43 @@ function WeeklyPlannerView({
     try { localStorage.removeItem("mise_en_code_shopping_checked"); } catch {}
   };
   const toggleCatCollapse = (cat) => {
-    setCollapsedCats(prev => { const n = new Set(prev); if (n.has(cat)) n.delete(cat); else n.add(cat); return n; });
+    setCollapsedCats(prev => {
+      const n = new Set(prev);
+      if (n.has(cat)) n.delete(cat); else n.add(cat);
+      try { localStorage.setItem("mise_en_code_shopping_collapsed_cats", JSON.stringify(Array.from(n))); } catch {}
+      return n;
+    });
+  };
+
+  /* Phase D2 — full-screen shopping mode. Distraction-free big-touch view
+     for when you're physically at the supermarket. Big checkboxes, tap-to-
+     check, screen-stay-on hint via the Wake Lock API where available. */
+  const [shoppingMode, setShoppingMode] = useState(false);
+  const wakeLockRef = useRef(null);
+  useEffect(() => {
+    if (shoppingMode && typeof navigator !== "undefined" && navigator.wakeLock) {
+      navigator.wakeLock.request("screen").then(lock => { wakeLockRef.current = lock; }).catch(() => {});
+    }
+    return () => {
+      if (wakeLockRef.current) { try { wakeLockRef.current.release(); } catch {} wakeLockRef.current = null; }
+    };
+  }, [shoppingMode]);
+
+  /* Phase A — shopping list scope filter.
+     One of: "all" | "week" | "today" | "inbox". Default "week" so users see
+     what they're cooking this week, not a flood from every scheduled slot.
+     Persisted in localStorage. The aggregator below reads it through
+     getScopedSlots() (declared near deriveStructuralCard above the component). */
+  const [shoppingScope, setShoppingScope] = useState(() => {
+    try {
+      const raw = localStorage.getItem("mise_en_code_shopping_scope");
+      if (raw && ["all","week","today","inbox"].includes(raw)) return raw;
+    } catch {}
+    return "week";
+  });
+  const updateShoppingScope = (scope) => {
+    setShoppingScope(scope);
+    try { localStorage.setItem("mise_en_code_shopping_scope", scope); } catch {}
   };
 
   const th = TH();
@@ -2734,6 +2799,26 @@ function WeeklyPlannerView({
     return null;
   };
   const slotStatus = (s) => (s && s.status) || "planned";
+
+  /* Phase A — pure helper for the shopping-list scope filter.
+     Filters slots to the active scope AND drops non-"planned" (cooked /
+     skipped slots shouldn't show up on a list of stuff to buy). Also returns
+     the corresponding date set so the "Clear plan in scope" action knows
+     which slots to delete via wpResetWeek(dates). */
+  const getScopedSlots = (scope) => {
+    const planned = (weekPlan.slots || []).filter(s => slotStatus(s) === "planned");
+    switch (scope) {
+      case "today":
+        return { slots: planned.filter(s => slotDate(s) === todayKey), dates: [todayKey], inboxIncluded: false };
+      case "inbox":
+        return { slots: planned.filter(s => slotDate(s) == null), dates: [], inboxIncluded: true };
+      case "week":
+        return { slots: planned.filter(s => visibleWeekDates.indexOf(slotDate(s)) >= 0), dates: visibleWeekDates.slice(), inboxIncluded: false };
+      case "all":
+      default:
+        return { slots: planned, dates: Array.from(new Set(planned.map(slotDate).filter(d => d !== null))), inboxIncluded: true };
+    }
+  };
 
   /* Split slots:
        pool          — unscheduled (date == null), all weeks
@@ -2845,8 +2930,22 @@ function WeeklyPlannerView({
      Sum quantities for same ingredient name (case-insensitive).
      Group by category. */
   const shoppingList = useMemo(() => {
-    const aggregate = new Map(); /* key: lowercased name, val: {name, category, totalGrams, recipes:Set} */
-    (weekPlan.slots || []).forEach(slot => {
+    /* Phase A — scope-filtered, planned-only aggregation. Cooked/skipped
+       slots are excluded by getScopedSlots. Track sources as Map<id,name>
+       so chips can link back to recipes. */
+    const aggregate = new Map();
+    const scoped = getScopedSlots(shoppingScope);
+    const upsertItem = (recipe, key, name, category, addGrams, fallback) => {
+      let item = aggregate.get(key);
+      if (!item) {
+        item = { name, category: category || "Other", totalGrams: 0, fallback: !!fallback, recipes: new Map() };
+        aggregate.set(key, item);
+      }
+      item.totalGrams += addGrams || 0;
+      if (fallback) item.fallback = true;
+      item.recipes.set(recipe.id, recipe.name);
+    };
+    scoped.slots.forEach(slot => {
       const recipe = recs.find(r => r.id === slot.recipeId);
       if (!recipe) return;
       const cardEntry = (parametricCards.cards || []).find(c => c.recipeId === slot.recipeId);
@@ -2856,19 +2955,10 @@ function WeeklyPlannerView({
         card.ingredients.forEach(ing => {
           if (!ing.name || ing.massGrams == null) return;
           const key = ing.name.toLowerCase().trim();
-          const existing = aggregate.get(key);
-          const grams = ing.massGrams * scale;
-          if (existing) {
-            existing.totalGrams += grams;
-            existing.recipes.add(recipe.name);
-          } else {
-            aggregate.set(key, { name: ing.name, category: ing.category || "Other", totalGrams: grams, recipes: new Set([recipe.name]) });
-          }
+          upsertItem(recipe, key, ing.name, ing.category, ing.massGrams * scale, false);
         });
       } else {
-        /* Fallback: use raw ingredients from preparations (modules included since we don't filter isModule) */
-        const baseServings = recipe.servings || 4;
-        const scale = slot.servings / baseServings;
+        /* Fallback: use raw ingredients from preparations (modules included since we don't filter isModule). Grams stay 0 — labeled "approx (no card)". */
         (recipe.preparations || []).forEach(prep => {
           (prep.grid || []).forEach(row => (row || []).forEach(step => {
             if (!step) return;
@@ -2877,14 +2967,7 @@ function WeeklyPlannerView({
               const name = i.name || i.n || "";
               if (!name) return;
               const key = name.toLowerCase().trim();
-              const existing = aggregate.get(key);
-              /* No mass conversion in fallback — store as label only */
-              if (existing) {
-                existing.recipes.add(recipe.name);
-                existing.notes = existing.notes || "approx (no card)";
-              } else {
-                aggregate.set(key, { name, category: i.category || "Other", totalGrams: 0, fallback: true, recipes: new Set([recipe.name]), notes: "approx (no card)" });
-              }
+              upsertItem(recipe, key, name, i.category, 0, true);
             });
           }));
         });
@@ -2922,8 +3005,62 @@ function WeeklyPlannerView({
       "Other":              99,
     };
     const sortedCats = Object.keys(byCategory).sort((a, b) => (catPriority[a] || 99) - (catPriority[b] || 99) || a.localeCompare(b));
-    return { byCategory, sortedCats, total: aggregate.size };
+    return { byCategory, sortedCats, total: aggregate.size, scopedSlotCount: scoped.slots.length };
+  }, [weekPlan.slots, recs, parametricCards, shoppingScope, visibleWeekDates, todayKey]);
+
+  /* Phase A5 — ghost-check pruning. When a slot is removed (or marked cooked),
+     items it uniquely sourced disappear from the derived list. Their check
+     marks would otherwise survive in localStorage and reappear ahead of time
+     the next time someone re-adds the recipe. Watch the derived item-key
+     set across ALL scopes (not just the active one — we don't want flicker
+     when the user changes scope). Skip the first render to avoid clearing
+     legitimate checks on mount. 300 ms debounce smooths rapid undo cycles.
+
+     Note: keys come from the active scope's items. If a user has "All"
+     scope items checked and switches to "Today" then back, no prune happens
+     because the All-scope keys are recomputed each time the scope changes.
+     What we WANT is to prune checks against the union of all reachable keys
+     — i.e., what could ever appear in any scope. So we derive that here.  */
+  const allReachableKeys = useMemo(() => {
+    const keys = new Set();
+    (weekPlan.slots || []).forEach(slot => {
+      if ((slot.status || "planned") !== "planned") return;
+      const cardEntry = (parametricCards.cards || []).find(c => c.recipeId === slot.recipeId);
+      const card = cardEntry ? cardEntry.parametricCard : null;
+      if (card && Array.isArray(card.ingredients)) {
+        card.ingredients.forEach(ing => { if (ing.name) keys.add(ing.name.toLowerCase().trim()); });
+      } else {
+        const recipe = recs.find(r => r.id === slot.recipeId);
+        if (!recipe) return;
+        (recipe.preparations || []).forEach(prep => {
+          (prep.grid || []).forEach(row => (row || []).forEach(step => {
+            if (!step) return;
+            (step.ingredients || []).forEach(i => {
+              const name = i.name || i.n || "";
+              if (name && i.unit !== "×") keys.add(name.toLowerCase().trim());
+            });
+          }));
+        });
+      }
+    });
+    return keys;
   }, [weekPlan.slots, recs, parametricCards]);
+
+  const ghostPruneInitRef = useRef(false);
+  useEffect(() => {
+    if (!ghostPruneInitRef.current) { ghostPruneInitRef.current = true; return; }
+    const timer = setTimeout(() => {
+      setCheckedItems(prev => {
+        let changed = false;
+        const next = new Set();
+        prev.forEach(k => { if (allReachableKeys.has(k)) next.add(k); else changed = true; });
+        if (!changed) return prev;
+        try { localStorage.setItem("mise_en_code_shopping_checked", JSON.stringify(Array.from(next))); } catch {}
+        return next;
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [allReachableKeys]);
 
   /* ══ Render — mobile-first redesign ══ */
   /* totalSlots — count of all planned slots across every week (tray + scheduled),
@@ -2937,9 +3074,66 @@ function WeeklyPlannerView({
   /* keep `scheduledCount` as an alias for places that read "scheduled in view" */
   const scheduledCount = scheduledThisWeek;
 
+  /* Phase 0 hotfix — scope "Reset week" to the visible week and tell the truth
+     in the confirm. Previously `wpResetWeek()` (no args) wiped EVERY slot
+     including the Inbox; the confirm read "Reset the active week plan?" which
+     was a lie. Three call sites used this — they now all funnel through here. */
+  const confirmResetVisibleWeek = () => {
+    const n = scheduledThisWeek;
+    if (n === 0) return;
+    const msg = n === 1
+      ? "Remove the 1 planned recipe from this week? Your Inbox and other weeks are kept."
+      : `Remove the ${n} planned recipes from this week? Your Inbox and other weeks are kept.`;
+    if (window.confirm(msg)) wpResetWeek(visibleWeekDates);
+  };
+
   /* Shopping list helpers + derived stats */
   const itemKey = (it) => (it.name || "").toLowerCase().trim();
   const fmtMass = (g) => g > 0 ? (g >= 1000 ? `${(g/1000).toFixed(2)} kg` : `${Math.round(g)} g`) : null;
+
+  /* Phase A8 — quantity rounding tier. "350 g onion" is correct but useless
+     to a shopper; "≈2 medium onions" is what you write on a list. For known
+     count-purchased items we map total grams to count. Falls back to grams
+     when (a) the name isn't in the table, (b) the count would round to 0,
+     or (c) totalGrams is 0 (fallback recipes with no card). */
+  const ITEM_PER_UNIT_G = {
+    "onion":            { g: 150, sing: "medium onion",   plur: "medium onions" },
+    "yellow onion":     { g: 150, sing: "medium onion",   plur: "medium onions" },
+    "white onion":      { g: 150, sing: "medium onion",   plur: "medium onions" },
+    "red onion":        { g: 110, sing: "red onion",      plur: "red onions" },
+    "shallot":          { g: 30,  sing: "shallot",        plur: "shallots" },
+    "garlic":           { g: 5,   sing: "garlic clove",   plur: "garlic cloves" },
+    "garlic clove":     { g: 5,   sing: "garlic clove",   plur: "garlic cloves" },
+    "egg":              { g: 50,  sing: "large egg",      plur: "large eggs" },
+    "tomato":           { g: 120, sing: "medium tomato",  plur: "medium tomatoes" },
+    "cherry tomato":    { g: 15,  sing: "cherry tomato",  plur: "cherry tomatoes" },
+    "avocado":          { g: 200, sing: "avocado",        plur: "avocados" },
+    "lemon":            { g: 100, sing: "lemon",          plur: "lemons" },
+    "lime":             { g: 60,  sing: "lime",           plur: "limes" },
+    "lime juice":       { g: 30,  sing: "lime (juiced)",  plur: "limes (juiced)" },
+    "lemon juice":      { g: 50,  sing: "lemon (juiced)", plur: "lemons (juiced)" },
+    "jalapeño":    { g: 15,  sing: "jalapeño",  plur: "jalapeños" },
+    "jalapeno":         { g: 15,  sing: "jalapeño",  plur: "jalapeños" },
+    "chile":            { g: 12,  sing: "chile",          plur: "chiles" },
+    "potato":           { g: 180, sing: "medium potato",  plur: "medium potatoes" },
+    "carrot":           { g: 80,  sing: "carrot",         plur: "carrots" },
+    "bell pepper":      { g: 160, sing: "bell pepper",    plur: "bell peppers" },
+    "red bell pepper":  { g: 160, sing: "red bell pepper",plur: "red bell peppers" },
+    "cucumber":         { g: 300, sing: "cucumber",       plur: "cucumbers" },
+    "zucchini":         { g: 200, sing: "zucchini",       plur: "zucchinis" },
+    "apple":            { g: 180, sing: "apple",          plur: "apples" },
+    "banana":           { g: 120, sing: "banana",         plur: "bananas" },
+    "orange":           { g: 130, sing: "orange",         plur: "oranges" },
+  };
+  const humanQty = (name, grams) => {
+    if (!grams || grams <= 0) return null;
+    const k = (name || "").toLowerCase().trim();
+    const def = ITEM_PER_UNIT_G[k];
+    if (!def) return null;
+    const n = Math.round(grams / def.g);
+    if (n < 1) return null;
+    return "≈" + n + " " + (n === 1 ? def.sing : def.plur);
+  };
   const allShoppingItems = Object.values(shoppingList.byCategory).flat();
   const checkedCount = allShoppingItems.filter(it => checkedItems.has(itemKey(it))).length;
   const totalMassG = allShoppingItems.reduce((acc, it) => acc + (it.totalGrams || 0), 0);
@@ -3133,7 +3327,15 @@ function WeeklyPlannerView({
       >
         <div style={{ display: "flex", alignItems: "flex-start", gap: isCompactDayDesktop ? 0 : 8 }}>
           {!isCompactDayDesktop && (
-            <span style={{ color: th.txD, fontSize: 14, cursor: "grab", marginTop: 4, flexShrink: 0, lineHeight: 1 }}>{"\u2630"}</span>
+            /* Phase B6 \u2014 drag-handle hover affordance. Color shift + slight
+               scale on hover instead of just opacity, so it reads as
+               "grabbable" rather than "decorative". */
+            <span
+              onMouseEnter={(e) => { e.currentTarget.style.color = th.acc; e.currentTarget.style.transform = "scale(1.12)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = th.txD; e.currentTarget.style.transform = "scale(1)"; }}
+              title="Drag to reorder"
+              style={{ color: th.txD, fontSize: 14, cursor: "grab", marginTop: 4, flexShrink: 0, lineHeight: 1, transition: "color 0.15s, transform 0.15s", display: "inline-block" }}
+            >{"\u2630"}</span>
           )}
           {!isCompactDayDesktop && (
             <span title={meta.label} style={{ width: 8, height: 8, borderRadius: "50%", background: meta.color, marginTop: 7, flexShrink: 0 }}/>
@@ -3151,6 +3353,16 @@ function WeeklyPlannerView({
               WebkitBoxOrient: "vertical",
               paddingRight: isCompactDayDesktop ? 22 : 0, /* reserve space for hover-revealed \u00D7 so layout doesn't shift */
             }} title={slot.name}>{slot.name}</div>
+            {slot.notes && !isCompactDayDesktop && (
+              /* Phase D1 — surface notes on the chip as an italic clamp. */
+              <div title={slot.notes} style={{
+                fontFamily: "'Cormorant Garamond',serif",
+                fontSize: 11, fontStyle: "italic", color: th.txM,
+                marginTop: 3, lineHeight: 1.3,
+                overflow: "hidden", textOverflow: "ellipsis",
+                display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical",
+              }}>{slot.notes}</div>
+            )}
             {/* Lead-time icon \u2014 compact mode shows it as a tiny pill below the name when hover-revealed */}
             {isCompactDayDesktop && showLeadBadge && (
               <div style={{
@@ -3257,24 +3469,38 @@ function WeeklyPlannerView({
         onDragOver={(e => onDragOver(e, dateKey))}
         onDragLeave={(e => onDragLeave(e, dateKey))}
         onDrop={(e => onDrop(e, dateKey))}
+        aria-current={isToday ? "date" : undefined}
         style={{
           background: isHovered ? `${th.acc}18` : th.bgC,
           border: isToday ? `2px solid ${th.sec}` : `1px solid ${isHovered ? th.acc : th.bdS}`,
+          /* Phase B3 — stronger Today indicator: glowing left-edge accent bar
+             that reads at a glance across the 7-col grid. */
+          boxShadow: isToday ? `inset 4px 0 0 ${th.sec}, 0 6px 18px ${th.sec}1F` : undefined,
           borderRadius: 14,
           display: "flex",
           flexDirection: "column",
           minHeight: isMobile ? 0 : 220,
           overflow: "hidden",
           opacity: isPast && !isToday ? 0.78 : 1,
-          transition: "background 0.15s, border-color 0.15s, opacity 0.15s",
+          transition: "background 0.15s, border-color 0.15s, opacity 0.15s, box-shadow 0.2s",
         }}
       >
+        {/* Phase D3 — load color-grading. Color-tint the header background
+           by cumulative cook time. Today's sec-tint wins; otherwise the
+           accent fades from subtle (≥1h) to firm (≥4h) — a built-in heatmap
+           that reads instantly across the week. */}
         <div onClick={isMobile ? (() => { const n = new Set(collapsedDates); if (n.has(dateKey)) n.delete(dateKey); else n.add(dateKey); setCollapsedDates(n); }) : undefined} style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: isMobile ? "10px 14px" : "10px 12px",
-          background: isToday ? `${th.sec}20` : th.bgH,
+          background: isToday ? `${th.sec}20`
+                      : load.totalMin >= 240 ? `${th.acc}2A`
+                      : load.totalMin >= 120 ? `${th.acc}1F`
+                      : load.totalMin >= 60  ? `${th.acc}12`
+                      : load.totalMin > 0    ? `${th.acc}08`
+                      : th.bgH,
           borderBottom: isCollapsed ? "none" : `1px solid ${th.div}`,
           cursor: isMobile ? "pointer" : "default",
+          transition: "background 0.2s",
         }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
             <span style={{
@@ -3341,15 +3567,23 @@ function WeeklyPlannerView({
         {!isCollapsed && (
         <div style={{ padding: isMobile ? "10px 12px 12px" : "10px", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
           {slots.length === 0 ? (
-            <button onClick={() => openAddRecipeModal(dateKey)} style={{
-              padding: isMobile ? "16px" : "12px",
-              border: `1.5px dashed ${th.bd}`, borderRadius: 10, background: "transparent",
-              color: th.txM, fontFamily: "'Cormorant Garamond',serif",
-              fontSize: isMobile ? 14 : 12, fontStyle: "italic",
-              cursor: "pointer", textAlign: "center", flex: 1,
-              minHeight: isMobile ? 0 : 110,
-            }}>
-              + Add a recipe
+            /* Phase B4 — active empty-state CTA. Was passive italic dashed
+               placeholder; now reads as a clear tap-target with icon. */
+            <button onClick={() => openAddRecipeModal(dateKey)}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = th.acc; e.currentTarget.style.color = th.acc; e.currentTarget.style.background = th.acc + "0A"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = th.bd; e.currentTarget.style.color = th.txM; e.currentTarget.style.background = "transparent"; }}
+              style={{
+                padding: isMobile ? "14px" : "12px",
+                border: `1.5px dashed ${th.bd}`, borderRadius: 10, background: "transparent",
+                color: th.txM, fontFamily: "'DM Sans',sans-serif",
+                fontSize: isMobile ? 13 : 11.5, fontWeight: 600, letterSpacing: 0.2,
+                cursor: "pointer", textAlign: "center", flex: 1,
+                minHeight: isMobile ? 0 : 110,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                transition: "border-color 0.18s, color 0.18s, background 0.18s",
+              }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden><path d="M12 5v14M5 12h14"/></svg>
+              Add a recipe
             </button>
           ) : (
             slots.map(slot => <SlotChip key={slot.uid} slot={slot} location="day"/>)
@@ -3432,7 +3666,7 @@ function WeeklyPlannerView({
           </div>
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 700, color: th.tx, marginBottom: 2 }}>{moveSheetSlot.name}</div>
           <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 12, fontStyle: "italic", color: th.txM, marginBottom: 14 }}>
-            {currentDate ? `Scheduled for ${wpFormatDayShort(currentDate)}` : "In the tray"}
+            {currentDate ? `Scheduled for ${wpFormatDayShort(currentDate)}` : "In the Inbox"}
           </div>
 
           {/* Cook actions — for past or today slots */}
@@ -3461,7 +3695,7 @@ function WeeklyPlannerView({
 
           <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Move to…</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 8 }}>
-            <button onClick={() => moveTo(null)} style={sheetBtn(currentDate === null)}>Tray</button>
+            <button onClick={() => moveTo(null)} style={sheetBtn(currentDate === null)}>Inbox</button>
             {visibleWeekDates.map(k => (
               <button key={k} onClick={() => moveTo(k)} style={sheetBtn(currentDate === k)}>
                 {wpFormatDayShort(k)}{wpIsToday(k) ? " · Today" : ""}
@@ -3479,6 +3713,31 @@ function WeeklyPlannerView({
               border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
               fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
             }}>Next week (Mon) →</button>
+          </div>
+
+          {/* Phase D1 — per-slot notes. "use half garlic; double the basil." */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>Notes</span>
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: th.txD, textTransform: "none", letterSpacing: 0 }}>{(moveSheetSlot.notes || "").length}/280</span>
+            </div>
+            <textarea
+              defaultValue={moveSheetSlot.notes || ""}
+              placeholder="e.g. use half garlic; double the basil…"
+              onBlur={(e) => {
+                const v = e.target.value;
+                if (v !== (moveSheetSlot.notes || "")) wpSetSlotNotes(moveSheetSlot.uid, v);
+              }}
+              maxLength={280}
+              rows={2}
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: 10,
+                border: `1.5px solid ${th.bd}`, background: th.bgI,
+                fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic",
+                color: th.tx, outline: "none", resize: "vertical", minHeight: 56,
+                boxSizing: "border-box",
+              }}
+            />
           </div>
 
           <button onClick={() => { wpRemoveSlot(moveSheetSlot.uid); close(); }} style={{
@@ -3588,7 +3847,7 @@ function WeeklyPlannerView({
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx }}>Tray</span>
+            <span style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 15 : 14, fontWeight: 700, color: th.tx }}>Inbox</span>
             <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, color: th.txM, background: th.bgH, padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>{pool.length}</span>
           </div>
           <span style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 11, fontStyle: "italic", color: th.txD, textAlign: "right" }}>
@@ -3596,13 +3855,20 @@ function WeeklyPlannerView({
           </span>
         </div>
         {pool.length === 0 ? (
-          <button onClick={() => openAddRecipeModal(null)} style={{
-            width: "100%", padding: isMobile ? "18px" : "14px",
-            borderRadius: 12, border: `1.5px dashed ${th.bd}`, background: "transparent",
-            color: th.txM, fontFamily: "'Cormorant Garamond',serif",
-            fontSize: isMobile ? 14 : 13, fontStyle: "italic", cursor: "pointer",
-          }}>
-            Tray is empty — tap to add a recipe.
+          /* Phase B4 — active empty-Inbox CTA with icon + clear copy. */
+          <button onClick={() => openAddRecipeModal(null)}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = th.acc; e.currentTarget.style.color = th.acc; e.currentTarget.style.background = th.acc + "0A"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = th.bd; e.currentTarget.style.color = th.txM; e.currentTarget.style.background = "transparent"; }}
+            style={{
+              width: "100%", padding: isMobile ? "18px" : "14px",
+              borderRadius: 12, border: `1.5px dashed ${th.bd}`, background: "transparent",
+              color: th.txM, fontFamily: "'DM Sans',sans-serif",
+              fontSize: isMobile ? 13 : 12.5, fontWeight: 600, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              transition: "border-color 0.18s, color 0.18s, background 0.18s",
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden><path d="M12 5v14M5 12h14"/></svg>
+            Add a recipe to your Inbox
           </button>
         ) : (
           <div style={{
@@ -3672,14 +3938,47 @@ function WeeklyPlannerView({
               style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid " + th.bdS, background: th.bgC, color: th.tx, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, fontSize: 14 }}>{"\u203A"}</button>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(7, 1fr)", gap: isMobile ? 10 : 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : isTablet ? "repeat(4, 1fr)" : "repeat(7, 1fr)", gap: isMobile ? 10 : isTablet ? 10 : 8 }}>
           {visibleWeekDates.map(k => DayCard(k))}
         </div>
       </div>
     </>
   );
 
-  /* ── Section: Shopping list (cumulative across all recipes, checkable rows) ── */
+  /* ── Section: Shopping list (Phase A — scope-aware, checkable, recipe-linked) ──
+     Scope chips at the top let users filter to All / This week / Today / Inbox.
+     The progress card shows two scoped actions: "Clear checks" (only when any
+     are checked) and "Clear plan in scope" (only when the scope holds slots
+     that can be deleted). Items show their source recipes as tappable chips
+     capped at 2 + "+N more" overflow. */
+  const SCOPE_DEFS = [
+    { key: "all",    label: "All planned" },
+    { key: "week",   label: "This week" },
+    { key: "today",  label: "Today" },
+    { key: "inbox",  label: "Inbox" },
+  ];
+  const scopeLabel = (key) => (SCOPE_DEFS.find(s => s.key === key) || SCOPE_DEFS[0]).label;
+  const openRecipePreview = (recipeId) => {
+    const recipe = recs.find(r => r.id === recipeId);
+    if (!recipe) return;
+    setPreviewCardSlot({ recipeId, name: recipe.name, servings: recipe.servings || 4, date: null, status: "planned", uid: "preview-" + recipeId });
+  };
+  const confirmClearPlanInScope = () => {
+    const scoped = getScopedSlots(shoppingScope);
+    const n = scoped.slots.length;
+    if (n === 0) return;
+    const label = scopeLabel(shoppingScope);
+    const msg = n === 1
+      ? `Remove the 1 planned recipe from "${label}"? Other scopes are kept.`
+      : `Remove the ${n} planned recipes from "${label}"? Other scopes are kept.`;
+    if (!window.confirm(msg)) return;
+    const removedUids = new Set(scoped.slots.map(s => s.uid));
+    setWeekPlanAndPersist(plan => ({
+      ...plan,
+      slots: (plan.slots || []).filter(s => !removedUids.has(s.uid)),
+    }));
+  };
+
   const renderShoppingSection = () => {
     if (totalSlots === 0) {
       return (
@@ -3697,33 +3996,111 @@ function WeeklyPlannerView({
         </div>
       );
     }
+    const scopedSlotCount = shoppingList.scopedSlotCount || 0;
     return (
       <>
+        {/* Phase A — scope filter chips with Phase C6 keyboard nav.
+            Roving tabindex (active tab is 0, others -1). ArrowLeft / ArrowRight
+            move + activate (automatic activation, per WAI-ARIA tabs pattern).
+            Home/End jump to first/last. Hidden in print via Phase C5. */}
+        <div role="tablist" aria-label="Shopping list scope" data-noprint style={{
+          display: "flex", gap: 6, marginBottom: 14, padding: 4,
+          background: th.bgC, border: `1px solid ${th.bdS}`, borderRadius: 999,
+          overflowX: "auto", WebkitOverflowScrolling: "touch",
+        }}>
+          {SCOPE_DEFS.map((s, i) => {
+            const active = shoppingScope === s.key;
+            const onKeyDown = (e) => {
+              let nextIdx = -1;
+              if (e.key === "ArrowLeft")  nextIdx = (i - 1 + SCOPE_DEFS.length) % SCOPE_DEFS.length;
+              else if (e.key === "ArrowRight") nextIdx = (i + 1) % SCOPE_DEFS.length;
+              else if (e.key === "Home")  nextIdx = 0;
+              else if (e.key === "End")   nextIdx = SCOPE_DEFS.length - 1;
+              if (nextIdx < 0) return;
+              e.preventDefault();
+              updateShoppingScope(SCOPE_DEFS[nextIdx].key);
+              const tabs = e.currentTarget.parentElement.querySelectorAll('[role="tab"]');
+              if (tabs[nextIdx]) tabs[nextIdx].focus();
+            };
+            return (
+              <button key={s.key}
+                role="tab"
+                aria-selected={active}
+                tabIndex={active ? 0 : -1}
+                onClick={() => updateShoppingScope(s.key)}
+                onKeyDown={onKeyDown}
+                style={{
+                  flex: isMobile ? "1 0 auto" : "1 1 0",
+                  padding: isMobile ? "10px 14px" : "8px 14px",
+                  borderRadius: 999, border: "none",
+                  background: active ? th.pri : "transparent",
+                  color: active ? th.txOn : th.txM,
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                  letterSpacing: 0.3,
+                  transition: "background 0.18s, color 0.18s",
+                }}>{s.label}</button>
+            );
+          })}
+        </div>
+
         {/* Progress card */}
         <div style={{ background: th.bgC, border: `1px solid ${th.bdS}`, borderRadius: 16, padding: isMobile ? "16px" : "16px 18px", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
-            <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10, gap: 10, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0, flex: "1 1 180px" }}>
               <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 22 : 20, fontWeight: 700, color: th.tx, lineHeight: 1.1 }}>
                 {checkedCount} <span style={{ color: th.txM, fontWeight: 500 }}>/ {shoppingList.total}</span>
                 <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, color: th.txM, marginLeft: 8, textTransform: "uppercase", letterSpacing: 0.6 }}>collected</span>
               </div>
               <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic", color: th.txM, marginTop: 4 }}>
-                aggregated from {totalSlots} recipe{totalSlots === 1 ? "" : "s"}
+                {scopeLabel(shoppingScope).toLowerCase()} · {scopedSlotCount} recipe{scopedSlotCount === 1 ? "" : "s"}
                 {totalMassG > 0 ? ` · ${fmtMass(totalMassG)} total` : ""}
               </div>
             </div>
-            {checkedCount > 0 && (
-              <button onClick={() => { if (window.confirm("Clear all checks?")) clearChecked(); }} style={{
-                padding: "8px 14px", borderRadius: 999,
-                border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
-                fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0,
-              }}>Clear {"\u2713"}</button>
-            )}
-            <button onClick={() => { var lines = []; shoppingList.sortedCats.forEach(function(cat) { lines.push("\u2014 " + cat + " \u2014"); (shoppingList.byCategory[cat] || []).forEach(function(it) { var m = it.totalGrams > 0 ? (it.totalGrams >= 1000 ? (it.totalGrams/1000).toFixed(2) + " kg" : Math.round(it.totalGrams) + " g") : ""; lines.push((checkedItems.has(itemKey(it)) ? "\u2713 " : "\u25CB ") + it.name + (m ? " (" + m + ")" : "")); }); lines.push(""); }); var text = lines.join("\n"); if (typeof navigator !== "undefined" && navigator.share) { navigator.share({ title: "Shopping List", text: text }).catch(function(){}); } else if (typeof navigator !== "undefined" && navigator.clipboard) { navigator.clipboard.writeText(text).then(function() { alert("Copied!"); }); } else { alert(text); } }} style={{
-              padding: "8px 14px", borderRadius: 999,
-              border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
-              fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0,
-            }}>{typeof navigator !== "undefined" && navigator.share ? "\uD83D\uDCE4 Share" : "\uD83D\uDCCB Copy"}</button>
+            <div data-noprint style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap" }}>
+              {scopedSlotCount > 0 && (
+                <button onClick={confirmClearPlanInScope}
+                  title={`Remove planned recipes in "${scopeLabel(shoppingScope)}"`}
+                  style={{
+                    padding: "8px 14px", borderRadius: 999,
+                    border: `1px solid ${th.bdSt}`, background: "transparent", color: th.txM,
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  }}>{"↻"} Clear plan</button>
+              )}
+              {checkedCount > 0 && (
+                <button onClick={() => { if (window.confirm("Clear all checks?")) clearChecked(); }} style={{
+                  padding: "8px 14px", borderRadius: 999,
+                  border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                }}>Clear {"\u2713"}</button>
+              )}
+              {shoppingList.total > 0 && (
+                <button onClick={() => {
+                  /* Phase A \u2014 scope-aware share. Only exports items currently
+                     visible in the active scope. Header line names the scope. */
+                  const header = "Shopping list \u2014 " + scopeLabel(shoppingScope);
+                  const lines = [header, ""];
+                  shoppingList.sortedCats.forEach(function(cat) {
+                    lines.push("\u2014 " + cat + " \u2014");
+                    (shoppingList.byCategory[cat] || []).forEach(function(it) {
+                      const m = it.totalGrams > 0 ? (it.totalGrams >= 1000 ? (it.totalGrams/1000).toFixed(2) + " kg" : Math.round(it.totalGrams) + " g") : "";
+                      lines.push((checkedItems.has(itemKey(it)) ? "\u2713 " : "\u25CB ") + it.name + (m ? " (" + m + ")" : ""));
+                    });
+                    lines.push("");
+                  });
+                  const text = lines.join("\n");
+                  if (typeof navigator !== "undefined" && navigator.share) {
+                    navigator.share({ title: header, text: text }).catch(function(){});
+                  } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+                    navigator.clipboard.writeText(text).then(function() { alert("Copied!"); });
+                  } else { alert(text); }
+                }} style={{
+                  padding: "8px 14px", borderRadius: 999,
+                  border: `1px solid ${th.bdS}`, background: th.bgH, color: th.txM,
+                  fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                }}>{typeof navigator !== "undefined" && navigator.share ? "\uD83D\uDCE4 Share" : "\uD83D\uDCCB Copy"}</button>
+              )}
+            </div>
           </div>
           <div style={{ width: "100%", height: 6, background: th.bgH, borderRadius: 999, overflow: "hidden" }}>
             <div style={{
@@ -3732,7 +4109,27 @@ function WeeklyPlannerView({
               transition: "width 0.3s, background 0.3s",
             }}/>
           </div>
-          <button onClick={() => setHideChecked(v => !v)} style={{
+          {/* Phase D2 — Start shopping (full-screen distraction-free mode) */}
+          {shoppingList.total > 0 && (
+            <button onClick={() => setShoppingMode(true)} data-noprint style={{
+              width: "100%", marginTop: 12, padding: isMobile ? "14px 14px" : "12px 14px",
+              borderRadius: 12, border: "none",
+              background: th.pri, color: th.txOn,
+              fontFamily: "'DM Sans',sans-serif", fontSize: isMobile ? 13 : 12.5, fontWeight: 700, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              letterSpacing: 0.3,
+              transition: "transform 0.12s, box-shadow 0.18s",
+            }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+                <path d="M3 6h18l-1.6 11.2a2 2 0 0 1-2 1.8H6.6a2 2 0 0 1-2-1.8L3 6z"/>
+                <path d="M8 6V4a4 4 0 0 1 8 0v2"/>
+              </svg>
+              Start shopping
+            </button>
+          )}
+          <button onClick={() => setHideChecked(v => !v)} data-noprint style={{
             width: "100%", marginTop: 12, padding: isMobile ? "12px 14px" : "10px 14px",
             borderRadius: 10,
             border: `1px solid ${hideChecked ? th.acc : th.bdS}`,
@@ -3753,10 +4150,34 @@ function WeeklyPlannerView({
           </button>
         </div>
 
-        {/* Categorised checkable list */}
+        {/* Categorised checkable list — Phase C3 fade on scope change */}
+        <div key={"scope-" + shoppingScope} className="wp-scope-list">
         {shoppingList.total === 0 ? (
-          <div style={{ textAlign: "center", padding: 30, color: th.txM, fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic" }}>
-            No ingredients to aggregate yet.
+          <div style={{ textAlign: "center", padding: isMobile ? "36px 20px" : "44px 20px", background: th.bgC, border: `1px dashed ${th.bd}`, borderRadius: 14 }}>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, fontWeight: 700, color: th.tx, lineHeight: 1.2 }}>
+              {shoppingScope === "today" ? "Nothing planned for today" : shoppingScope === "inbox" ? "Inbox is empty" : shoppingScope === "week" ? "Nothing planned this week" : "No planned recipes"}
+            </div>
+            <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic", color: th.txM, marginTop: 6, lineHeight: 1.5 }}>
+              {shoppingScope !== "all" ? "Try a wider scope, or plan a recipe to fill this view." : "Plan a recipe to fill this view."}
+            </div>
+            {shoppingScope !== "all" && (
+              <div style={{ marginTop: 14, display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap" }}>
+                {shoppingScope !== "week" && (
+                  <button onClick={() => updateShoppingScope("week")} style={{
+                    padding: "8px 14px", borderRadius: 999,
+                    border: `1px solid ${th.bdS}`, background: th.bgH, color: th.tx,
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}>Switch to This week</button>
+                )}
+                {shoppingScope !== "all" && (
+                  <button onClick={() => updateShoppingScope("all")} style={{
+                    padding: "8px 14px", borderRadius: 999,
+                    border: `1px solid ${th.bdS}`, background: th.bgH, color: th.tx,
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  }}>See All planned</button>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           shoppingList.sortedCats.map(cat => {
@@ -3792,54 +4213,99 @@ function WeeklyPlannerView({
                     {visibleItems.map((item, idx) => {
                       const k = itemKey(item);
                       const isChecked = checkedItems.has(k);
+                      /* Phase A4 — recipes is now Map<recipeId, recipeName>. Cap
+                         visible chips at 2 to avoid wall-of-chips; show "+N more"
+                         tooltip with the full list. Each chip is a span styled
+                         as a button so we don't nest <button> elements; the
+                         row's outer wrapper is a div with an onClick on the
+                         label area only. */
+                      const recipeEntries = item.recipes ? Array.from(item.recipes.entries()) : [];
+                      const visibleChips = recipeEntries.slice(0, 2);
+                      const overflowChips = recipeEntries.slice(2);
                       return (
-                        <button key={k + idx} onClick={() => toggleChecked(k)} style={{
+                        <div key={k + idx} style={{
                           display: "flex", alignItems: "center", gap: 12, width: "100%",
                           padding: isMobile ? "12px 16px" : "11px 16px",
                           background: isChecked ? th.bgH : "transparent",
-                          border: "none", borderTop: `1px solid ${th.div}50`,
-                          textAlign: "left", cursor: "pointer", color: th.tx,
-                          transition: "background 0.15s",
+                          borderTop: `1px solid ${th.div}50`,
+                          color: th.tx, transition: "background 0.15s",
                         }}>
-                          <span style={{
-                            width: 22, height: 22, borderRadius: "50%",
-                            border: `2px solid ${isChecked ? th.ok : th.bd}`,
-                            background: isChecked ? th.ok : "transparent",
-                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                            transition: "background 0.15s, border-color 0.15s",
-                          }}>
-                            {isChecked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                          </span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                              fontFamily: "'Cormorant Garamond',serif",
-                              fontSize: isMobile ? 16 : 15, fontWeight: 500,
-                              color: isChecked ? th.txM : th.tx,
-                              textDecoration: isChecked ? "line-through" : "none",
-                              opacity: isChecked ? 0.7 : 1,
-                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            }}>{item.name}</div>
-                            {item.recipes && item.recipes.size > 0 && (
+                          <button onClick={() => toggleChecked(k)}
+                            aria-label={(isChecked ? "Uncheck " : "Check ") + item.name}
+                            aria-pressed={isChecked}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0,
+                              border: "none", background: "transparent", padding: 0,
+                              textAlign: "left", cursor: "pointer", color: "inherit",
+                            }}>
+                            <span style={{
+                              width: 22, height: 22, borderRadius: "50%",
+                              border: `2px solid ${isChecked ? th.ok : th.bd}`,
+                              background: isChecked ? th.ok : "transparent",
+                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                              transition: "background 0.15s, border-color 0.15s",
+                            }}>
+                              {isChecked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                            </span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{
-                                fontFamily: "'DM Sans',sans-serif", fontSize: 10,
-                                color: th.txD, marginTop: 2,
+                                fontFamily: "'Cormorant Garamond',serif",
+                                fontSize: isMobile ? 16 : 15, fontWeight: 500,
+                                color: isChecked ? th.txM : th.tx,
+                                textDecoration: isChecked ? "line-through" : "none",
+                                opacity: isChecked ? 0.7 : 1,
                                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                              }}>
-                                {Array.from(item.recipes).join(" · ")}
-                              </div>
-                            )}
-                          </div>
-                          <span style={{
-                            fontFamily: "'JetBrains Mono',monospace",
-                            fontSize: isMobile ? 13 : 12,
-                            color: isChecked ? th.txD : th.tx2, fontWeight: 600,
-                            textDecoration: isChecked ? "line-through" : "none",
-                            background: isChecked ? "transparent" : th.bgH,
-                            padding: "4px 10px", borderRadius: 999, flexShrink: 0,
-                          }}>
-                            {item.totalGrams > 0 ? fmtMass(item.totalGrams) : (item.fallback ? "approx" : "—")}
-                          </span>
-                        </button>
+                              }}>{item.name}</div>
+                            </div>
+                          </button>
+                          {recipeEntries.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", maxWidth: isMobile ? 160 : 240 }}>
+                              {visibleChips.map(([rid, rname]) => (
+                                <span key={rid} role="button" tabIndex={0}
+                                  onClick={(e) => { e.stopPropagation(); openRecipePreview(rid); }}
+                                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openRecipePreview(rid); } }}
+                                  title={"Open " + rname}
+                                  style={{
+                                    fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 600,
+                                    color: th.txM, background: th.bgH,
+                                    padding: "3px 8px", borderRadius: 999,
+                                    border: `1px solid ${th.div}`,
+                                    cursor: "pointer", whiteSpace: "nowrap",
+                                    maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", display: "inline-block",
+                                  }}>{rname}</span>
+                              ))}
+                              {overflowChips.length > 0 && (
+                                <span title={overflowChips.map(([_, n]) => n).join(" · ")} style={{
+                                  fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700,
+                                  color: th.txD, background: th.bgH,
+                                  padding: "3px 8px", borderRadius: 999,
+                                  border: `1px solid ${th.div}`,
+                                }}>+{overflowChips.length}</span>
+                              )}
+                            </div>
+                          )}
+                          {(() => {
+                            /* Phase A8 — prefer human-readable count for known
+                               count-purchased items ("≈2 medium onions"); fall
+                               back to grams. Grams shown in the title tooltip
+                               so users can still verify the weight. */
+                            const hQty = humanQty(item.name, item.totalGrams);
+                            const grams = item.totalGrams > 0 ? fmtMass(item.totalGrams) : null;
+                            const displayText = hQty || grams || (item.fallback ? "approx" : "—");
+                            const isPremiumUnit = !!hQty;
+                            return (
+                              <span title={hQty && grams ? grams : undefined} style={{
+                                fontFamily: isPremiumUnit ? "'DM Sans',sans-serif" : "'JetBrains Mono',monospace",
+                                fontSize: isPremiumUnit ? (isMobile ? 12 : 11) : (isMobile ? 13 : 12),
+                                color: isChecked ? th.txD : th.tx2, fontWeight: 600,
+                                textDecoration: isChecked ? "line-through" : "none",
+                                background: isChecked ? "transparent" : th.bgH,
+                                padding: "4px 10px", borderRadius: 999, flexShrink: 0,
+                                whiteSpace: "nowrap",
+                              }}>{displayText}</span>
+                            );
+                          })()}
+                        </div>
                       );
                     })}
                   </div>
@@ -3848,6 +4314,7 @@ function WeeklyPlannerView({
             );
           })
         )}
+        </div>
       </>
     );
   };
@@ -3859,7 +4326,7 @@ function WeeklyPlannerView({
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 17 : 16, fontWeight: 700, color: th.tx }}>Saved plans</div>
           <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 12, fontStyle: "italic", color: th.txM, marginTop: 2 }}>
-            {weekPlanSnapshots.length} snapshot{weekPlanSnapshots.length === 1 ? "" : "s"}
+            {weekPlanSnapshots.length} saved plan{weekPlanSnapshots.length === 1 ? "" : "s"}
           </div>
         </div>
         {totalSlots > 0 && (
@@ -3881,7 +4348,7 @@ function WeeklyPlannerView({
           </svg>
           <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 18 : 20, fontWeight: 700, color: th.tx, lineHeight: 1.2, letterSpacing: -0.3, marginBottom: 8 }}>No saved plans yet</div>
           <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 14, fontStyle: "italic", color: th.txM, maxWidth: 320, margin: "0 auto", lineHeight: 1.5 }}>
-            Snapshot a week you'd like to come back to — favourite menus, holidays, your go-to rotation.
+            Save a week you'd like to come back to — favourite menus, holidays, your go-to rotation.
           </div>
         </div>
       ) : (
@@ -3895,8 +4362,8 @@ function WeeklyPlannerView({
                     {snap.slots.length} recipe{snap.slots.length === 1 ? "" : "s"} · {fmtTime(snap.savedAt)}
                   </div>
                 </div>
-                <button onClick={() => { if (window.confirm("Delete this snapshot?")) wpDeleteSnapshot(snap.id); }}
-                  aria-label="Delete snapshot"
+                <button onClick={() => { if (window.confirm("Delete this saved plan?")) wpDeleteSnapshot(snap.id); }}
+                  aria-label="Delete saved plan"
                   style={{
                     width: 32, height: 32, borderRadius: "50%",
                     border: "none", background: "transparent", color: th.txM,
@@ -3906,7 +4373,7 @@ function WeeklyPlannerView({
                 </button>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => { if (window.confirm("Restore this snapshot? Current plan will be replaced.")) wpRestoreSnapshot(snap.id); }} style={{
+                <button onClick={() => { if (window.confirm("Restore this saved plan? Current plan will be replaced.")) wpRestoreSnapshot(snap.id); }} style={{
                   flex: 1, padding: "11px 12px", borderRadius: 10, border: "none",
                   background: th.pri, color: th.txOn,
                   fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
@@ -3943,7 +4410,7 @@ function WeeklyPlannerView({
           color: th.txM, margin: "4px 0 0",
         }}>
           {totalSlots === 0 ? "Compose your week, one recipe at a time." :
-            `${pool.length} in tray · ${scheduledCount} scheduled · ${weekPlanSnapshots.length} saved`}
+            `${pool.length} in Inbox · ${scheduledCount} scheduled · ${weekPlanSnapshots.length} saved`}
         </p>
 
         <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
@@ -3961,8 +4428,8 @@ function WeeklyPlannerView({
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
             Add Recipe
           </button>
-          {!isMobile && totalSlots > 0 && (
-            <button onClick={() => { if (window.confirm("Reset the active week plan?")) wpResetWeek(); }} style={{
+          {!isMobile && scheduledThisWeek > 0 && (
+            <button onClick={confirmResetVisibleWeek} style={{
               padding: "12px 18px", borderRadius: 999,
               background: "transparent", color: th.txM, border: `1px solid ${th.bdSt}`,
               fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 600, cursor: "pointer",
@@ -4037,9 +4504,9 @@ function WeeklyPlannerView({
       )}
 
       {/* Mobile-only footer reset on Plan tab */}
-      {isMobile && totalSlots > 0 && mobileTab === "plan" && (
+      {isMobile && scheduledThisWeek > 0 && mobileTab === "plan" && (
         <div style={{ marginTop: 22, textAlign: "center" }}>
-          <button onClick={() => { if (window.confirm("Reset the active week plan?")) wpResetWeek(); }} style={{
+          <button onClick={confirmResetVisibleWeek} style={{
             padding: "11px 18px", borderRadius: 999, background: "transparent", color: th.txM,
             border: `1px solid ${th.bdSt}`, fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 600, cursor: "pointer",
           }}>{"\u21BB"} Reset week</button>
@@ -4047,6 +4514,125 @@ function WeeklyPlannerView({
       )}
 
       {renderMoveSheet()}
+
+      {/* Phase D2 — Shopping mode (full-screen distraction-free view).
+         Big-touch checkboxes (56×56), single-tap interactions, screen-stay-
+         on hint via Wake Lock API. Exit via ← back. */}
+      {shoppingMode && (
+        <div style={{
+          position: "fixed", inset: 0, background: th.bg, zIndex: 2000,
+          display: "flex", flexDirection: "column",
+        }}>
+          {/* Top bar */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "12px 16px", borderBottom: `1px solid ${th.div}`,
+            background: th.glass, backdropFilter: "saturate(140%) blur(14px)",
+            WebkitBackdropFilter: "saturate(140%) blur(14px)",
+          }}>
+            <button onClick={() => setShoppingMode(false)} aria-label="Exit shopping mode" style={{
+              width: 44, height: 44, borderRadius: "50%",
+              border: `1px solid ${th.bdS}`, background: th.bgC, color: th.tx2,
+              cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700, color: th.tx, lineHeight: 1.1 }}>Shopping</div>
+              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 12, fontStyle: "italic", color: th.txM, marginTop: 2 }}>
+                {scopeLabel(shoppingScope).toLowerCase()} · {checkedCount} of {shoppingList.total} collected
+              </div>
+            </div>
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%",
+              background: progress === 1 ? `${th.ok}15` : `${th.acc}12`,
+              border: `2px solid ${progress === 1 ? th.ok : th.acc}`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'JetBrains Mono',monospace", fontSize: 14, fontWeight: 700,
+              color: progress === 1 ? th.ok : th.acc,
+            }}>{Math.round(progress * 100)}%</div>
+          </div>
+
+          {/* Scrollable list */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px 80px", WebkitOverflowScrolling: "touch" }}>
+            {shoppingList.sortedCats.map(cat => {
+              const items = shoppingList.byCategory[cat];
+              return (
+                <div key={cat} style={{ marginBottom: 18 }}>
+                  <div style={{
+                    fontFamily: "'DM Sans',sans-serif", fontSize: 11, fontWeight: 700,
+                    color: th.txM, textTransform: "uppercase", letterSpacing: 1.2,
+                    padding: "6px 12px 8px",
+                  }}>{cat}</div>
+                  {items.map(item => {
+                    const k = itemKey(item);
+                    const isChecked = checkedItems.has(k);
+                    const hQty = humanQty(item.name, item.totalGrams);
+                    const grams = item.totalGrams > 0 ? fmtMass(item.totalGrams) : null;
+                    const displayText = hQty || grams || (item.fallback ? "approx" : "—");
+                    return (
+                      <button key={k} onClick={() => toggleChecked(k)} aria-pressed={isChecked} style={{
+                        display: "flex", alignItems: "center", gap: 16, width: "100%",
+                        padding: "18px 16px",
+                        background: isChecked ? th.bgH : th.bgC,
+                        border: `1px solid ${isChecked ? th.div : th.bdS}`,
+                        borderRadius: 14, marginBottom: 8,
+                        cursor: "pointer", textAlign: "left",
+                        transition: "background 0.15s, border-color 0.15s",
+                      }}>
+                        <span style={{
+                          width: 36, height: 36, borderRadius: "50%",
+                          border: `2.5px solid ${isChecked ? th.ok : th.bd}`,
+                          background: isChecked ? th.ok : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                          transition: "background 0.15s, border-color 0.15s",
+                        }}>
+                          {isChecked && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontFamily: "'Cormorant Garamond',serif",
+                            fontSize: 19, fontWeight: 500,
+                            color: isChecked ? th.txM : th.tx,
+                            textDecoration: isChecked ? "line-through" : "none",
+                            opacity: isChecked ? 0.6 : 1,
+                            lineHeight: 1.2,
+                          }}>{item.name}</div>
+                          <div style={{
+                            fontFamily: hQty ? "'DM Sans',sans-serif" : "'JetBrains Mono',monospace",
+                            fontSize: 13, fontWeight: 600,
+                            color: isChecked ? th.txD : th.tx2,
+                            marginTop: 4,
+                            textDecoration: isChecked ? "line-through" : "none",
+                          }}>{displayText}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {shoppingList.total === 0 && (
+              <div style={{ textAlign: "center", padding: "60px 24px", color: th.txM, fontFamily: "'Cormorant Garamond',serif", fontSize: 16, fontStyle: "italic" }}>
+                Nothing to shop here.
+              </div>
+            )}
+          </div>
+
+          {/* Bottom progress bar */}
+          <div style={{
+            padding: "10px 16px 14px", borderTop: `1px solid ${th.div}`, background: th.bgC,
+          }}>
+            <div style={{ height: 8, background: th.bgH, borderRadius: 999, overflow: "hidden" }}>
+              <div style={{
+                width: `${progress * 100}%`, height: "100%",
+                background: progress === 1 ? th.ok : th.acc,
+                transition: "width 0.3s, background 0.3s",
+              }}/>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Multi-select toolbar (desktop only) ─────────────────────────
          Floats at the bottom-center of the viewport when one or more
@@ -4128,10 +4714,10 @@ function WeeklyPlannerView({
           }}>
             {isMobile && <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>}
             <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 19 : 18, fontWeight: 700, marginBottom: 4 }}>
-              {addTargetDate ? `Add to ${wpFormatDayShort(addTargetDate)}` : "Add to Tray"}
+              {addTargetDate ? `Add to ${wpFormatDayShort(addTargetDate)}` : "Add to Inbox"}
             </div>
             <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic", color: th.txM, marginTop: 0, marginBottom: 14 }}>
-              {addTargetDate ? `${wpFormatDayLong(addTargetDate)} — pick a recipe (you can move it later).` : "Recipes start in the tray, then drag (or tap) them onto days."}
+              {addTargetDate ? `${wpFormatDayLong(addTargetDate)} — pick a recipe (you can move it later).` : "Recipes start in the Inbox, then drag (or tap) them onto days."}
             </p>
             <label style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 10, fontWeight: 700, color: th.txM, textTransform: "uppercase", letterSpacing: 0.8, display: "block", marginBottom: 8 }}>Filter</label>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:14 }}>
@@ -4187,7 +4773,7 @@ function WeeklyPlannerView({
                 color: pickRecipeId ? th.txOn : th.txD,
                 fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 700,
                 cursor: pickRecipeId ? "pointer" : "not-allowed",
-              }}>{addTargetDate ? `Add to ${WP_DAY_SHORT[wpDayOfWeek(addTargetDate)]}` : "Add to Tray"}</button>
+              }}>{addTargetDate ? `Add to ${WP_DAY_SHORT[wpDayOfWeek(addTargetDate)]}` : "Add to Inbox"}</button>
             </div>
           </div>
         </div>
@@ -4210,7 +4796,7 @@ function WeeklyPlannerView({
             boxShadow: th.shO, color: th.tx,
           }}>
             {isMobile && <div style={{ width: 44, height: 4, background: th.div, borderRadius: 2, margin: "6px auto 14px" }}/>}
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 19 : 18, fontWeight: 700, marginBottom: 4 }}>Save plan snapshot</div>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: isMobile ? 19 : 18, fontWeight: 700, marginBottom: 4 }}>Save current plan</div>
             <p style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 13, fontStyle: "italic", color: th.txM, marginTop: 0, marginBottom: 14 }}>
               A frozen copy you can restore later.
             </p>
@@ -4469,7 +5055,7 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
   /* Add to plan: directly to tray, no modal */
   const addToPlan = (recipe) => {
     wpAddSlot(recipe);
-    setToast({ msg: `${recipe.name} added to Weekly Plan tray`, time: Date.now() });
+    setToast({ msg: `${recipe.name} added to Weekly Plan Inbox`, time: Date.now() });
     setTimeout(() => setToast(t2 => (t2 && Date.now() - t2.time >= 2400) ? null : t2), 2500);
   };
 
@@ -4790,7 +5376,7 @@ function BrV({ rs, sr, sSr, oO, oE, oC, oD, wpAddSlot, weekPlan, t, isAdmin, isM
                   {r.servings} {t.servingsUnit}
                 </span>
                 {isAdmin && !isMobile && <div style={{ display: "flex", gap: 2 }}>
-                  <button onClick={e => { e.stopPropagation(); addToPlan(r); }} title="Add to Weekly Plan tray"
+                  <button onClick={e => { e.stopPropagation(); addToPlan(r); }} title="Add to Weekly Plan Inbox"
                     style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: "transparent", color: th.txD, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s" }}
                     onMouseEnter={e => { e.currentTarget.style.background = th.bgH; e.currentTarget.style.color = th.sec; }}
                     onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = th.txD; }}
