@@ -2602,12 +2602,7 @@ function WeeklyPlannerView({
 
       if (cmd && k === "z" && undoToast) {
         e.preventDefault();
-        wpAddSlot(
-          { id: undoToast.slot.recipeId, name: undoToast.slot.name, servings: undoToast.slot.servings, category: undoToast.slot.category },
-          slotDate(undoToast.slot)
-        );
-        clearTimeout(undoToast.timer);
-        setUndoToast(null);
+        restoreUndo();
         return;
       }
       if (cmd) return; /* don't intercept other ⌘/Ctrl combos */
@@ -2682,8 +2677,30 @@ function WeeklyPlannerView({
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [weekOffset]);
 
+  /* undoToast shape — Phase A gap-closure: now supports bulk undo.
+       { slots: Slot[], timer: number, kind: "remove" | "bulk-clear" }
+     `slots` always carries the removed slot snapshots so a single restore
+     path works for both single-slot ⌘Z and "Clear plan in scope" bulk-clear. */
   const [undoToast, setUndoToast] = useState(null);
-  const undoRemove = (slot) => { wpRemoveSlot(slot.uid); if (undoToast) clearTimeout(undoToast.timer); const timer = setTimeout(() => setUndoToast(null), 5000); setUndoToast({ slot, timer }); };
+  const restoreUndo = () => {
+    if (!undoToast || !Array.isArray(undoToast.slots)) return;
+    /* Re-add in original order; wpAddSlot preserves slot identity but
+       allocates new uids. That's acceptable — uids are internal. */
+    undoToast.slots.forEach(s => {
+      wpAddSlot(
+        { id: s.recipeId, name: s.name, servings: s.servings, category: s.category },
+        slotDate(s)
+      );
+    });
+    clearTimeout(undoToast.timer);
+    setUndoToast(null);
+  };
+  const undoRemove = (slot) => {
+    wpRemoveSlot(slot.uid);
+    if (undoToast) clearTimeout(undoToast.timer);
+    const timer = setTimeout(() => setUndoToast(null), 5000);
+    setUndoToast({ slots: [slot], timer, kind: "remove" });
+  };
   const [checkedItems, setCheckedItems] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("mise_en_code_shopping_checked") || "[]")); }
     catch { return new Set(); }
@@ -3084,7 +3101,17 @@ function WeeklyPlannerView({
     const msg = n === 1
       ? "Remove the 1 planned recipe from this week? Your Inbox and other weeks are kept."
       : `Remove the ${n} planned recipes from this week? Your Inbox and other weeks are kept.`;
-    if (window.confirm(msg)) wpResetWeek(visibleWeekDates);
+    if (!window.confirm(msg)) return;
+    /* Gap-closure: snapshot before reset, post a bulk-undo toast so users
+       have a 5 s safety net. Mirror of confirmClearPlanInScope. */
+    const snapshot = (weekPlan.slots || []).filter(s => {
+      const d = slotDate(s);
+      return d && slotStatus(s) === "planned" && visibleWeekDates.indexOf(d) >= 0;
+    }).map(s => ({ ...s }));
+    wpResetWeek(visibleWeekDates);
+    if (undoToast) clearTimeout(undoToast.timer);
+    const timer = setTimeout(() => setUndoToast(null), 5000);
+    setUndoToast({ slots: snapshot, timer, kind: "bulk-clear" });
   };
 
   /* Shopping list helpers + derived stats */
@@ -3972,11 +3999,18 @@ function WeeklyPlannerView({
       ? `Remove the 1 planned recipe from "${label}"? Other scopes are kept.`
       : `Remove the ${n} planned recipes from "${label}"? Other scopes are kept.`;
     if (!window.confirm(msg)) return;
-    const removedUids = new Set(scoped.slots.map(s => s.uid));
+    /* Snapshot for undo before mutating. The toast gives users a 5 s window
+       to recover via the Undo button or ⌘Z. After timeout, the bulk-clear
+       becomes permanent (cloud-sync will replicate at that point). */
+    const snapshot = scoped.slots.map(s => ({ ...s }));
+    const removedUids = new Set(snapshot.map(s => s.uid));
     setWeekPlanAndPersist(plan => ({
       ...plan,
       slots: (plan.slots || []).filter(s => !removedUids.has(s.uid)),
     }));
+    if (undoToast) clearTimeout(undoToast.timer);
+    const timer = setTimeout(() => setUndoToast(null), 5000);
+    setUndoToast({ slots: snapshot, timer, kind: "bulk-clear" });
   };
 
   const renderShoppingSection = () => {
@@ -4693,7 +4727,14 @@ function WeeklyPlannerView({
           </div>
         );
       })()}
-      {undoToast && (<div style={{ position: "fixed", bottom: isMobile ? 80 : 24, left: "50%", transform: "translateX(-50%)", zIndex: 1600, background: "#1a1a2e", color: "#fff", padding: "12px 20px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 6px 24px rgba(0,0,0,0.3)", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500, maxWidth: "90vw" }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Removed</span><button onClick={() => { wpAddSlot({ id: undoToast.slot.recipeId, name: undoToast.slot.name, servings: undoToast.slot.servings, category: undoToast.slot.category }, slotDate(undoToast.slot)); clearTimeout(undoToast.timer); setUndoToast(null); }} style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#8B5CF6", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>Undo</button></div>)}
+      {/* Gap-closure: aria-live region so screen readers announce removes and
+         the bulk-clear count. role=status keeps it polite (not interruptive). */}
+      <div role="status" aria-live="polite" aria-atomic="true" style={{ position: "fixed", bottom: 0, left: 0, width: 0, height: 0, overflow: "hidden", pointerEvents: "none" }}>
+        {undoToast && (undoToast.kind === "bulk-clear"
+          ? `${undoToast.slots.length} recipe${undoToast.slots.length === 1 ? "" : "s"} removed. Press Undo to restore.`
+          : `Removed ${(undoToast.slots[0] && undoToast.slots[0].name) || "recipe"}. Press Undo to restore.`)}
+      </div>
+      {undoToast && (<div style={{ position: "fixed", bottom: isMobile ? 80 : 24, left: "50%", transform: "translateX(-50%)", zIndex: 1600, background: "#1a1a2e", color: "#fff", padding: "12px 20px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12, boxShadow: "0 6px 24px rgba(0,0,0,0.3)", fontFamily: "'DM Sans',sans-serif", fontSize: 13, fontWeight: 500, maxWidth: "90vw" }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{undoToast.kind === "bulk-clear" ? `${undoToast.slots.length} recipe${undoToast.slots.length === 1 ? "" : "s"} removed` : "Removed"}</span><button onClick={restoreUndo} style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#8B5CF6", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>Undo</button></div>)}
 
       {/* Add recipe modal — bottom-sheet on mobile, centered card on desktop */}
       {showAdd && (
