@@ -8375,6 +8375,32 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
     const connMap = {};
     [...mainPreps,...modules].forEach(prep => { flattenGrid(prep.grid||[[]]).forEach(step => { (step.connectsTo||[]).forEach(ct => { if(!connMap[step.id])connMap[step.id]=[]; let tln=""; for(const ln of allLanes){if(ln.steps.some(s=>s.id===ct.targetId)){tln=ln.laneName;break;}} connMap[step.id].push({targetId:ct.targetId,laneName:tln}); }); }); });
 
+    /* ── Step-flow analytics ──
+       globalStepNum: map<stepId → 1-based int> in natural reading order
+         (allLanes walk: lane-by-lane, top-to-bottom within each lane).
+       incomingMap: invert connMap so each step knows what feeds INTO it.
+       laneByStepId: stepId → lane object (for color + name lookups).
+       This gives the chef a clear "After step N · Lane X" signal on any
+       step that has cross-lane dependencies, and a "Then step M · Lane Y"
+       signal on any step that feeds elsewhere. Both wire to the existing
+       connectsTo data — no schema change. */
+    const globalStepNum = {};
+    const laneByStepId = {};
+    let _globalIdx = 1;
+    allLanes.forEach(ln => {
+      ln.steps.forEach(s => {
+        globalStepNum[s.id] = _globalIdx++;
+        laneByStepId[s.id] = ln;
+      });
+    });
+    const incomingMap = {};
+    Object.entries(connMap).forEach(([fromId, conns]) => {
+      conns.forEach(c => {
+        if (!incomingMap[c.targetId]) incomingMap[c.targetId] = [];
+        incomingMap[c.targetId].push({ fromId, fromLaneName: (laneByStepId[fromId]||{}).laneName, fromColor: (laneByStepId[fromId]||{}).color });
+      });
+    });
+
     if (mStep) {
       let found=null; for(const ln of allLanes){const s=ln.steps.find(s=>s.id===mStep);if(s){found={step:s,lane:ln};break;}}
       if (!found){setMStep(null);return null;}
@@ -8458,25 +8484,73 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
             <div style={{position:"relative",paddingLeft:18,marginBottom:4}}>
               <div style={{position:"absolute",left:4,top:0,bottom:0,width:1.5,background:lane.color+"30",borderRadius:1}}/>
               {lane.steps.map((step,si)=>{const ings2=(step.ingredients||[]).filter(i=>!i.isPrepRef&&!i.multiplierRef);const conns=connMap[step.id]||[];
+                const gNum = globalStepNum[step.id];
+                /* Cross-lane incoming only — within-lane order is implicit
+                   from top-to-bottom. Show "After N · Lane Name" with the
+                   source lane's color so the chef knows where to look. */
+                const incoming = (incomingMap[step.id] || []).filter(inc => inc.fromLaneName !== lane.laneName);
+                /* Cross-lane outgoing only. */
+                const outgoing = conns.filter(c => c.laneName && c.laneName !== lane.laneName);
                 return<div key={step.id}>
-                  <div onClick={()=>enterStep(step.id)} role="button" tabIndex={0} style={{position:"relative",padding:"12px 32px 12px 12px",borderRadius:10,border:`0.5px solid ${TH().bdS}`,background:TH().bgC,marginBottom:conns.length?4:6,cursor:"pointer",minHeight:48}}>
-                    <div style={{position:"absolute",left:-18,top:"50%",transform:"translateY(-50%)",width:10,height:10,borderRadius:"50%",border:`2px solid ${lane.color}`,background:TH().bg}}/>
-                    <div style={{fontSize:13,fontWeight:600,marginBottom:5}}>{step.title||`Step ${si+1}`}</div>
-                    {ings2.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:4}}>
-                      {ings2.slice(0,4).map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<span key={ing.uid} style={{fontSize:11,padding:"3px 8px",borderRadius:6,border:`0.5px solid ${TH().bdS}`,color:TH().txM}}>{fi?.n||ing.ingredientId}</span>;})}
-                      {ings2.length>4&&<span style={{fontSize:11,padding:"3px 6px",color:TH().txD}}>+{ings2.length-4}</span>}
+                  <div onClick={()=>enterStep(step.id)} role="button" tabIndex={0} style={{position:"relative",padding:"12px 36px 12px 14px",borderRadius:12,border:`0.5px solid ${TH().bdS}`,background:TH().bgC,marginBottom:outgoing.length?4:6,cursor:"pointer",minHeight:48,boxShadow:`0 1px 0 ${TH().bdS}40`}}>
+                    {/* Timeline anchor — lane-color outer ring + lane-color filled inner dot
+                        signals the lane at-a-glance even without the legend. */}
+                    <div style={{position:"absolute",left:-18,top:"50%",transform:"translateY(-50%)",width:10,height:10,borderRadius:"50%",border:`2px solid ${lane.color}`,background:lane.color,boxShadow:`0 0 0 2px ${TH().bg}`}}/>
+                    {/* Step number badge — global, lab-grade monospace. */}
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                      <span aria-label={`Step ${gNum}`} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,padding:"2px 7px",borderRadius:5,background:lane.color+"18",color:lane.color,minWidth:22,textAlign:"center",letterSpacing:-0.3,flexShrink:0}}>{gNum}</span>
+                      <div style={{fontSize:14,fontWeight:600,lineHeight:1.2,color:TH().tx,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{step.title||`Step ${si+1}`}</div>
+                    </div>
+                    {/* Cross-lane incoming dependency — "After N · Lane Name". */}
+                    {incoming.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>
+                      {incoming.slice(0,2).map((inc,ii)=>{const ig=globalStepNum[inc.fromId];return<span key={ii} style={{display:"inline-flex",alignItems:"center",gap:4,fontFamily:"'DM Sans',sans-serif",fontSize:10,color:TH().txM,padding:"2px 7px",borderRadius:999,background:(inc.fromColor||TH().acc)+"12",border:`0.5px solid ${(inc.fromColor||TH().acc)}30`}}>
+                        <span aria-hidden="true">↦</span>
+                        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,fontWeight:700,color:inc.fromColor||TH().acc}}>{ig}</span>
+                        <span style={{color:TH().tx2}}>{inc.fromLaneName}</span>
+                      </span>;})}
+                      {incoming.length>2&&<span style={{fontSize:10,color:TH().txD}}>+{incoming.length-2}</span>}
                     </div>}
-                    {(step.processes||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-                      {step.processes.map(proc=><span key={proc} style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:TH().proc+"10",border:`0.5px solid ${TH().proc}25`,color:TH().proc}}>{trN(proc,"proc",lang)}</span>)}
+                    {ings2.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:5}}>
+                      {ings2.slice(0,4).map(ing=>{
+                        const fi=flat.find(f=>f.id===ing.ingredientId);
+                        /* Lab-grade quantity rendering. Eggs use whole counts;
+                           large grams/ml auto-collapse to kg/L; trace amounts
+                           labeled as such; otherwise one-decimal precision. */
+                        let qtyLabel = "";
+                        if (ing.qty != null && ing.qty > 0) {
+                          const scaled = ing.qty * sv / base;
+                          if (ing.unit === "ea") qtyLabel = Math.round(scaled) + " ea";
+                          else if (scaled < 0.1) qtyLabel = "trace";
+                          else if (scaled >= 1000 && (ing.unit === "g" || ing.unit === "ml")) qtyLabel = (Math.round(scaled / 100) / 10) + " " + (ing.unit === "g" ? "kg" : "L");
+                          else qtyLabel = (Math.round(scaled * 10) / 10) + " " + (ing.unit || "");
+                        }
+                        /* Typography upgrade: qty in JetBrains Mono, semibold,
+                           TH().tx (strongest); name in DM Sans, TH().tx2;
+                           both 12 px for tap-distance legibility. */
+                        return <span key={ing.uid} style={{fontSize:12,padding:"4px 9px",borderRadius:7,background:TH().bgH,border:`0.5px solid ${TH().bdS}`,color:TH().tx2,display:"inline-flex",alignItems:"baseline",gap:6,maxWidth:"100%",overflow:"hidden",lineHeight:1.3}}>
+                          {qtyLabel && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,fontWeight:700,color:TH().tx,flexShrink:0,letterSpacing:-0.3}}>{qtyLabel}</span>}
+                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif",fontWeight:500}}>{fi?.n||ing.ingredientId}</span>
+                        </span>;
+                      })}
+                      {ings2.length>4&&<span style={{fontSize:11,padding:"3px 6px",color:TH().txD,alignSelf:"center"}}>+{ings2.length-4}</span>}
                     </div>}
-                    {step.tool&&<div style={{fontSize:11,color:TH().txD,marginTop:5}}>{step.tool.icon||"🔧"} {step.tool.name}</div>}
-                    <div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:TH().txD}}>
+                    {(step.processes||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:step.tool?5:0}}>
+                      {step.processes.map(proc=><span key={proc} style={{fontSize:11,padding:"3px 9px",borderRadius:6,background:TH().proc+"12",border:`0.5px solid ${TH().proc}25`,color:TH().proc,fontWeight:600,letterSpacing:0.2,textTransform:"uppercase"}}>{trN(proc,"proc",lang)}</span>)}
+                    </div>}
+                    {step.tool&&<div style={{fontSize:11,color:TH().txD,marginTop:2,display:"flex",alignItems:"center",gap:4}}><span aria-hidden="true">{step.tool.icon||"🔧"}</span>{step.tool.name}</div>}
+                    <div style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:TH().txD}} aria-hidden="true">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
                   </div>
-                  {conns.map((c,ci3)=><div key={ci3} style={{display:"flex",alignItems:"center",gap:6,padding:"0 0 4px 4px",marginBottom:4}}>
-                    <span style={{fontSize:9,color:TH().acc}}>↘ connects to</span><div style={{flex:1,height:0,borderTop:`1px dashed ${TH().acc}40`}}/><span style={{fontSize:9,color:TH().acc,fontWeight:600}}>{c.laneName}</span>
-                  </div>)}
+                  {/* Cross-lane outgoing connector — "Then N · Lane Name" with
+                     the target lane's color. Stronger than the prior dashed line. */}
+                  {outgoing.map((c,ci3)=>{const tg=globalStepNum[c.targetId];const tlane=laneByStepId[c.targetId];const tColor=(tlane&&tlane.color)||TH().acc;return<div key={ci3} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 4px 4px 16px",marginBottom:4}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={tColor} strokeWidth="2.2" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                    <span style={{fontFamily:"'DM Sans',sans-serif",fontSize:10,color:TH().txM,letterSpacing:0.3,textTransform:"uppercase",fontWeight:600}}>then</span>
+                    <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:700,color:tColor,padding:"1px 6px",borderRadius:4,background:tColor+"14"}}>{tg}</span>
+                    <span style={{fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().tx2,fontWeight:500}}>{c.laneName}</span>
+                    <div style={{flex:1,height:0,borderTop:`1px dashed ${tColor}30`}}/>
+                  </div>;})}
                 </div>;})}
             </div>
           </div>)}
@@ -9128,14 +9202,16 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
     {/* Grid with measured overlay */}
     <div style={{ display:"flex",justifyContent:"center" }}>
       <div ref={gridRef} style={{ position:"relative",width:totalW }}>
-        {/* SVG overlay — matches gridRef's own box exactly so layout coords align */}
+        {/* Phase A — SVG overlay polished for legibility (drop-shadow halo so
+           arrows read behind cards), anti-aliasing, and 7×7 arrowheads. */}
         {layout && <svg
+          data-conn="view"
           width={bounds.w || totalW}
           height={bounds.h || 0}
-          style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:1,overflow:"visible" }}>
+          style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:1,overflow:"visible",filter:"drop-shadow(0 0 2px " + (typeof document !== "undefined" && document.body.classList.contains("dark-mode") ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.85)") + ")" }}>
           <defs>
-            <marker id={`arr-${prep.id}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill={LANE_COL}/></marker>
-            <marker id={`arrH-${prep.id}`} markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#6BAF6E"/></marker>
+            <marker id={`arr-${prep.id}`} markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L9,4.5 L0,9 Z" fill={LANE_COL}/></marker>
+            <marker id={`arrH-${prep.id}`} markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3.5 L0,7 Z" fill="#6BAF6E"/></marker>
           </defs>
 
           {/* Vertical arrows: leave source perpendicularly from its bottom, arrive at target's
@@ -9154,7 +9230,7 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
             const d = aligned
               ? `M ${x1} ${y1} L ${x2} ${y2}`
               : `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`;
-            return <path key={`v-${i}`} d={d} stroke={LANE_COL} strokeWidth="2" fill="none" markerEnd={`url(#arr-${prep.id})`}/>;
+            return <path key={`v-${i}`} d={d} stroke={LANE_COL} strokeWidth="2" fill="none" markerEnd={`url(#arr-${prep.id})`} strokeLinecap="round" strokeLinejoin="round" shapeRendering="geometricPrecision"/>;
           })}
 
           {/* Horizontal connectors between lanes (Visio-style elbow routing
@@ -9238,7 +9314,7 @@ function GanttPrep({ prep, rc, allIngs, flat, tLib, sv, base, t, asModule, ancho
                 d = `M ${xA} ${yA} L ${xA2} ${yA} L ${xA2} ${routeY} L ${xB2} ${routeY} L ${xB2} ${yB} L ${xB} ${yB}`;
               }
             }
-            return <path key={`h-${i}`} d={d} stroke="#6BAF6E" strokeWidth="2" fill="none" markerEnd={`url(#arrH-${prep.id})`}/>;
+            return <path key={`h-${i}`} d={d} stroke="#6BAF6E" strokeWidth="2" fill="none" markerEnd={`url(#arrH-${prep.id})`} strokeLinecap="round" strokeLinejoin="round" shapeRendering="geometricPrecision"/>;
           })}
 
         </svg>}
@@ -9410,7 +9486,179 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
   const [editorBounds, setEditorBounds] = useState({ w: 0, h: 0 });
 
   const r = recipe;
-  const up = fn => { const c = JSON.parse(JSON.stringify(r)); fn(c); sR(c); };
+
+  /* ─── Phase B1 — Undo/redo stack + Phase B7 — error boundary ───────────
+     Every mutation deep-clones the pre-edit recipe and pushes it onto
+     history.past. Within a single text-input burst we coalesce (one undo
+     step per field, not per keystroke) via a lastActionKey token.
+     Per-tab in-memory ring buffer, cap 50 (~1 MB worst case on a 10-step
+     recipe). The fn() call is wrapped in try/catch so a throwing
+     mutation rolls back rather than corrupting the recipe in place. */
+  const historyRef = useRef({ past: [], future: [], lastKey: null, lastTs: 0 });
+  const COALESCE_MS = 600;
+  const HISTORY_CAP = 50;
+  const [histLen, setHistLen] = useState({ past: 0, future: 0 });
+  const up = (fn, opts) => {
+    const actionKey = opts && opts.actionKey ? opts.actionKey : null;
+    const prevSnapshot = JSON.parse(JSON.stringify(r));
+    const c = JSON.parse(JSON.stringify(r));
+    try {
+      fn(c);
+    } catch (err) {
+      console.error("EdV up() mutation threw:", err);
+      if (typeof flashSaved === "function") flashSaved("⚠ Edit rejected");
+      return;
+    }
+    /* Coalesce text-burst edits — same actionKey within COALESCE_MS just
+       updates the most recent state without pushing a new history entry. */
+    const h = historyRef.current;
+    const now = Date.now();
+    const sameBurst = actionKey && h.lastKey === actionKey && (now - h.lastTs) < COALESCE_MS;
+    if (!sameBurst) {
+      h.past.push(prevSnapshot);
+      if (h.past.length > HISTORY_CAP) h.past.shift();
+      h.future = [];
+    }
+    h.lastKey = actionKey;
+    h.lastTs = now;
+    sR(c);
+    setHistLen({ past: h.past.length, future: h.future.length });
+  };
+  const undo = () => {
+    const h = historyRef.current;
+    if (h.past.length === 0) return;
+    const prev = h.past.pop();
+    h.future.push(JSON.parse(JSON.stringify(r)));
+    h.lastKey = null;
+    sR(prev);
+    setHistLen({ past: h.past.length, future: h.future.length });
+  };
+  const redo = () => {
+    const h = historyRef.current;
+    if (h.future.length === 0) return;
+    const next = h.future.pop();
+    h.past.push(JSON.parse(JSON.stringify(r)));
+    h.lastKey = null;
+    sR(next);
+    setHistLen({ past: h.past.length, future: h.future.length });
+  };
+
+  /* ─── Phase B2 — Dirty indicator ────────────────────────────────────────
+     Snapshot the version hash of the recipe at mount (or after a save).
+     Live recipeVersionHash(r) compared against that baseline = dirty.
+     The baseline updates when the user clicks Save or Publish, so the
+     dot clears after a successful save. */
+  const savedHashRef = useRef(recipeVersionHash(recipe));
+  const [savedHashState, setSavedHashState] = useState(savedHashRef.current);
+  useEffect(() => {
+    /* When the parent passes a new recipe id (user navigated to a
+       different recipe), re-baseline the hash. */
+    savedHashRef.current = recipeVersionHash(recipe);
+    setSavedHashState(savedHashRef.current);
+    /* And reset undo history — undo across recipes makes no sense. */
+    historyRef.current = { past: [], future: [], lastKey: null, lastTs: 0 };
+    setHistLen({ past: 0, future: 0 });
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [recipe.id]);
+  const liveHash = recipeVersionHash(r);
+  const isDirty = liveHash !== savedHashState;
+  const markSaved = () => {
+    const h = recipeVersionHash(r);
+    savedHashRef.current = h;
+    setSavedHashState(h);
+  };
+
+  /* ─── Phase B4 — Crash recovery ─────────────────────────────────────────
+     Auto-snapshot the live recipe state into localStorage every 5 s
+     while dirty. On a different mount with a snapshot that's newer than
+     the saved baseline, surface a banner offering Restore / Discard. */
+  const RECOVERY_KEY = "mise_en_code_edit_recovery";
+  const [recoveryOffer, setRecoveryOffer] = useState(null); /* { snapshot, ts } | null */
+  useEffect(() => {
+    /* On mount: check for a recovery snapshot for this recipe. */
+    try {
+      const raw = localStorage.getItem(RECOVERY_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (data && data.recipeId === recipe.id && data.snapshot && data.ts) {
+        /* Only offer recovery if the snapshot differs from the current state. */
+        if (recipeVersionHash(data.snapshot) !== recipeVersionHash(recipe)) {
+          setRecoveryOffer(data);
+        } else {
+          localStorage.removeItem(RECOVERY_KEY);
+        }
+      }
+    } catch {}
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [recipe.id]);
+  useEffect(() => {
+    if (!isDirty) return;
+    const id = setTimeout(() => {
+      try {
+        localStorage.setItem(RECOVERY_KEY, JSON.stringify({
+          recipeId: recipe.id, snapshot: r, ts: Date.now()
+        }));
+      } catch {}
+    }, 5000);
+    return () => clearTimeout(id);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [r, isDirty]);
+  const restoreRecovery = () => {
+    if (!recoveryOffer) return;
+    sR(recoveryOffer.snapshot);
+    historyRef.current = { past: [], future: [], lastKey: null, lastTs: 0 };
+    setHistLen({ past: 0, future: 0 });
+    setRecoveryOffer(null);
+    try { localStorage.removeItem(RECOVERY_KEY); } catch {}
+  };
+  const discardRecovery = () => {
+    setRecoveryOffer(null);
+    try { localStorage.removeItem(RECOVERY_KEY); } catch {}
+  };
+
+  /* ─── Phase B8 — Tab-lock ────────────────────────────────────────────────
+     Detect when the same recipe is open in another tab. Write a token at
+     mount; check + warn on conflict. Token expires after 30 s of no
+     refresh so a crashed tab doesn't permanently lock the recipe. */
+  const LOCK_KEY = "mise_en_code_edit_lock";
+  const tabIdRef = useRef(Math.random().toString(36).slice(2, 10));
+  const [tabConflict, setTabConflict] = useState(false);
+  useEffect(() => {
+    const writeLock = () => {
+      try {
+        const raw = localStorage.getItem(LOCK_KEY);
+        const existing = raw ? JSON.parse(raw) : null;
+        const now = Date.now();
+        if (existing && existing.recipeId === recipe.id
+            && existing.tabId !== tabIdRef.current
+            && (now - existing.ts) < 30000) {
+          /* Another tab is actively editing this recipe. */
+          setTabConflict(true);
+          return;
+        }
+        localStorage.setItem(LOCK_KEY, JSON.stringify({
+          recipeId: recipe.id, tabId: tabIdRef.current, ts: now
+        }));
+        if (tabConflict) setTabConflict(false);
+      } catch {}
+    };
+    writeLock();
+    const id = setInterval(writeLock, 10000);
+    return () => {
+      clearInterval(id);
+      /* Clear the lock on unmount IF it's ours. */
+      try {
+        const raw = localStorage.getItem(LOCK_KEY);
+        if (raw) {
+          const existing = JSON.parse(raw);
+          if (existing && existing.tabId === tabIdRef.current) {
+            localStorage.removeItem(LOCK_KEY);
+          }
+        }
+      } catch {}
+    };
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [recipe.id]);
   const prep = r.preparations[aPI];
   const grid = prep?.grid || [[null]];
   const { rows, lanes } = gridDims(grid);
@@ -9519,13 +9767,23 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
         if (ing.isEgg) { sEM({ row, lane, ingredient:ing }); }
         else if (ing.isChilli) { sChM({ row, lane, ingredient:ing }); }
         else {
-          g[row][lane].ingredients.push({ uid:uid(), ingredientId:ing.id, name:ing.n, qty:1, unit:ing.u||"g" });
+          /* Phase C9 — pre-fill qty/unit from the user's last value for this
+             ingredient (persisted in localStorage by upI()). Falls back to
+             qty:1 / unit:ing.u || "g" when no memory exists. */
+          let defaultQty = 1, defaultUnit = ing.u || "g";
+          try {
+            const map = JSON.parse(localStorage.getItem("mise_en_code_ingredient_defaults") || "{}");
+            const rem = map[ing.id];
+            if (rem) {
+              if (rem.qty != null) defaultQty = rem.qty;
+              if (rem.unit) defaultUnit = rem.unit;
+            }
+          } catch {}
+          g[row][lane].ingredients.push({ uid:uid(), ingredientId:ing.id, name:ing.n, qty: defaultQty, unit: defaultUnit });
           /* Historically we popped a modal asking which tool to use, but this
              felt like an interruption. The user just wants the ingredient to
              land. Tools can be added separately by drag-dropping onto the
-             step. (The ToolSuggestModal machinery is kept in place in case we
-             later decide to re-enable it on a different trigger, e.g. an
-             opt-in "suggest tool" button on each step.) */
+             step. */
         }
       } else if (drag.type === "prep") {
         const p = drag.data;
@@ -9657,7 +9915,26 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
   const rmStep = (row, lane) => up(c => { c.preparations[aPI].grid[row][lane] = null; });
   const updStep = (row, lane, fn) => up(c => { const s = c.preparations[aPI].grid[row][lane]; if (s) fn(s); });
   const rmI = (row, lane, uI) => updStep(row, lane, s => { s.ingredients = s.ingredients.filter(i => i.uid !== uI); });
-  const upI = (row, lane, uI, f, v) => updStep(row, lane, s => { const i = s.ingredients.find(x => x.uid === uI); if (i) i[f] = v; });
+  const upI = (row, lane, uI, f, v) => {
+    updStep(row, lane, s => { const i = s.ingredients.find(x => x.uid === uI); if (i) i[f] = v; });
+    /* Phase C9 — Remember last qty/unit per ingredient. When the user edits
+       qty or unit, persist the value keyed by ingredientId. The next time
+       that ingredient is dropped onto a step, we pre-fill from this map. */
+    if (f === "qty" || f === "unit") {
+      try {
+        const ing = (r.preparations[aPI].grid[row][lane] || {}).ingredients?.find(x => x.uid === uI);
+        if (ing && ing.ingredientId) {
+          const raw = localStorage.getItem("mise_en_code_ingredient_defaults") || "{}";
+          const map = JSON.parse(raw);
+          const entry = map[ing.ingredientId] || {};
+          if (f === "qty") entry.qty = v;
+          if (f === "unit") entry.unit = v;
+          map[ing.ingredientId] = entry;
+          localStorage.setItem("mise_en_code_ingredient_defaults", JSON.stringify(map));
+        }
+      } catch {}
+    }
+  };
   const rmProc = (row, lane, p) => updStep(row, lane, s => { s.processes = (s.processes||[]).filter(x => x !== p); });
   const rmTool = (row, lane) => updStep(row, lane, s => { s.tool = null; });
   const upTO = (row, lane, no) => updStep(row, lane, s => { if (s.tool) s.tool.opts = no; });
@@ -9691,6 +9968,37 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
     if (!pendingConnect) { setPendingConnect({ stepId: step.id, side }); return; }
     /* If clicking the same source handle again, cancel */
     if (pendingConnect.stepId === step.id && pendingConnect.side === side) { setPendingConnect(null); return; }
+    /* Phase A9 — Cycle / self-loop prevention.
+       Self-loop = source === target. Cycle = target's outgoing chain
+       reaches source. Walk connectsTo from target via BFS. Reject with
+       a flash + tooltip without writing the data model. */
+    if (pendingConnect.stepId === step.id) {
+      flashSaved("⚠ Self-loops aren't allowed");
+      setPendingConnect(null);
+      return;
+    }
+    /* Build a step-id → outgoing-targetIds map from the live grid (any prep,
+       so cross-prep chains are checked too). */
+    const outMap = new Map();
+    (r.preparations || []).forEach(p => (p.grid || []).forEach(row => (row || []).forEach(s => {
+      if (s) outMap.set(s.id, (s.connectsTo || []).map(c => c.targetId));
+    })));
+    /* BFS from target step, checking if we ever reach pendingConnect.stepId. */
+    const seen = new Set();
+    const queue = [step.id];
+    let reachesSource = false;
+    while (queue.length) {
+      const cur = queue.shift();
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      if (cur === pendingConnect.stepId) { reachesSource = true; break; }
+      (outMap.get(cur) || []).forEach(n => queue.push(n));
+    }
+    if (reachesSource) {
+      flashSaved("⚠ Cycle rejected — would create a loop");
+      setPendingConnect(null);
+      return;
+    }
     /* Otherwise: create connector from pending.source to this step */
     up(c => {
       const grid = c.preparations[aPI].grid;
@@ -9703,7 +10011,7 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
           src.connectsTo.push({ targetId: step.id, side: pendingConnect.side });
         }
       }
-    });
+    }, { actionKey: "addConnector" });
     setPendingConnect(null);
   };
 
@@ -9726,6 +10034,124 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
     sSM(false);
     sAPI(r.preparations.length);
   };
+
+  /* Phase B1+D1 — Keyboard shortcuts. ⌘Z / ⌘⇧Z = undo / redo,
+     ⌘S = save draft, ⌘⇧S = publish. Skips when typing in input/textarea
+     except for ⌘S which always intercepts (browser default = save page). */
+  const saveDraft = () => {
+    const c = JSON.parse(JSON.stringify(r));
+    c.status = "draft";
+    sR(c);
+    oS(c, false);
+    markSaved();
+    flashSaved(t.savedDraft || "Draft saved");
+  };
+
+  /* Phase B6 — Validate before publish.
+     Walks every step, surfaces three classes of issue:
+       block — must fix (empty step title; dangling connectsTo target)
+       warn  — should fix (process requires temp/time but none set; lane is empty)
+       info  — fyi (step has no incoming AND no outgoing connector)
+     Returns { block: [], warn: [], info: [] } where each entry is
+       { msg, prepIdx, row, lane, stepId }. */
+  const [publishGate, setPublishGate] = useState(null); /* null | { issues, override } */
+  const validateForPublish = (recipe) => {
+    const block = [], warn = [], info = [];
+    const allStepIds = new Set();
+    (recipe.preparations || []).forEach(p => (p.grid || []).forEach(row => (row || []).forEach(s => { if (s) allStepIds.add(s.id); })));
+    (recipe.preparations || []).forEach((p, prepIdx) => {
+      const grid = p.grid || [];
+      grid.forEach((row, rowIdx) => {
+        (row || []).forEach((step, laneIdx) => {
+          if (!step) return;
+          if (!(step.title || "").trim()) block.push({ msg: "Step has no title", prepIdx, row: rowIdx, lane: laneIdx, stepId: step.id, prepName: p.name });
+          (step.connectsTo || []).forEach(c => {
+            if (!allStepIds.has(c.targetId)) block.push({ msg: "Connector points to a deleted step", prepIdx, row: rowIdx, lane: laneIdx, stepId: step.id, prepName: p.name });
+          });
+          (step.processes || []).forEach(proc => {
+            const pp = (step.processParams && (step.processParams[proc] || step.processParams)) || {};
+            const opts = (step.tool && step.tool.opts) || {};
+            const needsTime = /simmer|boil|deep-fry|shallow-fry|pan-fry|bake|roast|sous-vide|steam|rest|reduce|reduction|caramelize|saute|stew/i.test(proc);
+            const needsTemp = /simmer|boil|deep-fry|shallow-fry|pan-fry|bake|roast|sous-vide|steam|caramelize|saute|stew/i.test(proc);
+            const hasTime = pp._time != null || opts._time != null;
+            const hasTemp = pp._temp != null || opts._temp != null;
+            if (needsTime && !hasTime) warn.push({ msg: `Process "${proc}" usually needs a time`, prepIdx, row: rowIdx, lane: laneIdx, stepId: step.id, prepName: p.name });
+            if (needsTemp && !hasTemp) warn.push({ msg: `Process "${proc}" usually needs a temperature`, prepIdx, row: rowIdx, lane: laneIdx, stepId: step.id, prepName: p.name });
+          });
+        });
+      });
+    });
+    return { block, warn, info };
+  };
+  const publishNow = (overridden) => {
+    const issues = validateForPublish(r);
+    const hasIssues = issues.block.length + issues.warn.length > 0;
+    if (hasIssues && !overridden) {
+      setPublishGate({ issues, override: false });
+      return;
+    }
+    const c = JSON.parse(JSON.stringify(r));
+    c.status = "published";
+    sR(c);
+    markSaved();
+    setPublishGate(null);
+    /* Phase B9 — Stronger publish feedback. Hero-style 4 s message via
+       flashSaved so the act of publishing feels durable. */
+    flashSaved("✓ Published — recipe is now live");
+    oS(c, true);
+  };
+  const jumpToPublishIssue = (issue) => {
+    /* Switch to the issue's prep tab and try to scroll its cell into view. */
+    if (typeof issue.prepIdx === "number") sAPI(issue.prepIdx);
+    setTimeout(() => {
+      const el = editorCellRefs.current && editorCellRefs.current[issue.stepId];
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    setPublishGate(null);
+  };
+  /* Phase D2 — Cheat sheet overlay (toggled by ?). */
+  const [showCheatSheet, setShowCheatSheet] = useState(false);
+  useEffect(() => {
+    const onKey = (e) => {
+      const cmd = e.metaKey || e.ctrlKey;
+      const k = (e.key || "").toLowerCase();
+      const inField = e.target && /input|textarea|select/i.test(e.target.tagName || "");
+
+      /* Phase D2 — ? opens cheat-sheet (no cmd, no field). Esc closes it. */
+      if (e.key === "?" && !inField && !cmd) {
+        e.preventDefault();
+        setShowCheatSheet(true);
+        return;
+      }
+      if (e.key === "Escape" && showCheatSheet) {
+        setShowCheatSheet(false);
+        return;
+      }
+
+      /* Phase D1 — [ / ] = prev / next preparation tab. */
+      if (!cmd && !inField && (e.key === "[" || e.key === "]")) {
+        if ((r.preparations || []).length <= 1) return;
+        e.preventDefault();
+        const delta = e.key === "]" ? 1 : -1;
+        sAPI(((aPI + delta) % r.preparations.length + r.preparations.length) % r.preparations.length);
+        return;
+      }
+
+      if (!cmd) return;
+      if (k === "z") {
+        if (inField) return;
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      } else if (k === "s") {
+        /* Always intercept — browser's "save page" is never wanted here. */
+        e.preventDefault();
+        if (e.shiftKey) publishNow(); else saveDraft();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [r, histLen, aPI, showCheatSheet]);
 
   const STEP_W = 250;
   const STEP_GAP = 28;
@@ -9765,6 +10191,37 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
             </button>
             {oCL.__preps && <div style={{ padding:"0 6px 4px" }}>{r.preparations.map(p => <div key={p.id} draggable onDragStart={()=>dSP(p)} onDragEnd={()=>sD(null)} style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 7px",borderRadius:6,cursor:"grab",marginBottom:2,background:TH().bgC,border:`1px solid ${PC}20`,fontFamily:"'DM Sans',sans-serif",fontSize:11 }}><Ic.G/><Ic.Lk/>{p.name||"Untitled"}</div>)}</div>}
           </div>)}
+          {/* Phase C6 — Modules panel.
+             Lists every isModule:true preparation across all recipes. Click
+             to import as a new preparation in the current recipe (deep-clone
+             with fresh uids via impMod). Filtered out: this recipe's own
+             modules (no value in re-importing). Search via the existing
+             ingredient search input — matches module name + source recipe. */}
+          {(() => {
+            const otherModules = (mL || []).filter(m => m.recipeId !== r.id);
+            if (otherModules.length === 0) return null;
+            const q = (sI || "").trim().toLowerCase();
+            const filtered = q ? otherModules.filter(m => (m.name||"").toLowerCase().includes(q) || (m.fromRecipe||"").toLowerCase().includes(q)) : otherModules;
+            return (<div>
+              <button onClick={()=>sOCL(p=>({...p,__modules:!p.__modules}))} style={{ width:"100%",border:"none",background:"transparent",padding:"5px 10px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:"#5A5048" }}>
+                <div style={{ width:8,height:8,borderRadius:2,background:"#7A5BAD" }}/>
+                {t.modulesPanel || "Modules"}
+                <span style={{ marginLeft:"auto",fontSize:10,color:TH().txD }}>{filtered.length}</span>
+                <Ic.Ch d={oCL.__modules?"up":"down"}/>
+              </button>
+              {oCL.__modules && <div style={{ padding:"0 6px 4px" }}>
+                {filtered.length === 0 && q && (
+                  <div style={{ padding:"6px 8px",fontFamily:"'Cormorant Garamond',serif",fontSize:11,fontStyle:"italic",color:TH().txD }}>No modules match "{q}"</div>
+                )}
+                {filtered.map(m => (
+                  <button key={`${m.recipeId}::${m.id}`} onClick={() => impMod(m)} title={`Import "${m.name}" from ${m.fromRecipe}`} style={{ display:"flex",flexDirection:"column",alignItems:"flex-start",gap:1,padding:"5px 7px",borderRadius:6,cursor:"pointer",marginBottom:2,background:TH().bgC,border:`1px solid #7A5BAD20`,width:"100%",textAlign:"left" }}>
+                    <span style={{ display:"flex",alignItems:"center",gap:4,fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:600,color:TH().tx }}><Ic.Mo/>{m.name || "Untitled"}</span>
+                    <span style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:10,fontStyle:"italic",color:TH().txD,paddingLeft:14 }}>from {m.fromRecipe}</span>
+                  </button>
+                ))}
+              </div>}
+            </div>);
+          })()}
           {Object.entries(filtLib).map(([cat,items]) => { const col = CC[cat] || "#888"; return (<div key={cat}>
             <button onClick={()=>sOCL(p=>({...p,[cat]:!p[cat]}))} style={{ width:"100%",border:"none",background:"transparent",padding:"5px 10px",display:"flex",alignItems:"center",gap:5,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,color:"#5A5048" }}>
               <div style={{ width:8,height:8,borderRadius:2,background:col }}/>{trCat(cat,lang)}<span style={{ marginLeft:"auto",fontSize:10,color:TH().txD }}>{items.length}</span><Ic.Ch d={oCL[cat]?"up":"down"}/>
@@ -9784,10 +10241,26 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
 
       {/* CENTER */}
       <div style={{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" }}>
-        <div style={{ padding:"8px 20px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",gap:10,background:TH().bgC,flexWrap:"wrap" }}>
-          <input value={r.name} onChange={e=>up(c=>{c.name=e.target.value;})} style={{ ...S.inp(),fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:600,border:"none",background:"transparent",padding:"3px 0",flex:"1 1 180px" }} placeholder={t.recipeName}/>
+        {/* Phase B3 — Sticky recipe-context header.
+            Breadcrumb + name + servings + dirty dot + Undo/Redo + Save/Publish.
+            Carries the entire save discipline in one always-visible bar. */}
+        <div style={{ padding:"6px 20px 4px",borderBottom:`1px solid ${TH().div}`,background:TH().bgC,position:"sticky",top:0,zIndex:60,display:"flex",alignItems:"center",gap:8,fontFamily:"'DM Sans',sans-serif",fontSize:10,color:TH().txM,letterSpacing:0.4,textTransform:"uppercase",fontWeight:600 }}>
+          <button onClick={oC} aria-label="Back to recipes" style={{ border:"none",background:"transparent",cursor:"pointer",color:TH().txM,fontFamily:"inherit",fontSize:"inherit",fontWeight:"inherit",letterSpacing:"inherit",textTransform:"inherit",padding:0 }}>{t.recipes||"Recipes"}</button>
+          <span style={{ color:TH().txD }}>{"›"}</span>
+          <span style={{ color:TH().tx2,maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.name||t.recipeName||"Untitled"}</span>
+          <span style={{ color:TH().txD }}>{"›"}</span>
+          <span style={{ color:TH().tx }}>{t.edit||"Edit"}</span>
+          <span style={{ flex:1 }}/>
+          {tabConflict && <span title="Another tab is editing this recipe" style={{ display:"inline-flex",alignItems:"center",gap:4,padding:"2px 8px",borderRadius:999,background:"#D45B5B14",color:"#D45B5B",fontSize:9,letterSpacing:0.4 }}>{"⚠"} multi-tab edit</span>}
+          {/* Phase D2 — discoverability for the cheat sheet. */}
+          <button onClick={() => setShowCheatSheet(true)} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (press ?)" style={{ border:"none",background:"transparent",color:TH().txM,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:600,padding:"2px 7px",borderRadius:4,letterSpacing:0,textTransform:"none" }}>?</button>
+        </div>
+        <div style={{ padding:"8px 20px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",gap:10,background:TH().bgC,flexWrap:"wrap",position:"sticky",top:22,zIndex:55 }}>
+          <input value={r.name} onChange={e=>up(c=>{c.name=e.target.value;},{actionKey:"edit:name"})} style={{ ...S.inp(),fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:600,border:"none",background:"transparent",padding:"3px 0",flex:"1 1 180px" }} placeholder={t.recipeName}/>
+          {/* Phase B2 — dirty dot. 6 px circle next to the name, accent color. */}
+          {isDirty && <span title="Unsaved changes" aria-label="Unsaved changes" style={{ width:6,height:6,borderRadius:"50%",background:"#C49A6C",flexShrink:0 }}/>}
           <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().txD }}>{t.serves}</span>
-          <input type="number" min="1" value={r.servings} onChange={e=>{const v=Math.max(1,+e.target.value);up(c=>{c.servings=v;});sES(v);}} style={{ ...S.inp(),width:46,textAlign:"center",padding:"4px",fontSize:13,fontWeight:600 }}/>
+          <input type="number" min="1" value={r.servings} onChange={e=>{const v=Math.max(1,+e.target.value);up(c=>{c.servings=v;},{actionKey:"edit:servings"});sES(v);}} style={{ ...S.inp(),width:46,textAlign:"center",padding:"4px",fontSize:13,fontWeight:600 }}/>
           <div style={{ display:"flex",alignItems:"center",gap:4,marginLeft:4,padding:"2px 8px",background:TH().bgH,borderRadius:8 }}>
             <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,color:TH().txM }}>preview:</span>
             <button onClick={()=>sES(Math.max(1,editServ-1))} style={{ border:"none",background:"transparent",cursor:"pointer",color:TH().tx2 }}>&minus;</button>
@@ -9795,9 +10268,15 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
             <button onClick={()=>sES(editServ+1)} style={{ border:"none",background:"transparent",cursor:"pointer",color:TH().tx2 }}>+</button>
           </div>
           <div style={{ width:1,height:20,background:TH().div }}/>
+          {/* Phase B1 — Undo / Redo buttons. Disabled-state when history is empty. */}
+          <button onClick={undo} disabled={histLen.past === 0} aria-label="Undo" title="Undo (⌘ Z)" style={{ ...S.btn("outline"),fontSize:11,padding:"5px 10px",opacity: histLen.past === 0 ? 0.4 : 1,cursor: histLen.past === 0 ? "not-allowed" : "pointer" }}>{"↶"}</button>
+          <button onClick={redo} disabled={histLen.future === 0} aria-label="Redo" title="Redo (⌘⇧ Z)" style={{ ...S.btn("outline"),fontSize:11,padding:"5px 10px",opacity: histLen.future === 0 ? 0.4 : 1,cursor: histLen.future === 0 ? "not-allowed" : "pointer" }}>{"↷"}</button>
           <button onClick={oC} style={{ ...S.btn("outline"),fontSize:11,padding:"5px 12px" }}>{t.cancel}</button>
-          <button onClick={()=>{const c=JSON.parse(JSON.stringify(r));c.status="draft";sR(c);oS(c, false);flashSaved(t.savedDraft||"Draft saved");}} style={{ ...S.btn("outline"),display:"flex",alignItems:"center",gap:4,fontSize:11,padding:"5px 12px",borderColor:"#C49A6C",color:"#C49A6C" }} title="Save as draft"><Ic.Sv/>{t.save}</button>
-          <button onClick={()=>{const c=JSON.parse(JSON.stringify(r));c.status="published";sR(c);oS(c, true);}} style={{ ...S.btn("primary"),background:"#6BAF6E",borderColor:"#6BAF6E",display:"flex",alignItems:"center",gap:4,fontSize:11,padding:"5px 12px" }} title="Publish recipe"><Ic.Pu/>{t.publish}</button>
+          {/* Phase B2 — Save reflects dirty state. */}
+          <button onClick={()=>{const c=JSON.parse(JSON.stringify(r));c.status="draft";sR(c);oS(c, false);markSaved();flashSaved(t.savedDraft||"Draft saved");}} style={{ ...S.btn("outline"),display:"flex",alignItems:"center",gap:4,fontSize:11,padding:"5px 12px",borderColor:isDirty?"#C49A6C":TH().bdS,color:isDirty?"#C49A6C":TH().txM,background:isDirty?"#C49A6C12":"transparent" }} title="Save as draft"><Ic.Sv/>{t.save}</button>
+          {/* Phase B6 + B9 — Publish runs through validation gate; on success
+             the hero flashSaved confirms via the toast bus. */}
+          <button onClick={() => publishNow(false)} style={{ ...S.btn("primary"),background:"#6BAF6E",borderColor:"#6BAF6E",display:"flex",alignItems:"center",gap:4,fontSize:11,padding:"5px 12px" }} title="Publish recipe"><Ic.Pu/>{t.publish}</button>
         </div>
         <div style={{ padding:"8px 20px",borderBottom:`1px solid ${TH().div}`,background:TH().bgH }}>
           <input value={r.description} onChange={e=>up(c=>{c.description=e.target.value;})} style={{ ...S.inp(),marginBottom:4,fontSize:12 }} placeholder={t.recipeDesc}/>
@@ -9827,6 +10306,92 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
             })}
           </div>
         </div>
+
+        {/* Phase D2 — Keyboard cheat sheet (press ? to open, Esc to close). */}
+        {showCheatSheet && (
+          <div role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={() => setShowCheatSheet(false)} style={{ position:"fixed",inset:0,background:"rgba(20,18,16,0.55)",backdropFilter:"blur(6px)",zIndex:1700,display:"flex",alignItems:"center",justifyContent:"center",padding:24 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background:TH().bgC,color:TH().tx,borderRadius:16,maxWidth:560,width:"100%",maxHeight:"82vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:TH().shO,border:`1px solid ${TH().bdS}` }}>
+              <div style={{ padding:"18px 22px 12px",borderBottom:`1px solid ${TH().div}`,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                <div>
+                  <div style={{ fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,letterSpacing:-0.3,color:TH().tx }}>Keyboard shortcuts</div>
+                  <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:13,fontStyle:"italic",color:TH().txM,marginTop:2 }}>Press <kbd style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:11,padding:"1px 6px",borderRadius:3,background:TH().bgH,border:`1px solid ${TH().bdS}` }}>Esc</kbd> to close</div>
+                </div>
+                <button onClick={() => setShowCheatSheet(false)} aria-label="Close" style={{ background:"transparent",border:"none",cursor:"pointer",color:TH().txM,fontSize:22,padding:6,lineHeight:1 }}>{"×"}</button>
+              </div>
+              <div style={{ padding:"14px 22px 22px",overflowY:"auto",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 24px" }}>
+                {[
+                  ["⌘ S", "Save as draft"],
+                  ["⌘ ⇧ S", "Publish recipe"],
+                  ["⌘ Z", "Undo"],
+                  ["⌘ ⇧ Z", "Redo"],
+                  ["[", "Previous preparation"],
+                  ["]", "Next preparation"],
+                  ["Esc", "Cancel pending connector"],
+                  ["?", "Open this cheat sheet"],
+                ].map(([k, label]) => (
+                  <div key={k} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"8px 0",borderBottom:`1px solid ${TH().div}` }}>
+                    <kbd style={{ fontFamily:"'JetBrains Mono',monospace",fontSize:11,fontWeight:600,padding:"3px 8px",borderRadius:5,background:TH().bgH,border:`1px solid ${TH().bdS}`,color:TH().tx,minWidth:60,textAlign:"center" }}>{k}</kbd>
+                    <span style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,color:TH().tx2,flex:1,textAlign:"right" }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Phase B6 — Publish-gate sheet. Renders when validateForPublish
+            surfaces issues; the user can Jump to issue, override + publish
+            anyway (if no blockers), or cancel. */}
+        {publishGate && (() => {
+          const allIssues = [...publishGate.issues.block.map(i => ({...i, kind:"block"})), ...publishGate.issues.warn.map(i => ({...i, kind:"warn"}))];
+          const hasBlockers = publishGate.issues.block.length > 0;
+          return (
+            <div role="dialog" aria-modal="true" aria-label="Publish issues" onClick={() => setPublishGate(null)} style={{ position:"fixed",inset:0,background:"rgba(20,18,16,0.55)",backdropFilter:"blur(6px)",zIndex:1700,display:"flex",alignItems:"center",justifyContent:"center",padding:24 }}>
+              <div onClick={e => e.stopPropagation()} style={{ background:TH().bgC,color:TH().tx,borderRadius:16,maxWidth:520,width:"100%",maxHeight:"82vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:TH().shO,border:`1px solid ${TH().bdS}` }}>
+                <div style={{ padding:"18px 22px 12px",borderBottom:`1px solid ${TH().div}` }}>
+                  <div style={{ fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,letterSpacing:-0.3,color:TH().tx,marginBottom:4 }}>Review before publishing</div>
+                  <div style={{ fontFamily:"'Cormorant Garamond',serif",fontSize:14,fontStyle:"italic",color:TH().txM }}>
+                    {hasBlockers
+                      ? `${publishGate.issues.block.length} blocker${publishGate.issues.block.length===1?"":"s"} must be fixed`
+                      : `${publishGate.issues.warn.length} warning${publishGate.issues.warn.length===1?"":"s"} — you can override`}
+                  </div>
+                </div>
+                <div style={{ flex:1,overflowY:"auto",padding:"10px 22px" }}>
+                  {allIssues.map((iss, idx) => (
+                    <button key={idx} onClick={() => jumpToPublishIssue(iss)} style={{ display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",borderRadius:8,border:"none",background:idx % 2 ? "transparent" : TH().bgH,textAlign:"left",cursor:"pointer",marginBottom:4 }}>
+                      <span style={{ fontSize:10,fontWeight:700,letterSpacing:0.6,textTransform:"uppercase",padding:"2px 8px",borderRadius:4,background: iss.kind === "block" ? "#D45B5B20" : "#E8B84B20",color: iss.kind === "block" ? "#D45B5B" : "#A0772E",flexShrink:0,fontFamily:"'DM Sans',sans-serif" }}>{iss.kind === "block" ? "Blocker" : "Warning"}</span>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:TH().tx,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{iss.msg}</div>
+                        <div style={{ fontFamily:"'DM Sans',sans-serif",fontSize:10,color:TH().txD,marginTop:2 }}>{iss.prepName || "Preparation"} · row {iss.row + 1}, lane {iss.lane + 1}</div>
+                      </div>
+                      <span aria-hidden="true" style={{ color:TH().txD }}>{"→"}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ padding:"12px 22px",borderTop:`1px solid ${TH().div}`,display:"flex",alignItems:"center",gap:10 }}>
+                  <button onClick={() => setPublishGate(null)} style={{ ...S.btn("outline"),fontSize:12,padding:"7px 14px" }}>{t.cancel || "Cancel"}</button>
+                  {!hasBlockers && (
+                    <button onClick={() => publishNow(true)} style={{ ...S.btn("primary"),background:"#6BAF6E",borderColor:"#6BAF6E",fontSize:12,padding:"7px 14px",marginLeft:"auto" }}>Publish anyway</button>
+                  )}
+                  {hasBlockers && <span style={{ marginLeft:"auto",fontFamily:"'DM Sans',sans-serif",fontSize:11,color:TH().txM,fontStyle:"italic" }}>Fix the blockers, then try again.</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Phase B4 — Crash-recovery banner. Renders when a newer-than-current
+            snapshot was found in localStorage on mount. */}
+        {recoveryOffer && (
+          <div role="status" aria-live="polite" style={{ padding:"10px 20px",background:"#E8B84B14",borderBottom:`1px solid #E8B84B40`,display:"flex",alignItems:"center",gap:12,fontFamily:"'DM Sans',sans-serif",fontSize:12 }}>
+            <span style={{ fontSize:14,flexShrink:0 }} aria-hidden="true">{"⟲"}</span>
+            <span style={{ flex:1,minWidth:0,color:TH().tx2 }}>
+              Recover unsaved edits from <strong style={{ color:TH().tx }}>{(() => { try { const mins = Math.max(1, Math.round((Date.now() - recoveryOffer.ts) / 60000)); return mins === 1 ? "1 minute ago" : mins + " minutes ago"; } catch { return "earlier"; } })()}</strong>?
+            </span>
+            <button onClick={restoreRecovery} style={{ ...S.btn("primary"),background:"#E8B84B",borderColor:"#E8B84B",color:"#FFF",fontSize:11,padding:"5px 14px" }}>Restore</button>
+            <button onClick={discardRecovery} style={{ ...S.btn("outline"),fontSize:11,padding:"5px 14px",borderColor:TH().bdS,color:TH().txM }}>Discard</button>
+          </div>
+        )}
 
         <div style={{ display:"flex",flex:1,overflow:"hidden" }}>
           {/* Prep tabs */}
@@ -9909,14 +10474,25 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
               </div>
 
               {/* Grid rows wrapped with a measurement container + SVG overlay for live connectors */}
-              <div ref={editorGridRef} style={{ position:"relative" }}>
-                {/* Live connector overlay — shows horizontal inter-lane arrows the user has created */}
+              <div ref={editorGridRef} style={{ position:"relative",overflow:"visible" }}>
+                {/* Phase A — Live connector overlay.
+                   A1: filter drop-shadow lets arrows read clearly even when
+                       they pass behind step cards. Light/dark variants flip
+                       via body.dark-mode CSS rule on data-conn attribute.
+                   A2: arrowheads scaled 4×4 → 7×7 for visibility.
+                   A3: shape-rendering / stroke-linecap / stroke-linejoin for
+                       crisp anti-aliased paths.
+                   A6: color tokens — connector green + pending amber + cycle
+                       red live in TOKENS_EDITOR map (line ~9300). */}
                 {editorLayout && editorHorizConnectors.length > 0 && <svg
+                  data-conn="editor"
                   width={editorBounds.w || 0}
                   height={editorBounds.h || 0}
-                  style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:1,overflow:"visible" }}>
+                  style={{ position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:1,overflow:"visible",filter:"drop-shadow(0 0 2px " + (document.body.classList.contains("dark-mode") ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.85)") + ")" }}>
                   <defs>
-                    <marker id={`arrHE-${prep.id}`} markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#6BAF6E"/></marker>
+                    <marker id={`arrHE-${prep.id}`} markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto" markerUnits="userSpaceOnUse">
+                      <path d="M0,0 L7,3.5 L0,7 Z" fill="#6BAF6E"/>
+                    </marker>
                   </defs>
                   {editorHorizConnectors.map(({ from, to, side }, i) => {
                     const a = editorLayout[from], b = editorLayout[to];
@@ -9987,7 +10563,7 @@ function EdV({ r:recipe, sR, oS, oC, mL, t, lib, tl:tLib, pl, aCI, aCT, aCP, fav
                         d = `M ${xA} ${yA} L ${xA2} ${yA} L ${xA2} ${routeY} L ${xB2} ${routeY} L ${xB2} ${yB} L ${xB} ${yB}`;
                       }
                     }
-                    return <path key={`eh-${i}`} d={d} stroke="#6BAF6E" strokeWidth="2" fill="none" markerEnd={`url(#arrHE-${prep.id})`}/>;
+                    return <path key={`eh-${i}`} d={d} stroke="#6BAF6E" strokeWidth="2" fill="none" markerEnd={`url(#arrHE-${prep.id})`} strokeLinecap="round" strokeLinejoin="round" shapeRendering="geometricPrecision"/>;
                   })}
                 </svg>}
 
@@ -10242,25 +10818,44 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
     };
   };
 
+  /* Phase E3 — Step completeness indicator.
+     gray = no title (missing the bare-minimum); amber = has title but
+     is missing ingredients or processes; green = title + at least one
+     ingredient + at least one process + a tool when required by the
+     processes. The completeness state surfaces as a 3 px left-border on
+     the card (subtle by default), expanding on hover with a tooltip. */
+  const stepHasTitle = !!(step.title || "").trim();
+  const stepHasIngs = (step.ingredients || []).length > 0;
+  const stepHasProc = (step.processes || []).length > 0;
+  const stepHasTool = !!step.tool;
+  const completeness =
+    !stepHasTitle ? { color:"#B0A898", label:"Add a title" } :
+    !stepHasIngs || !stepHasProc ? { color:"#E8B84B", label:"Add ingredients and a process" } :
+    !stepHasTool ? { color:"#7AAE6F", label:"Tool optional — add for precision" } :
+    { color:"#6BAF6E", label:"Complete" };
+
   return (<div draggable onDragStart={onDragStart} onDragEnd={onDragEnd}
-    style={{ background:TH().bgC,borderRadius:10,border:`1.5px solid ${TH().bd}`,padding:"8px 10px",cursor:"grab",boxShadow:TH().sh,position:"relative" }}>
+    title={completeness.label}
+    style={{ background:TH().bgC,borderRadius:10,border:`1.5px solid ${TH().bd}`,borderLeft:`3px solid ${completeness.color}`,padding:"8px 10px",cursor:"grab",boxShadow:TH().sh,position:"relative",transition:"border-color 0.15s, box-shadow 0.15s" }}>
 
     {/* Connector handles: always shown unless at the edge of the lane grid */}
     {showLeft && <button
       onClick={(e)=>{e.stopPropagation();onConnHandleClick("left");}}
       onMouseDown={e=>e.stopPropagation()} /* prevent drag init */
+      aria-label={hasConnLeft ? "Remove left connector" : (pendingConnect && pendingConnect.stepId!==step.id ? "Set as connector target (left)" : "Start connector from left")}
       title={hasConnLeft ? t.connectLeft+" \u2022 click to remove" : (pendingConnect && pendingConnect.stepId!==step.id ? "Click to set as target" : t.connectLeft)}
       style={handleStyle("left", hasConnLeft)}><Ic.ArL/></button>}
     {showRight && <button
       onClick={(e)=>{e.stopPropagation();onConnHandleClick("right");}}
       onMouseDown={e=>e.stopPropagation()}
+      aria-label={hasConnRight ? "Remove right connector" : (pendingConnect && pendingConnect.stepId!==step.id ? "Set as connector target (right)" : "Start connector from right")}
       title={hasConnRight ? t.connectRight+" \u2022 click to remove" : (pendingConnect && pendingConnect.stepId!==step.id ? "Click to set as target" : t.connectRight)}
       style={handleStyle("right", hasConnRight)}><Ic.ArR/></button>}
 
     <div style={{ display:"flex",alignItems:"center",gap:5,marginBottom:4 }}>
       <Ic.G/>
       <input value={step.title||""} onChange={e=>onUpdate(s=>{s.title=e.target.value;})} placeholder={t.stepTitle} style={{ ...S.inp(),fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600,padding:"3px 6px",flex:1 }}/>
-      <button onClick={onRemove} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#D45B5B",padding:2 }}><Ic.X/></button>
+      <button onClick={onRemove} aria-label="Delete step" title="Delete step" style={{ background:"transparent",border:"none",cursor:"pointer",color:"#D45B5B",padding:2 }}><Ic.X/></button>
     </div>
     <textarea value={step.instruction||""} onChange={e=>onUpdate(s=>{s.instruction=e.target.value;})} placeholder={t.stepDesc} rows={2} style={{ ...S.inp(),resize:"vertical",lineHeight:1.4,fontSize:12,color:TH().tx2,padding:"4px 6px",marginBottom:4 }}/>
 
@@ -10326,9 +10921,9 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
 
               if (r.param === "time") {
                 const curUnit = pP._timeUnit || "min";
-                return <div key={r.param} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"3px 6px",borderRadius:5,background:bgCol,border:`1px solid ${borderCol}`,fontFamily:"'DM Sans',sans-serif",fontSize:11 }}>
+                return <div key={r.param} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} title={isReq ? `${label} is required for this process` : `${label} is optional`} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"3px 6px",borderRadius:5,background:bgCol,border:`1px solid ${borderCol}`,fontFamily:"'DM Sans',sans-serif",fontSize:11 }}>
                   <span>{icon}</span>
-                  <span style={{ fontWeight:600,color:labelCol }}>{label}</span>
+                  <span style={{ fontWeight:600,color:labelCol }}>{label}{isReq && <span aria-label="required" style={{ color:"#D45B5B",marginLeft:2 }}>*</span>}</span>
                   <input type="number" min="0" step="any"
                     value={pP._time != null && pP._time > 0 ? pP._time : ""}
                     onMouseDown={e=>e.stopPropagation()}
@@ -10345,9 +10940,9 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
               }
 
               if (r.param === "temp") {
-                return <div key={r.param} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"3px 6px",borderRadius:5,background:bgCol,border:`1px solid ${borderCol}`,fontFamily:"'DM Sans',sans-serif",fontSize:11 }}>
+                return <div key={r.param} onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} title={isReq ? `${label} is required for this process` : `${label} is optional`} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"3px 6px",borderRadius:5,background:bgCol,border:`1px solid ${borderCol}`,fontFamily:"'DM Sans',sans-serif",fontSize:11 }}>
                   <span>{icon}</span>
-                  <span style={{ fontWeight:600,color:labelCol }}>{label}</span>
+                  <span style={{ fontWeight:600,color:labelCol }}>{label}{isReq && <span aria-label="required" style={{ color:"#D45B5B",marginLeft:2 }}>*</span>}</span>
                   <input type="number" min="0" step="1"
                     value={pP._temp != null && pP._temp > 0 ? pP._temp : ""}
                     onMouseDown={e=>e.stopPropagation()}
@@ -10380,7 +10975,7 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
         if (ing.isPrepRef) { const rp = rc.preparations.find(p => p.id === ing.prepId); return (
           <div key={ing.uid} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"3px 7px",borderRadius:6,background:PC+"14",border:`1px solid ${PC}28`,fontSize:12 }}>
             <Ic.Lk/><span style={{ fontWeight:600,color:PC }}>{rp?.name||ing.name}</span>
-            <button onClick={()=>onRemoveIng(ing.uid)} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:13 }}>&times;</button>
+            <button onClick={()=>onRemoveIng(ing.uid)} aria-label="Remove ingredient" title="Remove ingredient" style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:13 }}>&times;</button>
           </div>);}
         const cat = flat.find(fi=>fi.id===ing.ingredientId)?.category || "";
         const col = CC[cat] || "#8A7E72";
@@ -10399,7 +10994,7 @@ function StepEditor({ step, row, lane, lanes, rc, tLib, flat, allIngs, aU, t, ed
           </>}
           {ing.isEgg && <select value={ing.eggSize||"Large"} onChange={e=>onUpdateIng(ing.uid,"eggSize",e.target.value)} style={{ ...S.sel(),padding:"2px 3px",fontSize:11 }}>{Object.keys(ED).map(s=><option key={s} value={s}>{s}</option>)}</select>}
           {ing.isChilli && <select value={ing.chilliHeat||"md"} onChange={e=>onUpdateIng(ing.uid,"chilliHeat",e.target.value)} title={t.chilliHeatHint} style={{ ...S.sel(),padding:"2px 3px",fontSize:11 }}>{Object.entries(CH).map(([k,d])=><option key={k} value={k}>{d.label}</option>)}</select>}
-          <button onClick={()=>onRemoveIng(ing.uid)} style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:13 }}>&times;</button>
+          <button onClick={()=>onRemoveIng(ing.uid)} aria-label="Remove ingredient" title="Remove ingredient" style={{ background:"transparent",border:"none",cursor:"pointer",color:"#C0B0A0",padding:0,fontSize:13 }}>&times;</button>
         </div>);
       })}
     </div>
