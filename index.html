@@ -7405,6 +7405,87 @@ function mcFlattenRows(blocks) {
   return rows;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   PER-RECIPE STEP ORDER OVERRIDES (chef-authored sequencing)
+   ─────────────────────────────────────────────────────────────────────
+   Keyed by recipe id. Value is a linear list of step numbers (from the
+   derived row-major walk) in the order the chef wants the MC card to
+   read. Steps NOT in the list keep their original position appended at
+   the end. Numbers refer to the derived `step.number` field (1-based).
+
+   Source: explicit per-recipe sequences supplied by the recipe author. */
+const STEP_ORDER_OVERRIDES = {
+  /* Pavlova — final assembly steps reordered (8→10→12 before 9,11,13) */
+  "nposlv3u": [1,2,3,4,5,6,7,8,10,12,9,11,13],
+  /* Carbonara — Guanciale lane first (1,2,4,9), then Pasta (3,5,6,7),
+     then Egg & Cheese (8,10,11,12,13,14) */
+  "ylk9siou": [1,2,4,9,3,5,6,7,8,10,11,12,13,14],
+  /* Cazuela en cocción lenta — Sofrito (1,4,5), Carne (2,3,6,9), Pot (7,8,
+     10,11,12,13,14), Pebre module (15,16) */
+  "127vfi2s": [1,4,5,2,3,6,9,7,8,10,11,12,13,14,15,16],
+  /* Bún Bò Xào — Beef marinade (1,3,6), Noodles (2,4,7), Veg (5,8),
+     Cook (9), Plate (10,11), Sauce + finish (12,13,14,15) */
+  "w0gjfq3j": [1,3,6,2,4,7,5,8,9,10,11,12,13,14,15],
+  /* Crème Brûlée — Infusion lane (1,3,5), Oven (2), Egg base (4),
+     Combine + bake + finish (6,7,8,9,10,11) */
+  "1cp93np5": [1,3,5,2,4,6,7,8,9,10,11],
+  /* Base de Pino Chileno — Sofrito (1,2,4,6), Meat (3,5), Finish (7,8) */
+  "6dq2yc23": [1,2,4,6,3,5,7,8],
+  /* Carbonada — Mise en place (11,12,13), Sear + add sofrito (1,2,4),
+     Vegetables (5,6,7), Liquid + finish (3,8,9,10).
+     Step 4 ("Incorporar el Sofrito, agua") follows step 2 (sear) so the
+     liquid hits the meat right after browning. */
+  "8rr06994": [11,12,13,1,2,4,5,6,7,3,8,9,10],
+  /* Empanada — Filling (1,5), Dough (10,12,14,16,11,13,15,17),
+     Assembly (2,3,4,6,7), Bake (8,9) */
+  "w3rd5xgp": [1,5,10,12,14,16,11,13,15,17,2,3,4,6,7,8,9],
+  /* Pie de Limón — Crust (1,2,4,6,7,8), Filling (3), Curd (5,9),
+     Meringue (10,12,13), Assembly (11,14), Bake (15) */
+  "oy0ijfbr": [1,2,4,6,7,8,3,5,9,10,12,13,11,14,15],
+  /* Merengue Italiano — Whites (1,2), Syrup (3,5), Combine (4,6) */
+  "em9oulro": [1,2,3,5,4,6],
+};
+/* Apply the override to a list of items that each carry a `number` (for
+   block.steps[0].number) or a numeric ref. Returns a NEW array in the
+   requested order. Steps not present in the override list are appended
+   in their original order.
+
+   When the items are mc.blocks (i.e. block.steps[k].number exists), the
+   step numbers are ALSO renumbered sequentially 1..N so the visible
+   procedure reads 1, 2, 3, … in display order — never out-of-order
+   numbers. The original number is preserved as `originalNumber` on the
+   cloned step in case any downstream code needs it. */
+function applyStepOrderOverride(items, getNum, recipeId) {
+  const order = STEP_ORDER_OVERRIDES[recipeId];
+  if (!order || !Array.isArray(order) || !items || items.length === 0) return items;
+  const byNum = new Map();
+  items.forEach(item => { const n = getNum(item); if (n != null) byNum.set(n, item); });
+  const seen = new Set();
+  const out = [];
+  order.forEach(n => {
+    const item = byNum.get(n);
+    if (item && !seen.has(n)) { out.push(item); seen.add(n); }
+  });
+  /* Append any items not in the override (safety net for partial lists). */
+  items.forEach(item => {
+    const n = getNum(item);
+    if (n != null && !seen.has(n)) { out.push(item); seen.add(n); }
+  });
+  /* Renumber: clone each block + its steps with sequential numbers. */
+  let seq = 1;
+  return out.map(block => {
+    if (!block || !Array.isArray(block.steps)) return block;
+    return {
+      ...block,
+      steps: block.steps.map(s => ({
+        ...s,
+        originalNumber: s.originalNumber != null ? s.originalNumber : s.number,
+        number: seq++,
+      })),
+    };
+  });
+}
+
 function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin, isMobile }) {
   const mc = card && card.mc;
   if (!mc || !Array.isArray(mc.blocks) || !mc.blocks.length) {
@@ -7422,7 +7503,11 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin, isMobile }) {
   const mcL = { en:{ingredient:"Ingredient",quantity:"Quantity",scaling:"Scaling",procedure:"Procedure",yields:"Yields",reference:"Reference",critTemp:"Critical Temperatures",equipment:"Equipment",portions:"portions"}, es:{ingredient:"Ingrediente",quantity:"Cantidad",scaling:"Escala",procedure:"Procedimiento",yields:"Rinde",reference:"Referencia",critTemp:"Temperaturas Cr\u00edticas",equipment:"Equipamiento",portions:"porciones"}, fr:{ingredient:"Ingr\u00e9dient",quantity:"Quantit\u00e9",scaling:"\u00c9chelle",procedure:"Proc\u00e9dure",yields:"Rendement",reference:"R\u00e9f\u00e9rence",critTemp:"Temp\u00e9ratures Critiques",equipment:"\u00c9quipement",portions:"portions"} };
   const ml = mcL[lang] || mcL.en;
   const scale = sv && base ? sv / base : 1;
-  const rows = mcFlattenRows(mc.blocks);
+  /* Phase: per-recipe step ordering override — applied before flattening
+     to rows for the desktop 4-col table, so the chef's authored sequence
+     drives the visible procedure order. */
+  const _orderedBlocks = applyStepOrderOverride(mc.blocks, b => (b.steps && b.steps[0] && b.steps[0].number) || null, rc && rc.id);
+  const rows = mcFlattenRows(_orderedBlocks);
   const yieldG = Math.round((mc.yield && mc.yield.value) ? mc.yield.value * scale : 0);
   const yieldServ = mc.yield && mc.yield.servings ? Math.round(mc.yield.servings * scale) : sv;
   const showType = false; /* Amendment 3: suppress recipe type label */
@@ -7491,7 +7576,11 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin, isMobile }) {
            anchor while reading lane-cohesively. */
         <div style={{ marginTop: 8, marginBottom: 18 }}>
           {(() => {
-            const _src = mc.blocks || [];
+            /* Phase: Chef-authored step ordering override — applied FIRST,
+               so the lane-major grouping below respects the chef's
+               sequence within each lane group. */
+            const _srcRaw = mc.blocks || [];
+            const _src = applyStepOrderOverride(_srcRaw, b => (b.steps && b.steps[0] && b.steps[0].number) || null, rc && rc.id);
             const _groups = [];
             const _groupByKey = new Map();
             _src.forEach(b => {
@@ -7509,7 +7598,12 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin, isMobile }) {
             _groups.forEach(g => {
               const seen = new Set();
               g.ings = g.ings.filter(i => { const k = (i.name||"").toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-              g.steps.sort((a, b) => (a.number || 0) - (b.number || 0));
+              /* When an override exists for this recipe, preserve the
+                 chef's sequence within the lane group (don't re-sort by
+                 step number). Otherwise sort by number for chronology. */
+              if (!STEP_ORDER_OVERRIDES[rc && rc.id]) {
+                g.steps.sort((a, b) => (a.number || 0) - (b.number || 0));
+              }
             });
             return _groups;
           })().map((block, bi, arr) => {
@@ -7656,15 +7750,31 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin, isMobile }) {
                   </td>
                   <td style={{ ...cellBaseStyle, borderBottom: border }}>
                     {step ? (
-                      <div style={{ display: "flex", alignItems: "flex-start" }}>
-                        <span style={{
-                          display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          width: 17, height: 17, borderRadius: "50%",
-                          background: MC_PALETTE.burgundy, color: "#FFFFFF",
-                          fontFamily: MC_FONT_SANS, fontSize: 9.5, fontWeight: 600,
-                          lineHeight: 1, marginRight: 6, flexShrink: 0, marginTop: 2,
-                        }}>{step.number}</span>
-                        <span style={{ flex: 1 }}>{stripF(step.instruction)}</span>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "flex-start" }}>
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: 17, height: 17, borderRadius: "50%",
+                            background: MC_PALETTE.burgundy, color: "#FFFFFF",
+                            fontFamily: MC_FONT_SANS, fontSize: 9.5, fontWeight: 600,
+                            lineHeight: 1, marginRight: 6, flexShrink: 0, marginTop: 2,
+                          }}>{step.number}</span>
+                          <span style={{ flex: 1 }}>{stripF(step.instruction)}</span>
+                        </div>
+                        {step.applianceSummary && (
+                          <div style={{
+                            marginTop: 3, marginLeft: 23,
+                            fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5,
+                            color: MC_PALETTE.burgundy, fontWeight: 600,
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "2px 7px", borderRadius: 3,
+                            background: MC_PALETTE.burgundy + "0E",
+                            border: `0.5px solid ${MC_PALETTE.burgundy}26`,
+                          }}>
+                            <span aria-hidden="true">⚙</span>
+                            <span>{step.applianceSummary}</span>
+                          </div>
+                        )}
                       </div>
                     ) : ""}
                   </td>
@@ -8791,12 +8901,12 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
                 {step.tool.opts.heat&&<span>\uD83C\uDF21 {step.tool.opts.heat}</span>}
                 {step.tool.opts._time!=null&&<span>⏱ {step.tool.opts._time} {step.tool.opts._timeUnit||"min"}</span>}
               </div>}</div></div></div>}
-          {ings.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Ingredients</div>
-            {ings.map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<div key={ing.uid} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`0.5px solid ${TH().bdS}`}}><span style={{fontSize:12}}>{fi?.n||ing.ingredientId}</span><span style={{fontSize:12,color:TH().txM}}>{ing.qty?`${Math.round(ing.qty*sv/base*10)/10} ${ing.unit||""}`:""}</span></div>;})}
+          {ings.length>0&&<div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Ingredients</div>
+            {ings.map(ing=>{const fi=flat.find(f=>f.id===ing.ingredientId);return<div key={ing.uid} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`0.5px solid ${TH().bdS}`}}><span style={{fontSize:15,fontWeight:500}}>{fi?.n||ing.ingredientId}</span><span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,color:TH().tx,fontWeight:600}}>{ing.qty?`${Math.round(ing.qty*sv/base*10)/10} ${ing.unit||""}`:""}</span></div>;})}
           </div>}
-          {(step.processes||[]).length>0&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Processes</div>
-            {step.processes.map(proc=><div key={proc} style={{padding:"8px 10px",borderRadius:8,background:TH().proc+"08",border:`1px solid ${TH().proc}20`,marginBottom:6}}>
-              <div style={{fontSize:12,fontWeight:600,color:TH().proc}}>{trN(proc,"proc",lang)}</div>
+          {(step.processes||[]).length>0&&<div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Processes</div>
+            {step.processes.map(proc=><div key={proc} style={{padding:"10px 12px",borderRadius:8,background:TH().proc+"08",border:`1px solid ${TH().proc}20`,marginBottom:6}}>
+              <div style={{fontSize:14,fontWeight:700,color:TH().proc,letterSpacing:0.4,textTransform:"uppercase"}}>{trN(proc,"proc",lang)}</div>
             </div>)}</div>}
           {step.desc&&<div style={{marginBottom:14}}><div style={{fontSize:10,fontWeight:700,color:TH().txD,textTransform:"uppercase",letterSpacing:0.5,marginBottom:5}}>Notes</div><p style={{fontSize:12,color:TH().tx2,lineHeight:1.55,margin:0}}>{step.desc}</p></div>}
           {conns.length>0&&<div style={{padding:"8px 10px",borderRadius:8,background:TH().bgS,border:`1px solid ${TH().bdS}`}}><div style={{fontSize:10,color:TH().txD,marginBottom:3}}>Feeds into</div>{conns.map((c,ci3)=><div key={ci3} style={{fontSize:12,color:TH().acc}}>→ {c.laneName}</div>)}</div>}
@@ -8895,17 +9005,17 @@ function VwV({ r:rc, oB, oE, t, lib, tl:tLib, lang, isAdmin, isMobile, parametri
                         /* Typography upgrade: qty in JetBrains Mono, semibold,
                            TH().tx (strongest); name in DM Sans, TH().tx2;
                            both 12 px for tap-distance legibility. */
-                        return <span key={ing.uid} style={{fontSize:12,padding:"4px 9px",borderRadius:7,background:TH().bgH,border:`0.5px solid ${TH().bdS}`,color:TH().tx2,display:"inline-flex",alignItems:"baseline",gap:6,maxWidth:"100%",overflow:"hidden",lineHeight:1.3}}>
-                          {qtyLabel && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11.5,fontWeight:700,color:TH().tx,flexShrink:0,letterSpacing:-0.3}}>{qtyLabel}</span>}
-                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif",fontWeight:500}}>{fi?.n||ing.ingredientId}</span>
+                        return <span key={ing.uid} style={{fontSize:14,padding:"5px 11px",borderRadius:8,background:TH().bgH,border:`0.5px solid ${TH().bdS}`,color:TH().tx2,display:"inline-flex",alignItems:"baseline",gap:7,maxWidth:"100%",overflow:"hidden",lineHeight:1.3}}>
+                          {qtyLabel && <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:700,color:TH().tx,flexShrink:0,letterSpacing:-0.3}}>{qtyLabel}</span>}
+                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif",fontWeight:500,fontSize:14}}>{fi?.n||ing.ingredientId}</span>
                         </span>;
                       })}
-                      {ings2.length>4&&<span style={{fontSize:11,padding:"3px 6px",color:TH().txD,alignSelf:"center"}}>+{ings2.length-4}</span>}
+                      {ings2.length>4&&<span style={{fontSize:13,padding:"3px 7px",color:TH().txD,alignSelf:"center",fontWeight:600}}>+{ings2.length-4}</span>}
                     </div>}
-                    {(step.processes||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:step.tool?5:0}}>
-                      {step.processes.map(proc=><span key={proc} style={{fontSize:11,padding:"3px 9px",borderRadius:6,background:TH().proc+"12",border:`0.5px solid ${TH().proc}25`,color:TH().proc,fontWeight:600,letterSpacing:0.2,textTransform:"uppercase"}}>{trN(proc,"proc",lang)}</span>)}
+                    {(step.processes||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:step.tool?6:0}}>
+                      {step.processes.map(proc=><span key={proc} style={{fontSize:12.5,padding:"4px 11px",borderRadius:7,background:TH().proc+"12",border:`0.5px solid ${TH().proc}25`,color:TH().proc,fontWeight:700,letterSpacing:0.4,textTransform:"uppercase"}}>{trN(proc,"proc",lang)}</span>)}
                     </div>}
-                    {step.tool&&<div style={{fontSize:11,color:TH().txD,marginTop:2,display:"flex",alignItems:"center",gap:4}}><span aria-hidden="true">{step.tool.icon||"🔧"}</span>{step.tool.name}</div>}
+                    {step.tool&&<div style={{fontSize:12,color:TH().txD,marginTop:3,display:"flex",alignItems:"center",gap:5}}><span aria-hidden="true">{step.tool.icon||"🔧"}</span>{step.tool.name}</div>}
                     <div style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:TH().txD}} aria-hidden="true">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
@@ -9718,12 +9828,12 @@ function StepNode({ step, rc, allIngs, flat, tLib, sv, base, t, lang }) {
   const toolStr = hasTool ? fmtOpts(step.tool.opts, meta) : "";
   return (<Tip tx={step.instruction} ch={
     <div style={{ background:hasTool?TC+"08":TH().bgC,border:hasTool?`1.5px solid ${TC}30`:`1px solid ${TH().bdS}`,borderRadius:12,padding:"11px 14px",width:"100%",textAlign:"center",cursor:"default",boxShadow:TH().sh,transition:"all 0.2s",boxSizing:"border-box",flex:1,display:"flex",flexDirection:"column",justifyContent:"center" }}
-      onMouseEnter={e=>{e.currentTarget.style.boxShadow=TH().shM; e.currentTarget.style.borderColor=hasTool?`${TC}55`:TH().bdSt;}} onMouseLeave={e=>{e.currentTarget.style.boxShadow=TH().sh; e.currentTarget.style.borderColor=hasTool?`${TC}30`:TH().bdS;}}>      <div style={{ marginBottom:4 }}>
-        <span style={{ fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600 }}>{step.title || t.step}</span>
+      onMouseEnter={e=>{e.currentTarget.style.boxShadow=TH().shM; e.currentTarget.style.borderColor=hasTool?`${TC}55`:TH().bdSt;}} onMouseLeave={e=>{e.currentTarget.style.boxShadow=TH().sh; e.currentTarget.style.borderColor=hasTool?`${TC}30`:TH().bdS;}}>      <div style={{ marginBottom:6 }}>
+        <span style={{ fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:600 }}>{step.title || t.step}</span>
       </div>
-      {step.processes?.length > 0 && <div style={{ display:"flex",justifyContent:"center",gap:3,flexWrap:"wrap",marginBottom:4,width:"100%",flexDirection:"column",alignItems:"center" }}>
-        <div style={{ display:"flex",justifyContent:"center",gap:3,flexWrap:"wrap",width:"100%" }}>
-          {step.processes.map(p => <span key={p} style={{ ...S.tag(PROC_COL),fontSize:9,padding:"1px 6px",whiteSpace:"normal",display:"inline-flex",alignItems:"center",gap:3,maxWidth:"100%",lineHeight:1.35 }}><Ic.Fn/> <span style={{ wordBreak:"break-word" }}>{trN(p,"proc",lang)}</span></span>)}
+      {step.processes?.length > 0 && <div style={{ display:"flex",justifyContent:"center",gap:4,flexWrap:"wrap",marginBottom:5,width:"100%",flexDirection:"column",alignItems:"center" }}>
+        <div style={{ display:"flex",justifyContent:"center",gap:4,flexWrap:"wrap",width:"100%" }}>
+          {step.processes.map(p => <span key={p} style={{ ...S.tag(PROC_COL),fontSize:12,padding:"3px 9px",whiteSpace:"normal",display:"inline-flex",alignItems:"center",gap:4,maxWidth:"100%",lineHeight:1.35,fontWeight:700,letterSpacing:0.3,textTransform:"uppercase" }}><Ic.Fn/> <span style={{ wordBreak:"break-word" }}>{trN(p,"proc",lang)}</span></span>)}
         </div>
         {(()=>{
           const deg = String.fromCharCode(176);
@@ -9760,9 +9870,9 @@ function StepNode({ step, rc, allIngs, flat, tLib, sv, base, t, lang }) {
                 const parts = [];
                 if (timeParam) parts.push(timeParam.source === "tool" ? `\u2190 tool` : `${pp._time||"?"} ${pp._timeUnit||"min"}`);
                 if (tempParam) parts.push(tempParam.source === "tool" || tempParam.source === "tool_cat" ? `\u2190 tool` : `${pp._temp||"?"}${deg}C`);
-                return <span key={proc} style={{ display:"inline-flex",alignItems:"center",gap:2,padding:"1px 5px",borderRadius:4,background:"#6BAF6E10",border:"1px solid #6BAF6E25",fontFamily:"'DM Sans',sans-serif",fontSize:7.5,color:"#6BAF6E",lineHeight:1.3 }}>
-                  <span style={{ fontWeight:600,fontSize:7,textTransform:"uppercase" }}>{proc}:</span>
-                  <span style={{ opacity:0.8 }}>{parts.join(" · ")}</span>
+                return <span key={proc} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:5,background:"#6BAF6E10",border:"1px solid #6BAF6E25",fontFamily:"'DM Sans',sans-serif",fontSize:11,color:"#6BAF6E",lineHeight:1.3 }}>
+                  <span style={{ fontWeight:700,fontSize:10,textTransform:"uppercase",letterSpacing:0.3 }}>{proc}:</span>
+                  <span style={{ opacity:0.85,fontFamily:"'JetBrains Mono',monospace",fontWeight:600 }}>{parts.join(" · ")}</span>
                 </span>;
               })}
             </div>;
@@ -9788,21 +9898,21 @@ function StepNode({ step, rc, allIngs, flat, tLib, sv, base, t, lang }) {
                 bg = "#B0A89808"; color = "#B0A898"; border = "#B0A89815";
                 text = "optional";
               }
-              return <span key={r.param} style={{ display:"inline-flex",alignItems:"center",gap:2,padding:"1px 5px",borderRadius:4,background:bg,border:`1px solid ${border}`,fontFamily:"'DM Sans',sans-serif",fontSize:7.5,color,lineHeight:1.3 }}>
-                <span>{icon}</span><span style={{ fontWeight:600 }}>{label}</span><span style={{ opacity:0.8 }}>{text}</span>
+              return <span key={r.param} style={{ display:"inline-flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:5,background:bg,border:`1px solid ${border}`,fontFamily:"'DM Sans',sans-serif",fontSize:11,color,lineHeight:1.3 }}>
+                <span>{icon}</span><span style={{ fontWeight:700,letterSpacing:0.3 }}>{label}</span><span style={{ opacity:0.85,fontFamily:r.source==="process"?"'JetBrains Mono',monospace":"inherit",fontWeight:r.source==="process"?600:400 }}>{text}</span>
               </span>;
             })}
           </div>;
         })()}
       </div>}
-      {hasTool && <div style={{ marginBottom:4,width:"100%" }}><span style={{ ...S.tag(TC),fontSize:10,whiteSpace:"normal",display:"inline-flex",alignItems:"center",gap:4,flexWrap:"wrap",maxWidth:"100%",textAlign:"center",justifyContent:"center",lineHeight:1.35 }}><span style={{ fontSize:12,flexShrink:0 }}>{meta?.ic||"\uD83D\uDD27"}</span> <b style={{ wordBreak:"break-word" }}>{trN(step.tool.name,"tool",lang)}</b>{toolStr && <span style={{ opacity:.7,wordBreak:"break-word" }}>{toolStr}</span>}</span></div>}
-      {step.ingredients?.length > 0 && <div style={{ display:"flex",justifyContent:"center",flexWrap:"wrap",gap:3,width:"100%" }}>
+      {hasTool && <div style={{ marginBottom:5,width:"100%" }}><span style={{ ...S.tag(TC),fontSize:12,padding:"3px 9px",whiteSpace:"normal",display:"inline-flex",alignItems:"center",gap:5,flexWrap:"wrap",maxWidth:"100%",textAlign:"center",justifyContent:"center",lineHeight:1.35 }}><span style={{ fontSize:14,flexShrink:0 }}>{meta?.ic||"\uD83D\uDD27"}</span> <b style={{ wordBreak:"break-word" }}>{trN(step.tool.name,"tool",lang)}</b>{toolStr && <span style={{ opacity:.75,wordBreak:"break-word",fontFamily:"'JetBrains Mono',monospace",fontSize:11 }}>{toolStr}</span>}</span></div>}
+      {step.ingredients?.length > 0 && <div style={{ display:"flex",justifyContent:"center",flexWrap:"wrap",gap:4,width:"100%" }}>
         {step.ingredients.map(ing => {
-          if (ing.isPrepRef) { const rp=rc.preparations.find(p=>p.id===ing.prepId); return <span key={ing.uid} style={{ ...S.tag(PC),fontSize:9,padding:"1px 5px",whiteSpace:"normal",display:"inline-flex",flexWrap:"wrap",maxWidth:"100%",lineHeight:1.35 }}><Ic.Lk/> <span style={{ wordBreak:"break-word" }}>{rp?.name||ing.name}</span></span>;}
+          if (ing.isPrepRef) { const rp=rc.preparations.find(p=>p.id===ing.prepId); return <span key={ing.uid} style={{ ...S.tag(PC),fontSize:12,padding:"3px 8px",whiteSpace:"normal",display:"inline-flex",flexWrap:"wrap",maxWidth:"100%",lineHeight:1.35,fontWeight:600 }}><Ic.Lk/> <span style={{ wordBreak:"break-word" }}>{rp?.name||ing.name}</span></span>;}
           const res = rQ(ing, allIngs, sv, base);
           const cat = flat.find(fi=>fi.id===ing.ingredientId)?.category || "";
           const col = CC[cat] || "#8A7E72";
-          return <span key={ing.uid} style={{ ...S.tag(col),fontSize:9,padding:"1px 5px",whiteSpace:"normal",display:"inline-flex",flexWrap:"wrap",alignItems:"center",gap:2,maxWidth:"100%",lineHeight:1.35 }}>{ing.isEgg&&<Ic.Eg/>}{ing.isChilli&&<Ic.Ci/>}<b style={{ wordBreak:"break-word" }}>{trN(ing.name,"ing",lang)}</b>{ing.isChilli&&ing.chilliHeat&&<span style={{ fontSize:8,color:"#D45B5B",fontWeight:700,textTransform:"uppercase" }}>{CH[ing.chilliHeat]?.label}</span>}<span style={{ wordBreak:"break-word" }}>{fmtQ(res, displayUnit(ing, allIngs))}</span></span>;
+          return <span key={ing.uid} style={{ ...S.tag(col),fontSize:12,padding:"3px 8px",whiteSpace:"normal",display:"inline-flex",flexWrap:"wrap",alignItems:"baseline",gap:4,maxWidth:"100%",lineHeight:1.35 }}>{ing.isEgg&&<Ic.Eg/>}{ing.isChilli&&<Ic.Ci/>}<b style={{ wordBreak:"break-word",fontWeight:600 }}>{trN(ing.name,"ing",lang)}</b>{ing.isChilli&&ing.chilliHeat&&<span style={{ fontSize:10,color:"#D45B5B",fontWeight:700,textTransform:"uppercase" }}>{CH[ing.chilliHeat]?.label}</span>}<span style={{ wordBreak:"break-word",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:11.5 }}>{fmtQ(res, displayUnit(ing, allIngs))}</span></span>;
         })}
       </div>}
     </div>
