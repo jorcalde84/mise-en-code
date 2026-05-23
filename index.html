@@ -956,6 +956,238 @@ const recipeVersionHash = (recipe) => {
      When alignment breaks (user added/removed steps, or swapped to a
      new cooking method), curatedStale=true and the banner from Phase 1
      fires. Pure quantity / title / instruction edits do NOT trigger it. */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   INGREDIENT MASS TABLES (module-level — used by both deriveStructuralCard
+   and the shopping list humanQty rendering).
+   ─────────────────────────────────────────────────────────────────────
+   UNIT_GRAMS — per-unit mass for VOLUME and KITCHEN units (water-equiv).
+     "tsp" 5 g, "tbsp" 15 g, "cup" 240 g, "pinch" 0.3 g, etc.
+     For oils/fats these are slight under-estimates (oil ≈ 0.92 g/ml) —
+     acceptable for kitchen-scale precision.
+   INGREDIENT_GRAMS — per-piece mass for COUNT-style units (ea, clove,
+     stalk, bunch, head, sprig, slice). Keyed by lowercased ingredient
+     name (or canonical forms). When the algorithm has e.g.
+     `{ name: "Garlic Clove", unit: "ea", qty: 4 }`, derive 4 × 5 g = 20 g.
+   COOKING_MEDIUM_HINTS — name-substring patterns that hint an ingredient
+     is a cooking medium (boiling water, deep-fry oil, brining liquid)
+     and should be excluded from yield. Combined with the step's process
+     for context (deep-fry only marks oil as medium during a fry step).
+═══════════════════════════════════════════════════════════════════════ */
+const UNIT_GRAMS = {
+  /* mass */
+  "g": 1, "kg": 1000, "mg": 0.001,
+  "oz": 28.35, "lb": 453.6,
+  /* volume — water-equivalent (good enough for non-fat liquids) */
+  "ml": 1, "L": 1000, "l": 1000,
+  "tsp": 5, "tbsp": 15, "cup": 240, "fl oz": 30,
+  /* small-quantity kitchen units */
+  "pinch": 0.3, "dash": 0.6, "drop": 0.05,
+};
+const INGREDIENT_GRAMS = {
+  /* alliums */
+  "onion": 150, "yellow onion": 150, "white onion": 150, "red onion": 110,
+  "shallot": 30, "spring onion": 15, "scallion": 15,
+  "garlic": 5, "garlic clove": 5, "clove of garlic": 5,
+  /* leafy + herbs (bunch / sprig conventions) */
+  "parsley": 30, "parsley bunch": 30, "parsley sprig": 2,
+  "cilantro": 30, "cilantro bunch": 30, "coriander": 30, "coriander bunch": 30, "fresh coriander": 30,
+  "basil": 25, "basil bunch": 25, "basil leaf": 0.5,
+  "mint": 25, "mint bunch": 25, "mint leaf": 0.5,
+  "thyme sprig": 1, "rosemary sprig": 2, "sage leaf": 0.5,
+  "bay leaf": 0.2,
+  /* aromatics */
+  "lemongrass": 15, "lemongrass stalk": 15, "lemon grass stalk": 15,
+  "ginger": 40, "fresh ginger": 40, "ginger root": 40,
+  "chili": 12, "chile": 12, "chilli": 12, "red chilli": 12, "green chilli": 12,
+  "jalapeño": 15, "jalapeno": 15,
+  "star anise": 1, "cinnamon stick": 4, "cardamom pod": 0.3, "clove": 0.1, "peppercorn": 0.04,
+  /* citrus */
+  "lemon": 100, "lime": 60, "orange": 130,
+  "lemon juice": 50, "lime juice": 30, "orange juice": 100,
+  /* fruits + veg by piece */
+  "tomato": 120, "cherry tomato": 15, "plum tomato": 80, "roma tomato": 80,
+  "avocado": 200, "apple": 180, "banana": 120, "pear": 175,
+  "potato": 180, "medium potato": 180, "small potato": 120, "russet potato": 200,
+  "sweet potato": 200, "carrot": 80, "bell pepper": 160, "red bell pepper": 160,
+  "cucumber": 300, "zucchini": 200, "eggplant": 350, "aubergine": 350,
+  "green bean": 4, "green beans bunch": 80, "asparagus spear": 20, "asparagus": 20,
+  "broccoli head": 500, "cauliflower head": 800, "cabbage head": 1000,
+  /* bread + dough */
+  "slice of bread": 30, "bread slice": 30,
+  /* dairy + eggs (eggs handled by ED table for sizes) */
+  "egg": 50, "yolk": 18, "egg yolk": 18, "egg white": 32,
+  "vanilla bean": 3, "vanilla pod": 3,
+  /* protein */
+  "chicken breast": 200, "chicken thigh": 150, "chicken wing": 90,
+  "whole chicken": 1600, "chicken": 1600,
+  "rib eye": 250, "ribeye steak": 250, "short rib": 200,
+  "guanciale slice": 30, "pancetta slice": 25, "bacon slice": 30,
+  "sausage": 75, "sausage link": 75,
+  /* mushrooms */
+  "mushroom": 20, "button mushroom": 20, "shiitake": 15, "portobello": 100,
+};
+const COOKING_MEDIUM_HINTS = {
+  /* Patterns for ingredient names that, in the right process context,
+     are cooking media (NOT consumed by the final yield). */
+  fryOil:    /(^|\s)(oil|fat|ghee|lard|shortening|tallow)($|\s)/i,
+  boilWater: /(^|\s)(water|broth|stock)($|\s)|(pasta\s+water|boiling\s+water|steaming\s+water|cooking\s+water|salted\s+water)/i,
+};
+function isCookingMediumIngredient(ing, step) {
+  const procs = (step && step.processes) || [];
+  const name  = ((ing && (ing.name || ing.n)) || "").toLowerCase();
+  /* Explicit flag set by recipe author wins. */
+  if (ing && ing.isCookingMedium) return true;
+  /* Frying medium — oils in any fry-type step. */
+  if (procs.some(p => /^(deep-fry|shallow-fry|pan-fry)$/i.test(p)) && COOKING_MEDIUM_HINTS.fryOil.test(name)) return true;
+  /* Pasta water / blanching water / steaming water — water/stock in
+     boil/simmer/blanch/steam steps where the ingredient name signals
+     it's the cooking liquid (not a final-dish liquid like soup broth). */
+  if (procs.some(p => /^(boil|blanch|steam|simmer)$/i.test(p))
+      && /pasta\s+water|boiling\s+water|salted\s+water|steaming\s+water|cooking\s+water/i.test(name)) return true;
+  return false;
+}
+/* Look up grams for any unit + ingredient combination. Returns the
+   per-unit mass; multiply by qty at the call site. Returns null when
+   we genuinely don't know (better than fabricating). */
+function gramsForIngredient(ing) {
+  if (!ing) return null;
+  const unit = (ing.unit || "").toString();
+  const qty  = ing.qty || 0;
+  /* Eggs handled by canonical ED helper. */
+  if (ing.isEgg && ing.eggSize && typeof ED !== "undefined" && ED[ing.eggSize]) {
+    const d = ED[ing.eggSize];
+    const per = ing.eggPart === "white" ? d.wh
+              : ing.eggPart === "yolk"  ? (d.w - d.wh)
+              : d.w;
+    return qty * per;
+  }
+  /* Known volume/weight unit. */
+  if (UNIT_GRAMS[unit] != null) return qty * UNIT_GRAMS[unit];
+  /* Count-style unit ("ea", "clove", "stalk", "bunch", "sprig", "leaf"…)
+     — look up by ingredient name in the per-piece table. Try
+       full name → name minus modifiers → singular-form fallback. */
+  if (qty > 0) {
+    const raw = ((ing.name || ing.n || "").toLowerCase()).trim();
+    if (INGREDIENT_GRAMS[raw] != null) return qty * INGREDIENT_GRAMS[raw];
+    /* Strip trailing 's' for crude singularization */
+    const sg = raw.endsWith("s") ? raw.slice(0, -1) : raw;
+    if (INGREDIENT_GRAMS[sg] != null) return qty * INGREDIENT_GRAMS[sg];
+    /* Try matching key embedded in the name (e.g. "Brown Onion" → "onion") */
+    for (const k of Object.keys(INGREDIENT_GRAMS)) {
+      if (raw.includes(k)) return qty * INGREDIENT_GRAMS[k];
+    }
+  }
+  return null; /* unknown — don't fabricate */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PROCESS HEURISTIC (Phase: MC Card transformation overhaul)
+   ─────────────────────────────────────────────────────────────────────
+   describeProcess(step) reads the step's raw process(es) AND the tool's
+   heat / speed / temp + processParams to infer a more descriptive label.
+   Reason: a chef sees "stir" in the algorithm — but if temp = 80°C in
+   a Thermomix, that's actually "infuse" or "stabilize", not just stir.
+
+   Heat is the key. We classify into bands:
+     30-50°C  warming
+     50-70°C  controlled-heat  (gentle infusion, stabilization)
+     70-90°C  infuse / poach
+     90-105°C boil / reduce
+     105-160°C sauté / fry-low
+     160-200°C deep-fry / roast / sear
+     200+°C   high-heat sear / blast
+
+   Tool context refines further (Thermomix uses 'speed' + sealed heat,
+   so a 90°C / speed 3 / 10 min step reads as "infuse"; same temp on a
+   stovetop with no speed reads as "simmer").
+
+   Returns { label, raw, temp, time, isHeated } so the caller can pick
+   the descriptive `label` for UI and keep `raw` for data alignment. */
+function describeProcess(step, procParams) {
+  if (!step) return { label: "", raw: "", temp: null, time: null, isHeated: false };
+  const procs = step.processes || [];
+  const raw   = procs[0] || "";
+  const tool  = step.tool || null;
+  const toolOpts = (tool && tool.opts) || {};
+  const toolName = (tool && tool.name) || "";
+  const pp = step.processParams || {};
+  const ppForRaw = (pp[raw] && typeof pp[raw] === "object") ? pp[raw] : pp;
+  const defaults = (procParams && raw && procParams[raw] && procParams[raw].defaults) || {};
+  /* Effective temp / time — step override > tool > process default. */
+  const temp = (ppForRaw._temp != null ? ppForRaw._temp
+              : toolOpts._temp != null ? toolOpts._temp
+              : defaults._temp != null ? defaults._temp
+              : null);
+  const time = (ppForRaw._time != null ? ppForRaw._time
+              : toolOpts._time != null ? toolOpts._time
+              : defaults._time != null ? defaults._time
+              : null);
+  const speed = toolOpts._speed != null ? toolOpts._speed : null;
+  const heat  = toolOpts.heat || null;
+  const isThermo = /thermomix/i.test(toolName);
+  const isOven   = /oven|range/i.test(toolName);
+  const isPot    = /pot|pan|skillet|wok|saucepan|sautoir/i.test(toolName);
+  const isHeated = (temp != null && temp >= 30) || /^(boil|simmer|bake|roast|fry|steam|sear|reduce|caramelize|sous-vide|blanch|saute|sauté|poach|broil|grill|toast)/i.test(raw);
+
+  /* Stir / mix / whisk / fold + heat → context-specific verb.
+     Thermomix is a sealed-heat device, so 100°C is the WORKING ceiling
+     not a boiling event — at 100°C the liquid is at the steam edge but
+     the chef is still infusing. We treat >100 as boil only for
+     non-Thermomix tools. For Thermomix, anything 85-100°C is "infuse"; */
+  if (/^(stir|mix|whisk|fold|beat|stir-fry)$/i.test(raw) && temp != null && temp >= 30) {
+    if (isThermo) {
+      if (temp > 100) return { label: "boil", raw, temp, time, isHeated: true };
+      if (temp >= 85) return { label: "infuse", raw, temp, time, isHeated: true };
+      if (temp >= 65) return { label: "stabilize", raw, temp, time, isHeated: true };
+      return { label: "warm-stir", raw, temp, time, isHeated: true };
+    }
+    if (temp >= 175) return { label: "stir-fry", raw, temp, time, isHeated: true };
+    if (temp >= 140) return { label: "sauté", raw, temp, time, isHeated: true };
+    if (temp >= 100) return { label: "boil-stir", raw, temp, time, isHeated: true };
+    if (temp >= 85)  return { label: "simmer-stir", raw, temp, time, isHeated: true };
+    if (temp >= 60)  return { label: "warm-stir", raw, temp, time, isHeated: true };
+    return { label: "temper", raw, temp, time, isHeated: true };
+  }
+
+  /* Cool / rest at controlled temp. */
+  if (/^(cool|rest|chill|hold)$/i.test(raw) && temp != null) {
+    if (temp <= 4)  return { label: "chill", raw, temp, time, isHeated: false };
+    if (temp <= 25) return { label: "cool", raw, temp, time, isHeated: false };
+    if (temp <= 60) return { label: "rest at temp", raw, temp, time, isHeated: temp >= 30 };
+    return { label: "hold-hot", raw, temp, time, isHeated: true };
+  }
+
+  /* Bake / roast — refine by temperature band. */
+  if (/^(bake|roast)$/i.test(raw) && temp != null) {
+    if (temp >= 230) return { label: "blast-bake", raw, temp, time, isHeated: true };
+    if (temp >= 200) return { label: "roast-high", raw, temp, time, isHeated: true };
+    if (temp >= 160) return { label: "bake", raw, temp, time, isHeated: true };
+    if (temp >= 120) return { label: "slow-roast", raw, temp, time, isHeated: true };
+    if (temp >= 80)  return { label: "dehydrate", raw, temp, time, isHeated: true };
+    return { label: "proof", raw, temp, time, isHeated: temp >= 30 };
+  }
+
+  /* Generic heat-based step with no specific verb (some Thermomix steps
+     come through as a bare process or a generic one — infer from temp). */
+  if ((!raw || /^(heat|cook)$/i.test(raw)) && temp != null) {
+    if (isThermo) {
+      if (temp > 100)  return { label: "boil", raw, temp, time, isHeated: true };
+      if (temp >= 85)  return { label: "infuse", raw, temp, time, isHeated: true };
+      if (temp >= 60)  return { label: "warm", raw, temp, time, isHeated: true };
+    }
+    if (temp >= 175) return { label: "deep-fry", raw, temp, time, isHeated: true };
+    if (temp >= 150) return { label: "fry", raw, temp, time, isHeated: true };
+    if (temp >= 100) return { label: "boil", raw, temp, time, isHeated: true };
+    if (temp >= 85)  return { label: "simmer", raw, temp, time, isHeated: true };
+    if (temp >= 60)  return { label: "warm", raw, temp, time, isHeated: true };
+    return { label: raw || "low-heat", raw, temp, time, isHeated: temp >= 30 };
+  }
+
+  /* No reclassification needed — pass through the raw process. */
+  return { label: raw, raw, temp, time, isHeated };
+}
+
 function deriveStructuralCard(recipe, procParams) {
   if (!recipe) return null;
   /* Collect every step in execution order — preparation index, row, lane.
@@ -969,47 +1201,57 @@ function deriveStructuralCard(recipe, procParams) {
      disappear on ~15 of our 57 recipes. */
   const allPreps = (recipe.preparations || []).filter(p => p);
   const nonModulePreps = allPreps.filter(p => !p.isModule);
-  const preps = nonModulePreps.length > 0 ? nonModulePreps : allPreps;
+  const modulePreps = allPreps.filter(p => p.isModule);
+  /* Phase: MC Card overhaul (#4 Module rendering).
+     When the recipe authored both non-module preps AND module preps
+     (e.g. Cazuela en cocción lenta has a "Cazuela" main + a "Pebre"
+     module), we now INCLUDE the modules in the derived blocks instead
+     of dropping them. Module steps are flagged so the merge layer can
+     give them a "Module: <name>" sublabel and the MC card can render
+     them as a distinct (clearly-labeled) section. When EVERY prep is
+     a module (Pebre standalone, Guacamole standalone, etc.) the module
+     IS the recipe — same behavior as before. */
+  const preps = nonModulePreps.length > 0
+    ? [...nonModulePreps, ...modulePreps]
+    : allPreps;
   const allSteps = [];
   preps.forEach(prep => {
     const grid = prep.grid || [];
-    grid.forEach(row => {
-      (row || []).forEach(step => {
-        if (step) allSteps.push({ step });
+    const laneNames = prep.laneNames || [];
+    grid.forEach((row, rowIdx) => {
+      (row || []).forEach((step, laneIdx) => {
+        if (step) allSteps.push({
+          step, prep, isModuleStep: !!prep.isModule,
+          /* Capture lane info for lane-cohesive block grouping below.
+             laneName comes from prep.laneNames[laneIdx]; fall back to
+             "Lane N" when the author didn't name the lane. */
+          rowIdx, laneIdx,
+          laneName: laneNames[laneIdx] || `Lane ${laneIdx + 1}`,
+          prepId: prep.id, prepName: prep.name,
+        });
       });
     });
   });
 
-  /* Frying medium detection: oil-named ingredient inside a fry-type step.
-     These contribute to the recipe by mass but are excluded from yield and
-     baker% computation. */
-  const isFryingMedium = (ing, step) => {
-    const procs = step.processes || [];
-    const isFryStep = procs.some(p => /^(deep-fry|shallow-fry|pan-fry)$/.test(p));
-    if (!isFryStep) return false;
-    const n = (ing.name || ing.n || "").toLowerCase();
-    return /oil|fat|ghee|lard|shortening/.test(n);
-  };
+  /* Cooking medium detection — now broader than frying oil.
+     Pasta water, blanching water, steaming water, deep-fry oil etc.
+     Excluded from yield + baker% but still appear in the ingredient list
+     marked "as needed" so the chef knows they're required. The logic
+     lives module-level (isCookingMediumIngredient) so the shopping list
+     can call it too. Backward-compat alias. */
+  const isFryingMedium = (ing, step) => isCookingMediumIngredient(ing, step);
 
   /* Mass helper: convert any quantity to grams.
-     - Eggs use the ED table (eG() canonical helper at line ~398): mass
-       depends on size + part (whole / white / yolk). 4 XL whole eggs ≈ 236g,
-       not 4g. This was the bug surfaced on the Calzones Rotos card.
-     - kg / L: ×1000 (1g/ml water-equivalent for L — rough but consistent
-       with the existing offline generator).
-     - ml: 1:1 with grams (same water-equivalent assumption).
-     - ea (other than eggs): mass unknown — return 0 so the item still
-       appears in the list but isn't counted toward yield or baker %. */
+     Delegates to module-level gramsForIngredient which handles:
+       - Eggs (ED table by size + part)
+       - Volume + weight units (UNIT_GRAMS: g/kg/ml/L/tsp/tbsp/cup/oz/lb/pinch…)
+       - Count units (INGREDIENT_GRAMS: cloves, stalks, bunches, sprigs,
+         "ea" with name lookup like "garlic clove" → 5 g, "lemongrass" → 15 g)
+       - Returns null when truly unknown — caller treats as 0 for yield. */
   const toGrams = (ing) => {
-    if (ing && ing.isEgg && ing.eggSize) {
-      const d = (typeof ED !== "undefined" ? ED[ing.eggSize] : null) || (typeof ED !== "undefined" ? ED.Large : null);
-      if (d) {
-        const per = ing.eggPart === "white" ? d.wh
-                  : ing.eggPart === "yolk"  ? d.w - d.wh
-                  : d.w;
-        return (ing.qty || 0) * per;
-      }
-    }
+    const g = gramsForIngredient(ing);
+    if (g != null) return g;
+    /* Legacy fallback for units we never recognized (e.g. odd custom units) */
     const q = ing.qty || 0;
     if (ing.unit === "kg" || ing.unit === "L") return q * 1000;
     if (ing.unit === "ml") return q;
@@ -1085,17 +1327,24 @@ function deriveStructuralCard(recipe, procParams) {
     category: i.category,
   }));
 
-  /* Top-level procedure[]. */
-  const procedure = allSteps.map(({step}, idx) => {
+  /* Top-level procedure[].
+     Title fallback uses the describeProcess heuristic so steps without
+     explicit titles read descriptively (e.g. "Infuse" instead of "Stir"
+     when Thermomix + 80°C). */
+  const procedure = allSteps.map(({step, prep, isModuleStep}, idx) => {
     const proc = (step.processes || [])[0];
     const procDef = procParams && proc ? procParams[proc] : null;
     const tempC = stepTempC(step, procDef);
+    const desc = describeProcess(step, procParams);
+    const fallback = desc.label || proc;
     return {
       ref: "P" + (idx + 1),
-      title: step.title || (proc ? proc[0].toUpperCase() + proc.slice(1) : "Step " + (idx + 1)),
+      title: step.title || (fallback ? fallback[0].toUpperCase() + fallback.slice(1) : "Step " + (idx + 1)),
       instruction: step.instruction || "",
       criticalTemp: tempLabel(tempC),
       criticalTime: stepTime(step, procDef),
+      isModuleStep: !!isModuleStep,
+      moduleName: isModuleStep && prep ? prep.name : null,
     };
   });
 
@@ -1141,11 +1390,22 @@ function deriveStructuralCard(recipe, procParams) {
   const yieldValue = Math.round(uniqueIngs.filter(i => !i.fry).reduce((s, i) => s + i.massGrams, 0));
   const yieldObj = { value: yieldValue, servings: recipe.servings || 1 };
 
-  /* Build mc.blocks — one per step. */
-  const blocks = allSteps.map(({step}, idx) => {
+  /* Build mc.blocks — one per step.
+     Module blocks get a "Module: <prepName>" sublabel.
+     Multi-lane recipes get a lane-name sublabel on each step's block so
+     the chef can mentally connect "step 4 (Guanciale lane)" back to
+     "step 2 (Guanciale lane)" without scrolling the algorithm view. */
+  const prepLaneCount = (p) => {
+    if (!p || !Array.isArray(p.grid)) return 0;
+    let n = 0;
+    p.grid.forEach(row => { if ((row||[]).some(s => s)) n = Math.max(n, row.length); });
+    return n;
+  };
+  const blocks = allSteps.map(({step, prep, isModuleStep, laneName, laneIdx}, idx) => {
     const proc = (step.processes || [])[0];
     const procDef = procParams && proc ? procParams[proc] : null;
     const tempC = stepTempC(step, procDef);
+    const desc = describeProcess(step, procParams);
 
     const stepIngs = (step.ingredients || [])
       .filter(i => !i.isPrepRef && !i.multiplierRef)
@@ -1170,18 +1430,83 @@ function deriveStructuralCard(recipe, procParams) {
         };
       });
 
+    /* Heuristic process list — if describeProcess upgraded the label,
+       use that; otherwise pass through the raw list. */
+    const processListForDisplay =
+      desc.label && desc.label !== desc.raw && desc.raw
+        ? [desc.label, ...((step.processes || []).slice(1))]
+        : (step.processes || []);
+
+    /* Phase: MC Card overhaul — explicit appliance config in each step.
+       Every appliance step (Thermomix, KitchenAid, Oven, Cast Iron Pot,
+       Wok, Regular Pot, Stock Pot, etc.) now exposes the full setting set
+       — temp, time, speed, heat, attachment, mode — so the MC card can
+       render "Thermomix TM6 · 80°C · speed 3 · 10 min" inline next to
+       the step. The summary text is computed once here so renderers
+       don't need to know the opts shape. */
+    const toolOpts = (step.tool && step.tool.opts) || {};
+    const toolName = step.tool ? (step.tool.name || step.tool.n) : null;
+    /* Resolve step-level processParams for this raw process (handles both
+       per-process keyed format and the legacy flat format). */
+    const _pp = step.processParams || {};
+    const _ppForRaw = (proc && _pp[proc] && typeof _pp[proc] === "object") ? _pp[proc] : _pp;
+    const appliance = !toolName ? null : {
+      name: toolName,
+      temp: toolOpts._temp != null ? toolOpts._temp : (_ppForRaw._temp != null ? _ppForRaw._temp : null),
+      time: toolOpts._time != null ? toolOpts._time : (_ppForRaw._time != null ? _ppForRaw._time : null),
+      timeUnit: toolOpts._timeUnit || _ppForRaw._timeUnit || "min",
+      speed: toolOpts._speed != null ? toolOpts._speed : null,
+      heat: toolOpts.heat || null,
+      attachment: toolOpts.attachment || null,
+      mode: toolOpts.ovenMode || toolOpts.func || null,
+    };
+    /* Build the inline summary string. Order: tool name · temp · heat ·
+       speed · attachment · mode · time. Anything not set is skipped. */
+    let applianceSummary = null;
+    if (appliance) {
+      const parts = [appliance.name];
+      if (appliance.temp != null) parts.push(`${appliance.temp} °C / ${Math.round(appliance.temp * 9 / 5 + 32)} °F`);
+      if (appliance.heat) parts.push(`${appliance.heat} heat`);
+      if (appliance.speed != null) parts.push(`speed ${appliance.speed}`);
+      if (appliance.attachment) parts.push(appliance.attachment);
+      if (appliance.mode) parts.push(appliance.mode);
+      if (appliance.time != null) parts.push(`${appliance.time} ${appliance.timeUnit}`);
+      applianceSummary = parts.join(" · ");
+    }
     const blockStep = {
       number: idx + 1,
-      verb: step.title || (proc ? (proc[0].toUpperCase() + proc.slice(1)) : "Step"),
+      verb: step.title || (desc.label ? (desc.label[0].toUpperCase() + desc.label.slice(1)) : (proc ? (proc[0].toUpperCase() + proc.slice(1)) : "Step")),
       instruction: step.instruction || step.title || "",
       tempC: tempC,
       tempLabel: tempLabel(tempC),
       timeLabel: stepTime(step, procDef),
-      processList: step.processes || [],
-      toolName: step.tool ? (step.tool.name || step.tool.n) : null,
+      processList: processListForDisplay,
+      rawProcessList: step.processes || [],
+      toolName: toolName,
+      appliance: appliance,
+      applianceSummary: applianceSummary,
+      laneName: laneName,
+      laneIdx: laneIdx,
+      prepName: prep ? prep.name : null,
     };
 
-    return { sublabel: null, isReserveBlock: false, ingredients: stepIngs, steps: [blockStep] };
+    /* Sublabel selection — module wins; otherwise lane label for any
+       multi-lane prep with a meaningful lane name. */
+    const laneCount = prepLaneCount(prep);
+    const meaningfulLane = laneName && !/^Lane\s+\d+$/i.test(laneName) && !/^Main\s+Process$/i.test(laneName);
+    const sublabel =
+      isModuleStep ? `Module: ${prep.name || "Module"}` :
+      (laneCount > 1 && meaningfulLane) ? laneName :
+      null;
+
+    return {
+      sublabel,
+      isReserveBlock: false,
+      isModuleBlock: !!isModuleStep,
+      laneName, laneIdx,
+      ingredients: stepIngs,
+      steps: [blockStep],
+    };
   });
 
   return {
@@ -1239,8 +1564,12 @@ function mergeCardLayers(derived, cached) {
         newIngs.push(...(srcBlock.ingredients || []));
       }
       sIdx += stepCount;
+      /* Prefer cached sublabel when it carries curated text; fall back to
+         derived's lane-name sublabel when cached is empty (so multi-lane
+         recipes get lane context even when cached omitted it). */
+      const derivedSublabel = (dm.blocks[sIdx - stepCount] && dm.blocks[sIdx - stepCount].sublabel) || null;
       return {
-        sublabel: cb.sublabel || null,
+        sublabel: cb.sublabel || derivedSublabel,
         isReserveBlock: cb.isReserveBlock || false,
         ingredients: newIngs,
         steps: newSteps,
@@ -7153,20 +7482,40 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin, isMobile }) {
       )}
 
       {isMobile ? (
-        /* ─── Mobile block-stacked layout ─────────────────────────────────
-           The desktop 4-col table compresses badly on a 375 px viewport
-           (the 27/10/8/55 % columns become 100/37/30/206 px and headers
-           overlap, ingredient values wrap awkwardly). Mobile gets a
-           block-grouped layout instead: each MC block is a self-contained
-           section with sublabel header, ingredients listed (name ←→
-           quantity · scaling), then procedure steps with their numbered
-           circles + full-width instructions. Linkage is preserved within
-           each block; typography gets room to breathe. */
+        /* ─── Mobile block-stacked layout, lane-major ─────────────────────
+           We re-group the source blocks BY LANE: every step that belongs
+           to "Guanciale Rendering" appears consecutively under one
+           sublabel; "Sofrito" similarly; etc. Module-flagged blocks form
+           their own group. Within each lane group, steps keep their
+           original numbers (1, 4, 7, …) so the chef sees the temporal
+           anchor while reading lane-cohesively. */
         <div style={{ marginTop: 8, marginBottom: 18 }}>
-          {mc.blocks.map((block, bi) => {
-            const ings = block.ingredients || [];
-            const steps = block.steps || [];
-            const isLast = bi === mc.blocks.length - 1;
+          {(() => {
+            const _src = mc.blocks || [];
+            const _groups = [];
+            const _groupByKey = new Map();
+            _src.forEach(b => {
+              const key = (b.steps && b.steps[0] && b.steps[0].laneName) || b.sublabel || "(unlabeled)";
+              let g = _groupByKey.get(key);
+              if (!g) {
+                g = { key, sublabel: b.sublabel || key, isModuleBlock: !!b.isModuleBlock, ings: [], steps: [] };
+                _groupByKey.set(key, g);
+                _groups.push(g);
+              }
+              g.ings.push(...(b.ingredients || []));
+              g.steps.push(...(b.steps || []));
+              if (b.isModuleBlock) g.isModuleBlock = true;
+            });
+            _groups.forEach(g => {
+              const seen = new Set();
+              g.ings = g.ings.filter(i => { const k = (i.name||"").toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+              g.steps.sort((a, b) => (a.number || 0) - (b.number || 0));
+            });
+            return _groups;
+          })().map((block, bi, arr) => {
+            const ings = block.ings;
+            const steps = block.steps;
+            const isLast = bi === arr.length - 1;
             return (
               <div key={`b-${bi}`} style={{
                 paddingTop: bi === 0 ? 0 : 12,
@@ -7208,21 +7557,40 @@ function ModernistCardView({ card, rc, sv, base, t, lang, isAdmin, isMobile }) {
                     ))}
                   </div>
                 )}
-                {/* Procedure steps — numbered circle + full-width instruction */}
+                {/* Procedure steps — numbered circle + instruction + appliance summary */}
                 {steps.map((step, si) => (
-                  <div key={`s-${bi}-${si}`} style={{
-                    display: "flex", alignItems: "flex-start", gap: 8,
-                    padding: "4px 0",
-                    fontFamily: MC_FONT_SERIF, fontSize: 13, lineHeight: 1.45, color: MC_PALETTE.bodyText,
-                  }}>
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", justifyContent: "center",
-                      width: 20, height: 20, borderRadius: "50%",
-                      background: MC_PALETTE.burgundy, color: "#FFFFFF",
-                      fontFamily: MC_FONT_SANS, fontSize: 11, fontWeight: 600,
-                      lineHeight: 1, flexShrink: 0, marginTop: 1,
-                    }}>{step.number}</span>
-                    <span style={{ flex: 1, minWidth: 0 }}>{stripF(step.instruction)}</span>
+                  <div key={`s-${bi}-${si}`} style={{ padding: "4px 0" }}>
+                    <div style={{
+                      display: "flex", alignItems: "flex-start", gap: 8,
+                      fontFamily: MC_FONT_SERIF, fontSize: 13, lineHeight: 1.45, color: MC_PALETTE.bodyText,
+                    }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: 20, height: 20, borderRadius: "50%",
+                        background: MC_PALETTE.burgundy, color: "#FFFFFF",
+                        fontFamily: MC_FONT_SANS, fontSize: 11, fontWeight: 600,
+                        lineHeight: 1, flexShrink: 0, marginTop: 1,
+                      }}>{step.number}</span>
+                      <span style={{ flex: 1, minWidth: 0 }}>{stripF(step.instruction)}</span>
+                    </div>
+                    {/* Phase: explicit appliance config — every heated /
+                       configured appliance step shows its full setting set
+                       inline so the chef sees temp, time, speed/heat/
+                       attachment without drilling in. */}
+                    {step.applianceSummary && (
+                      <div style={{
+                        marginTop: 4, marginLeft: 28,
+                        fontFamily: MC_FONT_SANS, fontSize: 10.5, fontWeight: 600,
+                        color: MC_PALETTE.marginText, letterSpacing: 0.4, textTransform: "uppercase",
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "3px 8px", borderRadius: 4,
+                        background: MC_PALETTE.burgundy + "0F",
+                        border: `0.5px solid ${MC_PALETTE.burgundy}25`,
+                      }}>
+                        <span aria-hidden="true">⚙</span>
+                        <span style={{ fontFamily: "'JetBrains Mono',monospace", textTransform:"none", letterSpacing:0 }}>{step.applianceSummary}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
